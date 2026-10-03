@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Bad-Dashboard</title>
+  <link rel="icon" href="app/img/logo.svg">
+  <link rel="stylesheet" href="app/css/app.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail" aria-label="Hauptnavigation">
+      <a class="marke" href="#/heute">
+        <img class="marke-logo" id="marke-logo" src="app/img/logo.svg" alt="">
+        <span class="marke-text">
+          <strong id="marke-name">Bad-Dashboard</strong>
+          <small id="marke-bereich">Badbau</small>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="#/heute" data-nav="heute"><span class="nav-k">01</span>Heute</a>
+        <a href="#/projekte" data-nav="projekte"><span class="nav-k">02</span>Projekte</a>
+        <a href="#/ablauf" data-nav="ablauf"><span class="nav-k">03</span>Ablauf</a>
+        <a href="#/vorlagen" data-nav="vorlagen"><span class="nav-k">04</span>Vorlagen</a>
+        <a href="#/einrichtung" data-nav="einrichtung"><span class="nav-k">05</span>Einrichtung</a>
+      </nav>
+      <div class="speicher" id="speicher" aria-live="polite"></div>
+    </aside>
+
+    <main class="main" id="main" tabindex="-1">
+      <noscript><p class="noscript">Bitte JavaScript aktivieren — das Dashboard läuft komplett lokal in diesem Ordner.</p></noscript>
+    </main>
+  </div>
+
+  <dialog class="dlg" id="dlg"></dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="einstellungen/firma.js"></script>
+  <script src="einstellungen/ablauf.js"></script>
+  <script src="einstellungen/mailvorlagen.js"></script>
+  <script src="app/js/store.js"></script>
+  <script src="app/js/app.js"></script>
+</body>
+</html>
