@@ -1,6 +1,7 @@
-/* Bad-Dashboard — Ansichten und Bedienung.
-   Inhalte (Firma, Ablauf, Mailtexte) kommen aus /einstellungen, die Projekte
-   aus dem Store. Kein Build, kein Server: index.html doppelklicken genügt. */
+/* Bad-Dashboard — das Arbeits-Dashboard.
+   Jede Phase ist ein Level: erst wenn alle Pflichtschritte erledigt sind,
+   wird die nächste freigeschaltet. Formulare, Dateien und Kunden-Uploads
+   liegen direkt im Projekt. */
 
 (function () {
   "use strict";
@@ -9,41 +10,38 @@
   const N = PHASEN.length;
   const phase = (nr) => PHASEN.find((p) => p.nr === nr);
   const ersteNr = PHASEN[0].nr;
-  const letzteNr = PHASEN[N - 1].nr;
   const naechsteNr = (nr) => { const i = PHASEN.findIndex((p) => p.nr === nr); return i >= 0 && i < N - 1 ? PHASEN[i + 1].nr : null; };
   const phaseIndex = (nr) => PHASEN.findIndex((p) => p.nr === nr);
+  const KAT = window.KATEGORIEN;
+  const katTitel = (id) => (KAT.find((k) => k.id === id) || { titel: id }).titel;
 
   const TERMINE = [
-    { key: "anfrageAm",              label: "Anfrage vom",             typ: "date" },
-    { key: "erstgespraech",          label: "Erstgespräch",            typ: "datetime-local" },
-    { key: "angebotsbesprechung",    label: "Angebotsbesprechung",     typ: "datetime-local" },
-    { key: "baustellenbesichtigung", label: "Baustellenbesichtigung",  typ: "datetime-local" },
-    { key: "materialauswahl",        label: "Materialauswahl",         typ: "datetime-local" },
-    { key: "freigabeGesendet",       label: "Freigabe gesendet",       typ: "date" },
-    { key: "baustart",               label: "Baustart",                typ: "date" },
-    { key: "abnahme",                label: "Abnahme",                 typ: "datetime-local" },
+    { key: "erstgespraech",          label: "Erstgespräch",           typ: "datetime-local" },
+    { key: "angebotsbesprechung",    label: "Angebotsbesprechung",    typ: "datetime-local" },
+    { key: "baustellenbesichtigung", label: "Baustellenbesichtigung", typ: "datetime-local" },
+    { key: "materialauswahl",        label: "Materialauswahl",        typ: "datetime-local" },
+    { key: "baustart",               label: "Baustart",               typ: "date" },
+    { key: "abnahme",                label: "Abnahme",                typ: "datetime-local" },
   ];
   const STATUS = [
     { id: "aktiv", label: "Aktiv" },
-    { id: "pausiert", label: "Pausiert – Kunde braucht Zeit" },
+    { id: "pausiert", label: "Pausiert" },
     { id: "abgeschlossen", label: "Abgeschlossen" },
     { id: "verloren", label: "Abgesagt" },
   ];
   const ANREDEN = ["Herr", "Frau", "Herr und Frau", "Familie"];
-  const QUELLEN = ["Telefon", "Website / Badrechner", "Empfehlung", "Ausstellung", "Social Media", "Stammkunde", "Sonstiges"];
 
   /* ---------- Helfer ---------- */
   const $ = (s, el = document) => el.querySelector(s);
   const $$ = (s, el = document) => [...el.querySelectorAll(s)];
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-  const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
   const zwei = (n) => String(n).padStart(2, "0");
   const isoTag = (d) => `${d.getFullYear()}-${zwei(d.getMonth() + 1)}-${zwei(d.getDate())}`;
   const heute = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
   const plusTage = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
   const datum = (s) => { if (!s) return null; const d = new Date(s.length <= 10 ? s + "T00:00" : s); return isNaN(d) ? null : d; };
-  const tagOnly = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return x; };
-  const tageBis = (d) => Math.round((tagOnly(d) - heute()) / 864e5);
+  const tageBis = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); return Math.round((x - heute()) / 864e5); };
   const WT = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
   const fDatum = (d) => `${zwei(d.getDate())}.${zwei(d.getMonth() + 1)}.${d.getFullYear()}`;
   const fKurz = (d) => `${zwei(d.getDate())}.${zwei(d.getMonth() + 1)}.`;
@@ -56,18 +54,17 @@
     return hatUhrzeit(s) ? `${tag}, ${fUhr(d)} Uhr` : tag;
   };
   const relativ = (d) => { const t = tageBis(d); return t === 0 ? "heute" : t > 0 ? `in ${t} ${t === 1 ? "Tag" : "Tagen"}` : `seit ${-t} ${t === -1 ? "Tag" : "Tagen"}`; };
+  const groesse = (b) => (b > 1e6 ? (b / 1e6).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(b / 1e3)) + " KB");
+  const istBild = (d) => /^image\//.test(d.typ || "") || /\.(jpe?g|png|webp|gif)$/i.test(d.name);
 
-  function toast(text) {
+  function toast(text, art) {
     const t = $("#toast");
-    t.textContent = text; t.classList.add("an");
-    clearTimeout(toast.timer); toast.timer = setTimeout(() => t.classList.remove("an"), 2400);
+    t.textContent = text; t.className = "toast an" + (art ? " " + art : "");
+    clearTimeout(toast.timer); toast.timer = setTimeout(() => (t.className = "toast"), 2600);
   }
   async function kopieren(text) {
     try { await navigator.clipboard.writeText(text); }
-    catch (e) {
-      const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta);
-      ta.select(); document.execCommand("copy"); ta.remove();
-    }
+    catch (e) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); }
   }
   function herunterladen(name, text, typ = "application/json") {
     const a = document.createElement("a");
@@ -76,33 +73,41 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500);
   }
 
-  /* ---------- Einstellungen (firma.js + Änderungen aus „Einrichtung") ---------- */
+  /* ---------- Zustand ---------- */
+  const S = {
+    projekte: [],
+    dateien: [],            // Metadaten aller Dateien (für Zähler & Fortschritt)
+    einstellungen: null,
+    filter: { suche: "", wer: "", status: "offen", abschnitt: "" },
+    akteTab: "dateien",
+    ordnerOffen: null,
+    ansicht: {},            // projektId → angezeigtes Level
+    zeigeFehler: false,
+  };
+  const urlCache = new Map();
+
+  /* ---------- Einstellungen ---------- */
   function cfg() {
     const basis = window.FIRMA;
-    const e = Store.daten.einstellungen;
+    const e = S.einstellungen;
     if (!e) return basis;
     const out = { ...basis, ...e };
-    for (const k of ["adresse", "farben", "programme", "ordner", "fristen"]) out[k] = { ...basis[k], ...(e[k] || {}) };
+    for (const k of ["adresse", "farben", "programme", "fristen"]) out[k] = { ...basis[k], ...(e[k] || {}) };
     out.team = e.team || basis.team;
+    out.cloud = Daten.konf || basis.cloud;
     return out;
   }
   const leute = (rolle) => cfg().team.filter((m) => m.rolle === rolle && m.name);
-  const namen = (rolle) => leute(rolle).map((m) => m.name).join(" oder ") || `‹${rolle}›`;
+  const namen = (rolle) => leute(rolle).map((m) => m.name).join(" oder ") || rolle;
   const kuerzelListe = () => cfg().team.filter((m) => m.kuerzel).map((m) => m.kuerzel);
-
   function ersetzen(text) {
     const c = cfg();
     return String(text).replace(/\{([a-zA-Z.]+)\}/g, (m, key) => {
-      if (key === "badplanung.kuerzel") return leute("badplanung").map((x) => x.kuerzel).join(" oder ");
       if (key.startsWith("programm.")) return c.programme[key.slice(9)] ?? m;
-      if (key.startsWith("ordner.")) return c.ordner[key.slice(7)] ?? m;
-      if (key === "kundenPostfach") return c.kundenPostfach;
-      if (cfg().team.some((t) => t.rolle === key)) return namen(key);
+      if (c.team.some((t) => t.rolle === key)) return namen(key);
       return m;
     });
   }
-  const rolleName = (rolle) => { const t = cfg().team.find((m) => m.rolle === rolle); return t ? t.bezeichnung : rolle; };
-
   function anwenden() {
     const c = cfg();
     const r = document.documentElement.style;
@@ -115,324 +120,611 @@
   }
 
   /* ---------- Projekte ---------- */
-  const alle = () => Store.daten.projekte.filter((p) => !p.geloescht);
-  const finde = (id) => Store.daten.projekte.find((p) => p.id === id && !p.geloescht);
+  const alle = () => S.projekte.filter((p) => !p.geloescht);
+  const finde = (id) => S.projekte.find((p) => p.id === id && !p.geloescht);
+  const dateienVon = (pid, kat) => S.dateien.filter((d) => d.projekt_id === pid && (!kat || d.kategorie === kat));
   function anzeigeName(p) {
-    if (p.anrede === "Familie") return `Familie ${p.nachname}`;
-    if (p.vorname) return `${p.vorname} ${p.nachname}`;
-    return `${p.anrede || ""} ${p.nachname}`.trim();
+    const k = p.kunde || {};
+    if (k.anrede === "Familie") return `Familie ${k.nachname}`;
+    if (k.vorname) return `${k.vorname} ${k.nachname}`;
+    return `${k.anrede || ""} ${k.nachname}`.trim();
+  }
+
+  const offen = new Set();
+  let speicherTimer;
+  function speichern(p) {
+    p.geaendert = Date.now();
+    offen.add(p.id);
+    clearTimeout(speicherTimer);
+    speicherTimer = setTimeout(async () => {
+      const ids = [...offen]; offen.clear();
+      try {
+        if (Daten.modus === "lokal") await Daten.projektSpeichern(null, S.projekte);
+        else for (const id of ids) await Daten.projektSpeichern(S.projekte.find((x) => x.id === id));
+      } catch (e) { ids.forEach((i) => offen.add(i)); toast("Nicht gespeichert – Verbindung prüfen", "fehler"); }
+    }, 350);
   }
   function aendern(p, fn, log) {
     fn(p);
-    p.geaendert = Date.now();
     if (log) { p.verlauf = p.verlauf || []; p.verlauf.unshift({ ts: Date.now(), text: log }); }
-    Store.speichern();
+    speichern(p);
   }
-  function neuesProjekt(d) {
+  function neuesProjekt(kunde, extra = {}) {
     const p = {
-      id: uid(), anrede: "Herr", vorname: "", nachname: "", telefon: "", mobil: "", email: "",
-      strasse: "", ort: "", projektnr: "", zustaendig: "", status: "aktiv", quelle: "", kunde: "Neukunde",
-      budget: "", downloadCode: "", notiz: "", phase: ersteNr, erledigt: {}, termine: { anfrageAm: isoTag(new Date()) },
-      mails: {}, wiedervorlage: "", wiedervorlageNotiz: "", verlauf: [], angelegt: Date.now(), geaendert: Date.now(),
-      ...d,
+      id: uid(), kunde: { anrede: "Herr", vorname: "", nachname: "", strasse: "", ort: "", email: "", telefon: "", telefonGeschaeft: "", mobil: "", ...kunde },
+      projektnr: "", zustaendig: "", status: "aktiv", phase: ersteNr, schritte: {}, formulare: {}, termine: {}, mails: {},
+      downloadCode: "", wiedervorlage: "", wiedervorlageNotiz: "", notiz: "", verlauf: [{ ts: Date.now(), text: "Anfrage angelegt" }],
+      angelegt: Date.now(), geaendert: Date.now(), ...extra,
     };
-    p.verlauf.unshift({ ts: Date.now(), text: "Anfrage angelegt" });
-    Store.daten.projekte.push(p);
-    Store.speichern();
+    S.projekte.push(p);
+    speichern(p);
     return p;
   }
-  const erledigtAnzahl = (p, nr) => phase(nr).aufgaben.filter((_, i) => p.erledigt[`${nr}:${i}`]).length;
-  const abschnittVon = (nr) => window.ABSCHNITTE.find((a) => nr >= a.von && nr <= a.bis) || window.ABSCHNITTE[0];
 
-  /* Was ist fällig? Regeln entsprechen dem Ablauf-Handbuch. */
+  /* ---------- Spiel-Logik: Schritte & Level ---------- */
+  const sKey = (nr, s) => `${nr}:${s.id}`;
+  function schrittGilt(p, nr, s) {
+    if (!s.wenn) return true;
+    if (s.wenn.schritt) return ((p.schritte || {})[`${nr}:${s.wenn.schritt}`] || {}).wahl === s.wenn.wert;
+    if (s.wenn.formular) {
+      const w = Formular.werteVon(p, s.wenn.formular)[s.wenn.feld];
+      return Array.isArray(w) ? w.includes(s.wenn.wert) : w === s.wenn.wert;
+    }
+    return true;
+  }
+  function schrittErledigt(p, nr, s) {
+    if (p.demo && nr < p.phase) return true;
+    const st = (p.schritte || {})[sKey(nr, s)] || {};
+    switch (s.typ) {
+      case "formular": return Formular.status(s.formular, p, dateienVon(p.id)).vollstaendig;
+      case "dateien": return !!st.ersatz || dateienVon(p.id, s.kategorie).length >= (s.min || 1);
+      case "termin": return !!(p.termine || {})[s.termin];
+      case "mail": return !!(p.mails || {})[s.mail];
+      case "erledigt": return !!st.erledigt;
+      case "entscheidung": { const o = (s.optionen || []).find((x) => x.id === st.wahl); return !!o && o.weiter !== false; }
+      case "feld": return !!String(p[s.feld] || "").trim();
+    }
+    return false;
+  }
+  function phaseStatus(p, nr) {
+    const ph = phase(nr);
+    const liste = ph.schritte.filter((s) => schrittGilt(p, nr, s)).map((s) => ({ s, pflicht: s.pflicht !== false, erledigt: schrittErledigt(p, nr, s) }));
+    const pflicht = liste.filter((x) => x.pflicht);
+    const fertig = pflicht.filter((x) => x.erledigt);
+    return { liste, pflicht: pflicht.length, fertig: fertig.length, komplett: fertig.length === pflicht.length, offen: pflicht.filter((x) => !x.erledigt) };
+  }
+  function naechsterSchritt(p) {
+    if (p.status === "abgeschlossen") return "Abgeschlossen";
+    const st = phaseStatus(p, p.phase);
+    return st.komplett ? "Bereit für das nächste Level" : ersetzen(st.offen[0].s.titel);
+  }
+
+  /* ---------- Fälligkeiten (Cockpit) ---------- */
   function faelligkeiten(p) {
     if (p.geloescht || p.status === "abgeschlossen" || p.status === "verloren") return [];
-    const f = cfg().fristen;
-    const out = [];
-    const t = p.termine || {};
-    const erl = (k) => p.erledigt[k];
+    const f = cfg().fristen, t = p.termine || {}, m = p.mails || {}, out = [];
     const add = (text, d, unter) => out.push({ p, text, d, unter, ueber: tageBis(d) < 0 });
-
     const wv = datum(p.wiedervorlage);
     if (wv && tageBis(wv) <= 0) add(p.wiedervorlageNotiz || "Wiedervorlage", wv, "Wiedervorlage");
     if (p.status === "pausiert") return out;
-
     const eg = datum(t.erstgespraech);
-    if (p.phase <= 2 && eg && tageBis(eg) >= 0 && tageBis(eg) <= f.erinnerungVorErstgespraech && !erl("2:2") && !erl("2:4"))
-      add("Fotos & Maße nachfragen, an Termin erinnern", plusTage(eg, -f.erinnerungVorErstgespraech), `Erstgespräch ${fTermin(t.erstgespraech)}`);
-    if (p.phase === 2 && !erl("2:1") && eg) add("Terminbestätigung senden", heute(), `Erstgespräch ${fTermin(t.erstgespraech)}`);
-
+    if (p.phase === 2 && eg && tageBis(eg) >= 0 && tageBis(eg) <= f.erinnerungVorErstgespraech && !dateienVon(p.id, "bilder-alt").length && !((p.schritte || {})["2:fotos"] || {}).ersatz)
+      add("Fotos & Maße fehlen – Kunden anrufen", plusTage(eg, -f.erinnerungVorErstgespraech), `Erstgespräch ${fTermin(t.erstgespraech)}`);
     const ab = datum(t.angebotsbesprechung);
-    if (p.phase === 4 && ab && tageBis(ab) <= 3 && tageBis(ab) >= 0) add("Angebot & Planung prüfen", plusTage(ab, -3), `Besprechung ${fTermin(t.angebotsbesprechung)}`);
-    if (p.phase === 5 && ab && !wv && tageBis(plusTage(ab, f.angebotsverfolgung)) <= 0)
-      add("Angebotsverfolgung – beim Kunden nachfragen", plusTage(ab, f.angebotsverfolgung), `Besprechung war ${fTermin(t.angebotsbesprechung)}`);
-
+    if (p.phase === 4 && ab && tageBis(ab) <= 3) add("Angebot & Planung fertigstellen", plusTage(ab, -3), `Besprechung ${fTermin(t.angebotsbesprechung)}`);
+    if (p.phase === 5 && ab && !((p.schritte || {})["5:ergebnis"] || {}).wahl && tageBis(plusTage(ab, f.angebotsverfolgung)) <= 0)
+      add("Angebotsverfolgung – nachfragen", plusTage(ab, f.angebotsverfolgung), `Besprechung war ${fTermin(t.angebotsbesprechung)}`);
     const ma = datum(t.materialauswahl);
-    if ((p.phase === 7 || p.phase === 8) && ma && !t.freigabeGesendet && tageBis(plusTage(ma, f.freigabeNachMaterialauswahl)) <= 0)
-      add("Exposé & Angebot zur Freigabe schicken", plusTage(ma, f.freigabeNachMaterialauswahl), `Materialauswahl ${fTermin(t.materialauswahl)}`);
-
+    if ((p.phase === 7 || p.phase === 8) && ma && !m.freigabe && tageBis(plusTage(ma, f.freigabeNachMaterialauswahl)) <= 0)
+      add("Planung zur Freigabe schicken", plusTage(ma, f.freigabeNachMaterialauswahl), `Materialauswahl ${fTermin(t.materialauswahl)}`);
     const bs = datum(t.baustart);
-    if (bs && p.phase <= 11 && tageBis(bs) >= 0 && tageBis(bs) <= f.kundenerinnerungVorBaustart && !erl("11:0") && !(p.mails || {}).baustart)
+    if (bs && p.phase <= 11 && tageBis(bs) >= 0 && tageBis(bs) <= f.kundenerinnerungVorBaustart && !m.baustart)
       add("Kundenerinnerung vor Baustart senden", plusTage(bs, -f.kundenerinnerungVorBaustart), `Baustart ${fTermin(t.baustart)}`);
-
     const an = datum(t.abnahme);
-    if (p.phase === 12 && an && tageBis(an) <= 0 && !erl("12:1")) add("Schlussrechnung schreiben & senden", an, `Abnahme ${fTermin(t.abnahme)}`);
-    if (p.phase === 13 && an && tageBis(plusTage(an, 7)) <= 0 && !erl("13:0")) add("Bewertung nachhaken", plusTage(an, 7), "Abschluss");
+    if (p.phase === 12 && an && tageBis(an) <= 0 && !m.schlussrechnung) add("Schlussrechnung senden", an, `Abnahme ${fTermin(t.abnahme)}`);
     return out;
   }
 
-  function anstehendeTermine(tage) {
-    const out = [];
-    for (const p of alle()) {
-      if (p.status === "verloren") continue;
-      for (const def of TERMINE) {
-        if (def.key === "anfrageAm" || def.key === "freigabeGesendet") continue;
-        const d = datum((p.termine || {})[def.key]);
-        if (d && tageBis(d) >= 0 && tageBis(d) <= tage) out.push({ p, def, d, s: p.termine[def.key] });
-      }
-    }
-    return out.sort((a, b) => a.d - b.d);
+  /* ---------- Vorschaubilder ---------- */
+  async function dateiUrl(d) {
+    if (urlCache.has(d.id)) return urlCache.get(d.id);
+    const u = await Daten.dateiUrl(d);
+    urlCache.set(d.id, u);
+    return u;
+  }
+  function vorschauenLaden(root = document) {
+    $$("img[data-vorschau]", root).forEach(async (img) => {
+      const d = S.dateien.find((x) => x.id === img.dataset.vorschau);
+      if (!d) return;
+      try { img.src = await dateiUrl(d); } catch (e) { /* ohne Vorschau */ }
+    });
   }
 
   /* ---------- Bausteine ---------- */
-  function fliesen(p, gross) {
-    const i = phaseIndex(p.phase);
-    const fertig = p.status === "abgeschlossen";
-    return `<span class="fliesen${gross ? " gross" : ""}" aria-label="Phase ${i + 1} von ${N}">${PHASEN.map((ph, k) =>
-      `<span class="fliese${fertig || k < i ? " fertig" : k === i ? " jetzt" : ""}"></span>`).join("")}</span>`;
-  }
-  function vorschauBild(datei) {
-    return "vorlagen/_vorschau/" + datei.replace(/^vorlagen\//, "").replace(/\//g, "_").replace(/\.[^.]+$/, ".jpg");
-  }
-  function dokKachel(d) {
-    const ext = d.datei.split(".").pop().toUpperCase();
-    return `<a class="dok" href="${esc(d.datei)}" target="_blank" rel="noopener">
-      <div class="dok-bild"><img class="dok-thumb" src="${esc(vorschauBild(d.datei))}" alt="" loading="lazy"></div>
-      <div class="dok-name">${esc(d.titel)}</div>
-      <div class="dok-meta"><span class="dok-typ">${ext}</span>${esc(d.hinweis || (ext === "DOCX" ? "in Word öffnen" : "öffnen & drucken"))}</div></a>`;
-  }
-  function mailKnopf(m, p) {
-    const am = p && p.mails && p.mails[m.id];
-    return `<button class="mail-knopf" type="button" data-aktion="mail" data-mail="${m.id}"${p ? ` data-id="${p.id}"` : ""}>
-      <span class="umschlag" aria-hidden="true"></span>
-      <span><b>${esc(m.titel)}</b><small>Betreff: ${esc(m.betreff)}</small></span>
-      ${am ? `<span class="gesendet">gesendet ${fKurz(new Date(am))}</span>` : `<span class="pfeil" aria-hidden="true">→</span>`}</button>`;
+  function fliesen(p) {
+    const i = phaseIndex(p.phase), fertig = p.status === "abgeschlossen";
+    return `<span class="fliesen" aria-label="Level ${i + 1} von ${N}">${PHASEN.map((_, k) => `<span class="fliese${fertig || k < i ? " fertig" : k === i ? " jetzt" : ""}"></span>`).join("")}</span>`;
   }
   const opt = (liste, wert) => liste.map((x) => {
     const [v, l] = typeof x === "string" ? [x, x] : [x.id, x.label];
     return `<option value="${esc(v)}"${v === wert ? " selected" : ""}>${esc(l)}</option>`;
   }).join("");
 
+  /* Datei-Ablage einer Kategorie: Vorschauen + Upload-Feld */
+  function ablage(p, kat, kompakt) {
+    const l = dateienVon(p.id, kat);
+    return `<div class="ablage${kompakt ? " kompakt" : ""}" data-ablage="${esc(kat)}">
+      ${l.length ? `<ul class="thumbs">${l.map((d) => `<li><button type="button" class="thumb${d.neu ? " neu" : ""}" data-aktion="datei" data-datei="${esc(d.id)}" title="${esc(d.name)}">
+        ${istBild(d) ? `<img data-vorschau="${esc(d.id)}" alt="">` : `<span class="typ">${esc((d.name.split(".").pop() || "").toUpperCase().slice(0, 4))}</span>`}
+        <span class="thumb-name">${esc(d.name)}</span>${d.quelle === "kunde" ? '<span class="vom-kunden">Kunde</span>' : ""}</button></li>`).join("")}</ul>` : ""}
+      <label class="drop"><input type="file" multiple data-upload="${esc(kat)}" hidden>
+        <span class="drop-icon" aria-hidden="true">＋</span><span>Dateien hierher ziehen oder <u>auswählen</u></span></label></div>`;
+  }
+
   /* ================================================================
-     ANSICHT: Heute
+     Cockpit
      ================================================================ */
-  function ansichtHeute() {
-    const c = cfg();
-    const projekte = alle().filter((p) => p.status === "aktiv" || p.status === "pausiert");
-    const faellig = projekte.flatMap(faelligkeiten).sort((a, b) => a.d - b.d);
-    const faelligIds = new Set(faellig.map((f) => f.p.id));
-    const termine = anstehendeTermine(14);
+  function ansichtCockpit() {
+    const laufend = alle().filter((p) => p.status === "aktiv" || p.status === "pausiert");
+    const faellig = laufend.flatMap(faelligkeiten).sort((a, b) => a.d - b.d);
+    const neu = S.dateien.filter((d) => d.neu && finde(d.projekt_id));
+    const termine = [];
+    for (const p of alle()) for (const t of TERMINE) { const d = datum((p.termine || {})[t.key]); if (d && tageBis(d) >= 0 && tageBis(d) <= 14 && p.status !== "verloren") termine.push({ p, t, d, s: p.termine[t.key] }); }
+    termine.sort((a, b) => a.d - b.d);
     const d = new Date();
+    const queue = laufend.filter((p) => p.status === "aktiv").map((p) => ({ p, st: phaseStatus(p, p.phase) })).sort((a, b) => (b.st.komplett - a.st.komplett) || (b.p.phase - a.p.phase));
+    const neuNachProjekt = {};
+    for (const x of neu) (neuNachProjekt[x.projekt_id] = neuNachProjekt[x.projekt_id] || []).push(x);
 
-    const spalten = PHASEN.map((ph) => {
-      const steine = projekte.filter((p) => p.phase === ph.nr);
-      return `<div class="wand-spalte">${steine.length ? steine.map((p) =>
-        `<a class="wand-stein${faelligIds.has(p.id) ? " faellig" : ""}" href="#/projekt/${p.id}" aria-label="${esc(anzeigeName(p))}"><span class="nm">${esc(p.nachname)}</span><span class="tip">${esc(anzeigeName(p))} · ${esc(ph.titel)}</span></a>`).join("")
-        : `<span class="wand-leer"></span>`}</div>`;
-    }).join("");
-
-    return `<div class="seite">
-      <header class="kopf">
-        <div><p class="eyebrow">${WT[d.getDay()]}, ${fDatum(d)}</p>
-          <h1>Guten ${d.getHours() < 11 ? "Morgen" : d.getHours() < 18 ? "Tag" : "Abend"}.</h1>
-          <p class="unter">${faellig.length ? `${faellig.length} ${faellig.length === 1 ? "Sache ist" : "Sachen sind"} heute dran, ${projekte.length} Bäder laufen gerade.` : projekte.length ? `Nichts überfällig — ${projekte.length} Bäder laufen gerade.` : "Noch keine Projekte angelegt."}</p></div>
-        <div class="kopf-aktionen"><button class="btn jetzt" data-aktion="neu">+ Neue Anfrage</button></div>
-      </header>
-
-      <section class="wand" style="--n:${N}" aria-label="Fliesenspiegel aller Projekte">
-        <div class="wand-kopf"><h2>Der Fliesenspiegel</h2><span>Jede Fliese ein Bad — in der Spalte seiner Phase. Orange = heute etwas zu tun.</span></div>
-        <div class="wand-raster">${spalten}</div>
-        <div class="wand-fuss">${PHASEN.map((ph) => `<a href="#/ablauf/${ph.nr}" title="${esc(ph.titel)}">${zwei(ph.nr)}<small>${esc(ph.titel.split(/[ &]/)[0])}</small></a>`).join("")}</div>
-        <div class="wand-abschnitte">${window.ABSCHNITTE.map((a) => `<span style="grid-column: span ${PHASEN.filter((p) => p.nr >= a.von && p.nr <= a.bis).length}">${esc(a.titel)}</span>`).join("")}</div>
+    return `<div class="seite cockpit">
+      <header class="kopf"><div><p class="eyebrow">${WT[d.getDay()]}, ${fDatum(d)}</p><h1>Cockpit</h1></div></header>
+      <section class="kpis">
+        ${window.ABSCHNITTE.map((a) => {
+          const l = laufend.filter((p) => p.phase >= a.von && p.phase <= a.bis);
+          return `<a class="kpi" href="#/projekte?abschnitt=${a.id}"><span class="kpi-zahl">${l.length}</span><span class="kpi-titel">${esc(a.titel)}</span><span class="kpi-unter">Level ${zwei(a.von)}–${zwei(a.bis)}</span></a>`;
+        }).join("")}
+        <div class="kpi ${neu.length ? "alarm" : ""}"><span class="kpi-zahl">${neu.length}</span><span class="kpi-titel">Neu vom Kunden</span><span class="kpi-unter">${neu.length ? "Dateien warten" : "nichts Neues"}</span></div>
       </section>
 
-      <div class="zwei">
-        <section>
-          <h2 class="block-titel">Heute zu tun ${faellig.length ? `<span class="zahl">${faellig.length}</span>` : ""}</h2>
+      <div class="cockpit-raster">
+        <section class="panel">
+          <h2 class="panel-titel">Fällig ${faellig.length ? `<span class="zahl">${faellig.length}</span>` : ""}</h2>
           <ul class="liste">${faellig.length ? faellig.map((f) => `<li><a class="zeile" href="#/projekt/${f.p.id}">
-              <span class="marker ${f.ueber ? "ueber" : "jetzt"}"></span>
-              <span><span class="zeile-titel">${esc(f.text)}</span><br><span class="zeile-unter">${esc(anzeigeName(f.p))} · ${esc(f.unter)}</span></span>
-              <span class="zeile-rechts ${f.ueber ? "ueberfaellig" : ""}">${f.ueber ? relativ(f.d) : "heute"}</span></a></li>`).join("")
-            : `<li class="leer-hinweis">Alles erledigt. Fällige Nachfassaktionen erscheinen hier automatisch — z. B. die Angebotsverfolgung ${c.fristen.angebotsverfolgung} Tage nach der Besprechung.</li>`}</ul>
+            <span class="marker ${f.ueber ? "ueber" : "jetzt"}"></span>
+            <span><span class="zeile-titel">${esc(f.text)}</span><span class="zeile-unter">${esc(anzeigeName(f.p))} · ${esc(f.unter)}</span></span>
+            <span class="zeile-rechts ${f.ueber ? "ueberfaellig" : ""}">${f.ueber ? relativ(f.d) : "heute"}</span></a></li>`).join("")
+            : `<li class="leer-hinweis">Nichts überfällig.</li>`}</ul>
+
+          <h2 class="panel-titel abstand">Als Nächstes</h2>
+          <ul class="liste">${queue.length ? queue.map(({ p, st }) => `<li><a class="zeile" href="#/projekt/${p.id}">
+            <span class="lv-mini${st.komplett ? " bereit" : ""}">${zwei(p.phase)}</span>
+            <span><span class="zeile-titel">${esc(naechsterSchritt(p))}</span><span class="zeile-unter">${esc(anzeigeName(p))} · ${esc(phase(p.phase).titel)}</span></span>
+            <span class="zeile-rechts">${st.fertig}/${st.pflicht}</span></a></li>`).join("")
+            : `<li class="leer-hinweis">Keine laufenden Projekte. <button class="btn klein" data-aktion="neu">+ Neue Anfrage</button></li>`}</ul>
         </section>
-        <section>
-          <h2 class="block-titel">Nächste 14 Tage</h2>
-          <ul class="liste">${termine.length ? termine.map((t) => `<li><a class="zeile" href="#/projekt/${t.p.id}">
-              <span class="marker termin"></span>
-              <span><span class="zeile-titel">${esc(t.def.label)}</span><br><span class="zeile-unter">${esc(anzeigeName(t.p))}${t.p.ort ? " · " + esc(t.p.ort) : ""}</span></span>
-              <span class="zeile-rechts">${esc(fTermin(t.s))}</span></a></li>`).join("")
-            : `<li class="leer-hinweis">Keine Termine eingetragen.</li>`}</ul>
-        </section>
+
+        <div class="spalte">
+          <section class="panel">
+            <h2 class="panel-titel">Neu vom Kunden ${neu.length ? `<span class="zahl">${neu.length}</span>` : ""}</h2>
+            <ul class="liste">${Object.keys(neuNachProjekt).length ? Object.entries(neuNachProjekt).map(([pid, l]) => { const p = finde(pid); return `<li><a class="zeile" href="#/projekt/${pid}">
+              <span class="marker jetzt"></span><span><span class="zeile-titel">${esc(anzeigeName(p))}</span><span class="zeile-unter">${l.length} ${l.length === 1 ? "Datei" : "Dateien"} · ${esc([...new Set(l.map((x) => katTitel(x.kategorie)))].join(", "))}</span></span>
+              <span class="zeile-rechts">${fTermin(String(l[l.length - 1].am).slice(0, 10))}</span></a></li>`; }).join("")
+              : `<li class="leer-hinweis">Hier landen Fotos und Unterlagen, die Kunden über ihren Link hochladen.</li>`}</ul>
+          </section>
+          <section class="panel">
+            <h2 class="panel-titel">Termine · 14 Tage</h2>
+            <ul class="liste">${termine.length ? termine.map((t) => `<li><a class="zeile" href="#/projekt/${t.p.id}">
+              <span class="marker termin"></span><span><span class="zeile-titel">${esc(t.t.label)}</span><span class="zeile-unter">${esc(anzeigeName(t.p))}${t.p.kunde.ort ? " · " + esc(t.p.kunde.ort) : ""}</span></span>
+              <span class="zeile-rechts">${esc(fTermin(t.s))}</span></a></li>`).join("") : `<li class="leer-hinweis">Keine Termine.</li>`}</ul>
+          </section>
+        </div>
       </div>
+
+      <section class="panel wand" style="--n:${N}">
+        <h2 class="panel-titel">Fliesenspiegel <small>jede Fliese ein Bad, in der Spalte seines Levels</small></h2>
+        <div class="wand-raster">${PHASEN.map((ph) => `<div class="wand-spalte">${laufend.filter((p) => p.phase === ph.nr).map((p) => `<a class="wand-stein${phaseStatus(p, p.phase).komplett ? " bereit" : ""}${faelligkeiten(p).length ? " faellig" : ""}" href="#/projekt/${p.id}" title="${esc(anzeigeName(p))}">${esc(p.kunde.nachname)}</a>`).join("") || '<span class="wand-leer"></span>'}</div>`).join("")}</div>
+        <div class="wand-fuss">${PHASEN.map((ph) => `<span title="${esc(ph.titel)}">${zwei(ph.nr)}</span>`).join("")}</div>
+      </section>
     </div>`;
   }
 
   /* ================================================================
-     ANSICHT: Projekte
+     Projekte
      ================================================================ */
-  const filter = { suche: "", wer: "", status: "offen" };
   function ansichtProjekte() {
-    const liste = alle();
-    if (!liste.length) {
-      return `<div class="seite"><header class="kopf"><div><p class="eyebrow">Projekte</p><h1>Noch leer.</h1></div></header>
-        <div class="startfeld"><h2>Die erste Anfrage anlegen</h2>
-          <p>Jedes Bad läuft hier als Projekt durch die ${N} Phasen. Lege eine echte Anfrage an — oder schau dir das Dashboard erst mit ein paar Beispielprojekten an (die lassen sich unter „Einrichtung" wieder entfernen).</p>
+    if (!alle().length) {
+      return `<div class="seite"><header class="kopf"><div><p class="eyebrow">Projekte</p><h1>Noch leer</h1></div></header>
+        <div class="panel startfeld"><h2>Die erste Anfrage anlegen</h2>
+          <p>Jedes Bad läuft als Projekt durch ${N} Level. Leg eine echte Anfrage an – oder probier das Dashboard erst mit Beispielprojekten aus (lassen sich unter „Einrichtung“ wieder entfernen).</p>
           <div class="aktionen"><button class="btn jetzt" data-aktion="neu">+ Neue Anfrage</button><button class="btn" data-aktion="demo">Beispielprojekte laden</button></div></div></div>`;
     }
+    const f = S.filter;
     return `<div class="seite">
-      <header class="kopf"><div><p class="eyebrow">Projekte</p><h1>Alle Bäder</h1></div>
-        <div class="kopf-aktionen"><button class="btn jetzt" data-aktion="neu">+ Neue Anfrage</button></div></header>
+      <header class="kopf"><div><p class="eyebrow">Projekte</p><h1>Alle Bäder</h1></div></header>
       <div class="werkzeuge">
-        <input class="eingabe feld-suche" type="search" placeholder="Name, Ort, Projektnummer …" data-filter="suche" value="${esc(filter.suche)}" aria-label="Suchen">
-        <select class="eingabe" data-filter="wer" aria-label="Zuständig" style="width:auto"><option value="">Alle Zuständigen</option>${opt(kuerzelListe(), filter.wer)}</select>
-        <select class="eingabe" data-filter="status" aria-label="Status" style="width:auto">${opt([{ id: "offen", label: "Laufende" }, ...STATUS, { id: "alle", label: "Alle" }], filter.status)}</select>
+        <input class="eingabe feld-suche" type="search" placeholder="Name, Ort, Projektnummer …" data-filter="suche" value="${esc(f.suche)}" aria-label="Suchen">
+        <select class="eingabe auto" data-filter="abschnitt" aria-label="Abschnitt"><option value="">Alle Abschnitte</option>${opt(window.ABSCHNITTE.map((a) => ({ id: a.id, label: a.titel })), f.abschnitt)}</select>
+        <select class="eingabe auto" data-filter="wer" aria-label="Zuständig"><option value="">Alle Zuständigen</option>${opt(kuerzelListe(), f.wer)}</select>
+        <select class="eingabe auto" data-filter="status" aria-label="Status">${opt([{ id: "offen", label: "Laufende" }, ...STATUS, { id: "alle", label: "Alle" }], f.status)}</select>
       </div>
       <div id="projektliste">${projektListe()}</div></div>`;
   }
   function projektListe() {
-    const q = filter.suche.trim().toLowerCase();
+    const f = S.filter, q = f.suche.trim().toLowerCase();
     const liste = alle().filter((p) => {
-      if (filter.status === "offen" && !(p.status === "aktiv" || p.status === "pausiert")) return false;
-      if (filter.status !== "offen" && filter.status !== "alle" && p.status !== filter.status) return false;
-      if (filter.wer && p.zustaendig !== filter.wer) return false;
-      if (q && ![p.nachname, p.vorname, p.ort, p.projektnr, p.strasse].join(" ").toLowerCase().includes(q)) return false;
+      if (f.status === "offen" && !(p.status === "aktiv" || p.status === "pausiert")) return false;
+      if (f.status !== "offen" && f.status !== "alle" && p.status !== f.status) return false;
+      if (f.wer && p.zustaendig !== f.wer) return false;
+      if (q && ![p.kunde.nachname, p.kunde.vorname, p.kunde.ort, p.projektnr, p.kunde.strasse].join(" ").toLowerCase().includes(q)) return false;
       return true;
     });
     if (!liste.length) return `<p class="leer-hinweis">Keine Projekte für diese Auswahl.</p>`;
-    return window.ABSCHNITTE.map((a) => {
-      const teil = liste.filter((p) => p.phase >= a.von && p.phase <= a.bis).sort((x, y) => y.phase - x.phase || x.nachname.localeCompare(y.nachname, "de"));
+    return window.ABSCHNITTE.filter((a) => !f.abschnitt || a.id === f.abschnitt).map((a) => {
+      const teil = liste.filter((p) => p.phase >= a.von && p.phase <= a.bis).sort((x, y) => y.phase - x.phase || x.kunde.nachname.localeCompare(y.kunde.nachname, "de"));
       if (!teil.length) return "";
-      return `<section class="abschnitt"><div class="abschnitt-kopf"><h2>${esc(a.titel)}</h2><span class="phasen">Phase ${a.von}–${a.bis}</span><span class="anzahl">${teil.length}</span></div>
+      return `<section class="abschnitt"><div class="abschnitt-kopf"><h2>${esc(a.titel)}</h2><span class="phasen">Level ${a.von}–${a.bis}</span><span class="anzahl">${teil.length}</span></div>
         ${teil.map((p) => {
-          const ph = phase(p.phase);
-          const naechster = TERMINE.map((t) => ({ t, s: p.termine[t.key] })).filter((x) => x.s && datum(x.s) && tageBis(datum(x.s)) >= 0).sort((x, y) => datum(x.s) - datum(y.s))[0];
+          const st = phaseStatus(p, p.phase);
+          const neu = dateienVon(p.id).filter((d) => d.neu).length;
           return `<a class="projekt-zeile" href="#/projekt/${p.id}">
-            <span><span class="p-name">${esc(anzeigeName(p))}</span>${p.status !== "aktiv" ? `<span class="status-chip ${p.status}">${esc(p.status)}</span>` : ""}${p.demo ? `<span class="status-chip">Beispiel</span>` : ""}<br><span class="p-ort">${esc([p.projektnr, p.ort].filter(Boolean).join(" · ") || "—")}</span></span>
-            <span class="p-phase">${zwei(ph.nr)} ${esc(ph.titel)}<small>${erledigtAnzahl(p, p.phase)} von ${ph.aufgaben.length} erledigt</small></span>
+            <span><span class="p-name">${esc(anzeigeName(p))}</span>${p.status !== "aktiv" ? `<span class="status-chip ${p.status}">${esc(STATUS.find((s) => s.id === p.status)?.label)}</span>` : ""}${p.demo ? `<span class="status-chip">Beispiel</span>` : ""}${neu ? `<span class="status-chip neu">${neu} neu</span>` : ""}<br><span class="p-ort">${esc([p.projektnr, p.kunde.ort].filter(Boolean).join(" · ") || "—")}</span></span>
+            <span class="p-phase">${zwei(p.phase)} ${esc(phase(p.phase).titel)}<small>${esc(naechsterSchritt(p))}</small></span>
             ${fliesen(p)}
-            <span class="p-termin">${naechster ? `${esc(naechster.t.label)}<br>${esc(fTermin(naechster.s))}` : ""}</span>
+            <span class="p-termin">${st.fertig}/${st.pflicht} Schritte</span>
             <span class="kuerzel" title="Zuständig">${esc(p.zustaendig || "–")}</span></a>`;
         }).join("")}</section>`;
     }).join("");
   }
 
   /* ================================================================
-     ANSICHT: Projektakte
+     Projekt — die Spielfläche
      ================================================================ */
-  let ansichtPhase = null; // welche Phase in der Akte gerade angezeigt wird
   function ansichtProjekt(id) {
     const p = finde(id);
-    if (!p) return `<div class="seite"><header class="kopf"><div><p class="eyebrow">Projekt</p><h1>Nicht gefunden.</h1></div></header><a class="btn" href="#/projekte">← Zu den Projekten</a></div>`;
-    if (!ansichtPhase || ansichtPhase.id !== id) ansichtPhase = { id, nr: p.phase };
-    return `<div class="seite" data-projekt="${p.id}">
-      <div id="akte-kopf">${akteKopf(p)}</div>
-      <div class="akte">
-        <div id="phase-blatt">${phaseBlatt(p, ansichtPhase.nr)}</div>
-        <aside class="akte-seite">${akteSeite(p)}</aside>
+    if (!p) return `<div class="seite"><header class="kopf"><div><p class="eyebrow">Projekt</p><h1>Nicht gefunden</h1></div></header><a class="btn" href="#/projekte">← Zu den Projekten</a></div>`;
+    const nr = S.ansicht[id] && S.ansicht[id] <= p.phase ? S.ansicht[id] : p.phase;
+    S.ansicht[id] = nr;
+    return `<div class="seite projekt" data-projekt="${p.id}">
+      ${projektKopf(p)}
+      <nav class="karte" aria-label="Level">${levelKarte(p, nr)}</nav>
+      <div class="arbeit">
+        <div id="mission">${mission(p, nr)}</div>
+        <aside class="akte" id="akte">${akte(p)}</aside>
       </div></div>`;
   }
-  function akteKopf(p) {
-    const i = phaseIndex(p.phase);
-    const tel = [p.telefon, p.mobil].filter(Boolean);
-    return `<header class="akte-kopf">
-        <div><p class="eyebrow"><a href="#/projekte" style="text-decoration:none">Projekte</a> / ${esc(abschnittVon(p.phase).titel)}${p.projektnr ? " · Nr. " + esc(p.projektnr) : ""}</p>
-          <h1>${esc(anzeigeName(p))}</h1>
-          <div class="akte-kontakt">
-            ${p.strasse || p.ort ? `<span>${esc([p.strasse, p.ort].filter(Boolean).join(", "))}</span>` : ""}
-            ${tel.map((t) => `<a href="tel:${esc(t.replace(/[^\d+]/g, ""))}">${esc(t)}</a>`).join("")}
-            ${p.email ? `<a href="mailto:${esc(p.email)}">${esc(p.email)}</a>` : ""}
-            ${p.zustaendig ? `<span>Zuständig: <b>${esc(p.zustaendig)}</b></span>` : ""}
-          </div></div>
-        <div class="kopf-aktionen"><button class="btn" data-aktion="drucken">Drucken</button></div>
-      </header>
-      <div class="akte-spiegel" style="--n:${N}">
-        <div class="fliesen gross">${PHASEN.map((ph, k) => `<button type="button" class="fliese${p.status === "abgeschlossen" || k < i ? " fertig" : k === i ? " jetzt" : ""}${ansichtPhase.nr === ph.nr ? " ansicht" : ""}" data-aktion="zeige-phase" data-nr="${ph.nr}" title="${zwei(ph.nr)} ${esc(ph.titel)}" aria-label="Phase ${ph.nr}: ${esc(ph.titel)}"></button>`).join("")}</div>
-        <div class="akte-spiegel-legende"><span>${p.status === "abgeschlossen" ? "Abgeschlossen" : `Phase ${i + 1} von ${N} · ${esc(phase(p.phase).titel)}`}</span><span>Fliese anklicken, um eine Phase anzusehen</span></div>
-      </div>`;
+  function projektKopf(p) {
+    const k = p.kunde;
+    const tel = [k.telefon, k.mobil, k.telefonGeschaeft].filter(Boolean);
+    const neu = dateienVon(p.id).filter((d) => d.neu).length;
+    return `<header class="p-kopf">
+      <div><p class="eyebrow"><a href="#/projekte">Projekte</a> / ${p.projektnr ? "Nr. " + esc(p.projektnr) + " · " : ""}Level ${zwei(p.phase)} von ${N}${p.status !== "aktiv" ? " · " + esc(STATUS.find((s) => s.id === p.status)?.label) : ""}</p>
+        <h1>${esc(anzeigeName(p))}</h1>
+        <div class="p-kontakt">
+          ${k.strasse || k.ort ? `<span>${esc([k.strasse, k.ort].filter(Boolean).join(", "))}</span>` : ""}
+          ${tel.map((t) => `<a href="tel:${esc(t.replace(/[^\d+]/g, ""))}">${esc(t)}</a>`).join("")}
+          ${k.email ? `<a href="mailto:${esc(k.email)}">${esc(k.email)}</a>` : ""}
+          ${p.zustaendig ? `<span class="kuerzel klein" title="Zuständig">${esc(p.zustaendig)}</span>` : ""}
+        </div></div>
+      <div class="kopf-aktionen">
+        ${neu ? `<button class="btn jetzt" data-aktion="akte-tab" data-tab="dateien">${neu} neu vom Kunden</button>` : ""}
+        <button class="btn" data-aktion="kundenlink">Kundenlink</button>
+        <button class="btn" data-aktion="mappe">Monteurmappe</button>
+      </div></header>`;
   }
-  function phaseBlatt(p, nr) {
+  function levelKarte(p, ansicht) {
+    const i = phaseIndex(p.phase), fertigAlle = p.status === "abgeschlossen";
+    return `<ol class="levels">${PHASEN.map((ph, k) => {
+      const z = fertigAlle || k < i ? "fertig" : k === i ? "jetzt" : "zu";
+      return `<li class="lv ${z}${ph.nr === ansicht ? " ansicht" : ""}">
+        <button type="button" data-aktion="level" data-nr="${ph.nr}" ${z === "zu" ? 'aria-disabled="true"' : ""} title="${zwei(ph.nr)} ${esc(ph.titel)}${z === "zu" ? " – noch gesperrt" : ""}">
+          <span class="lv-knoten">${z === "fertig" ? "✓" : z === "zu" ? '<span class="schloss" aria-hidden="true"></span>' : zwei(ph.nr)}</span>
+          <span class="lv-titel">${esc(ph.titel)}</span></button></li>`;
+    }).join("")}</ol>`;
+  }
+
+  function mission(p, nr) {
     const ph = phase(nr);
-    const zustand = p.status === "abgeschlossen" || nr < p.phase ? "vergangen" : nr === p.phase ? "jetzt" : "kuenftig";
-    const fertig = erledigtAnzahl(p, nr);
-    const mails = (ph.mails || []).map((id) => window.MAILVORLAGEN.find((m) => m.id === id)).filter(Boolean);
+    const st = phaseStatus(p, nr);
+    const istJetzt = nr === p.phase && p.status !== "abgeschlossen";
+    const prozent = st.pflicht ? Math.round((st.fertig / st.pflicht) * 100) : 100;
     const weiter = naechsteNr(nr);
-    return `<article class="phase-blatt ${zustand === "jetzt" ? "" : zustand}">
-      <div class="phase-blatt-kopf"><span class="phase-nr">${zwei(ph.nr)}</span><h2>${esc(ph.titel)}</h2><p>${esc(ph.kurz)}</p></div>
-      <div class="phase-teil"><p class="teil-titel">Checkliste · ${fertig} von ${ph.aufgaben.length}</p>
-        <ul class="check">${ph.aufgaben.map((a, k) => `<li><label><input type="checkbox" data-aktion="haken" data-key="${nr}:${k}"${p.erledigt[`${nr}:${k}`] ? " checked" : ""}><span><span class="t">${esc(ersetzen(a.t))}</span>${a.d ? `<span class="d">${esc(ersetzen(a.d))}</span>` : ""}</span></label></li>`).join("")}</ul></div>
-      ${mails.length ? `<div class="phase-teil"><p class="teil-titel">E-Mail an den Kunden</p><div class="mails">${mails.map((m) => mailKnopf(m, p)).join("")}</div></div>` : ""}
-      ${ph.dokumente.length ? `<div class="phase-teil"><p class="teil-titel">Formulare & Unterlagen</p><div class="doks">${ph.dokumente.map(dokKachel).join("")}</div></div>` : ""}
-      ${ph.ordner ? `<div class="phase-teil"><p class="teil-titel">Ordnerstruktur</p><ul class="ordner-liste">${ph.ordner.map((o) => `<li>${esc(o)}</li>`).join("")}</ul></div>` : ""}
-      <div class="phase-fuss">${zustand === "jetzt" && p.status !== "abgeschlossen"
-        ? `<small>${fertig === ph.aufgaben.length ? "Alles abgehakt." : `Noch ${ph.aufgaben.length - fertig} offen.`}</small>
-           ${weiter ? `<button class="btn jetzt" data-aktion="weiter">Weiter zu ${zwei(weiter)} ${esc(phase(weiter).titel)} <span class="pfeil">→</span></button>`
-                    : `<button class="btn jetzt" data-aktion="abschliessen">Projekt abschließen ✓</button>`}`
-        : `<small>${zustand === "vergangen" ? "Diese Phase ist abgeschlossen." : "Diese Phase kommt noch."}</small>
-           <span style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-aktion="setze-phase" data-nr="${nr}">Projekt auf diese Phase setzen</button>
-           <button class="btn voll" data-aktion="zeige-phase" data-nr="${p.phase}">Zur aktuellen Phase</button></span>`}
-      </div></article>`;
+    return `<section class="mission panel${istJetzt ? "" : " vergangen"}">
+      <header class="mission-kopf">
+        <span class="mission-nr">${zwei(nr)}</span>
+        <div><p class="eyebrow">${istJetzt ? "Aktuelles Level" : "Abgeschlossenes Level"} · ${esc(window.ABSCHNITTE.find((a) => nr >= a.von && nr <= a.bis).titel)}</p>
+          <h2>${esc(ph.titel)}</h2><p class="mission-ziel">${esc(ersetzen(ph.ziel))}</p></div>
+        <div class="fortschritt" role="progressbar" aria-valuenow="${prozent}" aria-valuemin="0" aria-valuemax="100" aria-label="Fortschritt">
+          <span class="fs-zahl">${st.fertig}<small>/${st.pflicht}</small></span><span class="fs-balken"><span style="width:${prozent}%"></span></span></div>
+      </header>
+      <ol class="quests">${st.liste.map((x, k) => quest(p, nr, x, k)).join("")}</ol>
+      <footer class="mission-fuss">${istJetzt
+        ? (st.komplett
+          ? `<span class="bereit-text">Alles erledigt – Level freischalten.</span><button class="btn jetzt gross" data-aktion="abschliessen">${weiter ? `Weiter zu Level ${zwei(weiter)}: ${esc(phase(weiter).titel)}` : "Projekt abschließen & archivieren"} <span class="pfeil">→</span></button>`
+          : `<span class="offen-text">Noch offen: ${st.offen.map((x) => esc(ersetzen(x.s.titel))).join(" · ")}</span><button class="btn gross" disabled>${weiter ? `Level ${zwei(weiter)} gesperrt` : "Abschluss gesperrt"}</button>`)
+        : `<span class="offen-text">Dieses Level ist abgeschlossen. Änderungen bleiben möglich.</span><button class="btn voll" data-aktion="level" data-nr="${p.phase}">Zum aktuellen Level ${zwei(p.phase)}</button>`}
+      </footer></section>`;
   }
-  function akteSeite(p) {
-    const aktTermin = phase(p.phase).termin;
-    const f = (key, label, typ = "text", breit) => `<div class="feld${breit ? " breit" : ""}"><label for="f-${key}">${label}</label><input class="eingabe" id="f-${key}" type="${typ}" data-feld="${key}" value="${esc(p[key])}"></div>`;
-    return `
-      <section class="kasten"><h3>Termine</h3>
-        ${TERMINE.map((t) => `<div class="termin-zeile${t.key === aktTermin ? " aktiv" : ""}"><span>${esc(t.label)}</span><input class="eingabe" type="${t.typ}" data-termin="${t.key}" value="${esc(p.termine[t.key] || "")}" aria-label="${esc(t.label)}"></div>`).join("")}
-      </section>
-      <section class="kasten"><h3>Wiedervorlage</h3>
-        <div class="felder"><div class="feld"><label for="f-wv">Am</label><input class="eingabe" id="f-wv" type="date" data-feld="wiedervorlage" value="${esc(p.wiedervorlage)}"></div>
-        <div class="feld"><label for="f-wvn">Worum geht's</label><input class="eingabe" id="f-wvn" data-feld="wiedervorlageNotiz" value="${esc(p.wiedervorlageNotiz)}" placeholder="z. B. nochmal anrufen"></div></div>
-      </section>
-      <section class="kasten"><h3>Kunde</h3>
-        <div class="felder">
-          <div class="feld"><label for="f-anrede">Anrede</label><select class="eingabe" id="f-anrede" data-feld="anrede">${opt(ANREDEN, p.anrede)}</select></div>
-          ${f("vorname", "Vorname")}${f("nachname", "Nachname")}${f("projektnr", "Projekt-Nr.")}
-          ${f("telefon", "Telefon", "tel")}${f("mobil", "Mobil", "tel")}${f("email", "E-Mail", "email", true)}
-          ${f("strasse", "Straße")}${f("ort", "PLZ & Ort")}
-          <div class="feld"><label for="f-zustaendig">Zuständig</label><select class="eingabe" id="f-zustaendig" data-feld="zustaendig"><option value="">–</option>${opt(kuerzelListe(), p.zustaendig)}</select></div>
-          <div class="feld"><label for="f-status">Status</label><select class="eingabe" id="f-status" data-feld="status">${opt(STATUS, p.status)}</select></div>
-          <div class="feld"><label for="f-quelle">Kontakt über</label><select class="eingabe" id="f-quelle" data-feld="quelle"><option value="">–</option>${opt(QUELLEN, p.quelle)}</select></div>
-          <div class="feld"><label for="f-kunde">Kunde</label><select class="eingabe" id="f-kunde" data-feld="kunde">${opt(["Neukunde", "Stammkunde"], p.kunde)}</select></div>
-          ${f("budget", "Budget")}${f("downloadCode", cfg().programme.app3d + "-Code")}
-        </div>
-      </section>
-      <section class="kasten"><h3>Notizen</h3><textarea class="eingabe" data-feld="notiz" rows="5" placeholder="Wünsche, Besonderheiten, Absprachen …">${esc(p.notiz)}</textarea></section>
-      <section class="kasten"><h3>Verlauf</h3><ul class="verlauf">${(p.verlauf || []).map((v) => { const d = new Date(v.ts); return `<li><time>${fKurz(d)} ${fUhr(d)}</time><span>${esc(v.text)}</span></li>`; }).join("")}</ul></section>
-      <button class="btn still gefahr" data-aktion="loeschen">Projekt löschen</button>`;
+
+  function quest(p, nr, x, k) {
+    const s = x.s, key = sKey(nr, s), st = (p.schritte || {})[key] || {};
+    const titel = ersetzen(s.titel);
+    let inhalt = "", meta = "";
+    switch (s.typ) {
+      case "formular": {
+        const fs = Formular.status(s.formular, p, dateienVon(p.id));
+        meta = fs.vollstaendig ? "vollständig" : fs.begonnen ? `${fs.ok} von ${fs.gesamt} Pflichtfeldern` : "noch nicht begonnen";
+        inhalt = `<div class="q-aktion"><a class="btn ${x.erledigt ? "" : "voll"}" href="#/projekt/${p.id}/formular/${s.formular}">${fs.begonnen ? "Formular bearbeiten" : "Formular ausfüllen"} <span class="pfeil">→</span></a>
+          ${fs.begonnen ? `<button class="btn still" data-aktion="drucken" data-formular="${s.formular}">Drucken</button>` : ""}</div>`;
+        break;
+      }
+      case "dateien": {
+        const n = dateienVon(p.id, s.kategorie).length;
+        meta = st.ersatz ? `abgehakt: ${esc(st.ersatz)}` : `${n}${s.min > 1 ? ` von ${s.min}` : ""} ${n === 1 ? "Datei" : "Dateien"} in „${esc(katTitel(s.kategorie))}“`;
+        inhalt = `${s.vorlage ? `<div class="q-vorlagen">${s.vorlage.map((v) => `<a class="btn klein" href="${esc(v.datei)}" target="_blank" rel="noopener">↓ ${esc(v.titel)}</a>`).join("")}</div>` : ""}
+          ${ablage(p, s.kategorie, true)}
+          <div class="q-unter">${s.kundenlink ? `<button class="btn klein" data-aktion="kundenlink">Kundenlink kopieren</button>` : ""}
+          ${s.ersatz && !n ? (st.ersatz ? `<button class="btn klein still" data-aktion="ersatz-weg" data-key="${key}">Rückgängig</button>` : `<button class="btn klein still" data-aktion="ersatz" data-key="${key}" data-text="${esc(s.ersatz)}">Ohne Dateien abhaken: ${esc(s.ersatz)}</button>`) : ""}</div>`;
+        break;
+      }
+      case "termin": {
+        const def = TERMINE.find((t) => t.key === s.termin);
+        const v = (p.termine || {})[s.termin] || "";
+        meta = v ? fTermin(v) : "noch kein Termin";
+        inhalt = `<div class="q-aktion"><input class="eingabe auto" type="${def.typ}" data-termin="${s.termin}" value="${esc(v)}" aria-label="${esc(def.label)}"></div>`;
+        break;
+      }
+      case "mail": {
+        const am = (p.mails || {})[s.mail];
+        meta = am ? `gesendet ${fKurz(new Date(am))}` : "noch nicht gesendet";
+        inhalt = `<div class="q-aktion"><button class="btn ${am ? "" : "voll"}" data-aktion="mail" data-mail="${s.mail}">${am ? "Erneut öffnen" : "Mail schreiben"} <span class="pfeil">→</span></button></div>`;
+        break;
+      }
+      case "erledigt":
+        meta = st.erledigt ? `bestätigt ${fKurz(new Date(st.am))}${st.von ? " · " + esc(st.von) : ""}` : "";
+        inhalt = `<div class="q-aktion"><button class="btn ${st.erledigt ? "an" : ""}" data-aktion="bestaetigen" data-key="${key}" aria-pressed="${!!st.erledigt}">${st.erledigt ? "✓ Erledigt" : "Als erledigt bestätigen"}</button></div>`;
+        break;
+      case "entscheidung":
+        meta = st.wahl ? esc(ersetzen((s.optionen.find((o) => o.id === st.wahl) || {}).label || "")) : "";
+        inhalt = `<div class="chips">${s.optionen.map((o) => `<button type="button" class="chip${st.wahl === o.id ? " an" : ""}${o.status === "verloren" ? " warn" : ""}" data-aktion="wahl" data-key="${key}" data-nr="${nr}" data-schritt="${s.id}" data-wert="${o.id}">${esc(ersetzen(o.label))}</button>`).join("")}</div>`;
+        break;
+      case "feld": {
+        const v = p[s.feld] || "";
+        meta = v ? esc(v) : "";
+        inhalt = s.feld === "zustaendig"
+          ? `<div class="chips">${leute("badplanung").map((m) => `<button type="button" class="chip${v === m.kuerzel ? " an" : ""}" data-aktion="setze-feld" data-feld="zustaendig" data-wert="${esc(m.kuerzel)}">${esc(m.name)} (${esc(m.kuerzel)})</button>`).join("")}</div>`
+          : `<div class="q-aktion"><input class="eingabe auto" data-pfeld="${s.feld}" value="${esc(v)}" aria-label="${esc(titel)}" placeholder="eintragen"></div>`;
+        break;
+      }
+    }
+    return `<li class="quest ${x.erledigt ? "erledigt" : "offen"}${x.pflicht ? "" : " optional"}" data-quest="${key}">
+      <span class="q-marker" aria-hidden="true">${x.erledigt ? "✓" : k + 1}</span>
+      <div class="q-inhalt"><div class="q-kopf"><h3>${esc(titel)}</h3>${x.pflicht ? "" : '<span class="q-tag">optional</span>'}${meta ? `<span class="q-meta">${meta}</span>` : ""}</div>
+        ${s.hinweis ? `<p class="q-hinweis">${esc(ersetzen(s.hinweis))}</p>` : ""}${inhalt}</div></li>`;
+  }
+
+  /* Akte rechts: Dateien, Kunde, Termine, Verlauf */
+  function akte(p) {
+    const t = S.akteTab;
+    const tabs = [["dateien", "Dateien"], ["kunde", "Kunde"], ["termine", "Termine"], ["verlauf", "Verlauf"]];
+    let inhalt = "";
+    if (t === "dateien") {
+      inhalt = `<ul class="ordner">${KAT.map((k) => {
+        const l = dateienVon(p.id, k.id), neu = l.filter((d) => d.neu).length, auf = S.ordnerOffen === k.id;
+        return `<li class="${auf ? "auf" : ""}"><button class="ordner-k" data-aktion="ordner" data-kat="${k.id}" aria-expanded="${auf}">
+          <span class="ordner-icon" aria-hidden="true"></span><span class="ordner-name">${esc(k.titel)}</span>
+          ${neu ? `<span class="badge">${neu} neu</span>` : ""}<span class="ordner-zahl">${l.length || ""}</span></button>
+          ${auf ? ablage(p, k.id) : ""}</li>`;
+      }).join("")}</ul>`;
+    } else if (t === "kunde") {
+      const k = p.kunde;
+      const f = (feld, label, typ = "text", breit) => `<div class="feld${breit ? " breit" : ""}"><label for="k-${feld}">${label}</label><input class="eingabe" id="k-${feld}" type="${typ}" data-kfeld="${feld}" value="${esc(k[feld])}"></div>`;
+      inhalt = `<div class="felder">
+        <div class="feld"><label for="k-anrede">Anrede</label><select class="eingabe" id="k-anrede" data-kfeld="anrede">${opt(ANREDEN, k.anrede)}</select></div>
+        ${f("vorname", "Vorname")}${f("nachname", "Nachname")}${f("telefon", "Telefon", "tel")}${f("mobil", "Mobil", "tel")}${f("telefonGeschaeft", "Tel. geschäftl.", "tel")}
+        ${f("email", "E-Mail", "email", true)}${f("strasse", "Straße")}${f("ort", "PLZ & Ort")}
+        <div class="feld"><label for="k-status">Status</label><select class="eingabe" id="k-status" data-pfeld="status">${opt(STATUS, p.status)}</select></div>
+        <div class="feld"><label for="k-zust">Zuständig</label><select class="eingabe" id="k-zust" data-pfeld="zustaendig"><option value="">–</option>${opt(kuerzelListe(), p.zustaendig)}</select></div>
+        <div class="feld"><label for="k-wv">Wiedervorlage</label><input class="eingabe" id="k-wv" type="date" data-pfeld="wiedervorlage" value="${esc(p.wiedervorlage)}"></div>
+        <div class="feld"><label for="k-wvn">Worum geht's</label><input class="eingabe" id="k-wvn" data-pfeld="wiedervorlageNotiz" value="${esc(p.wiedervorlageNotiz)}"></div>
+        <div class="feld breit"><label for="k-notiz">Notizen</label><textarea class="eingabe" id="k-notiz" data-pfeld="notiz" rows="4">${esc(p.notiz)}</textarea></div>
+      </div><button class="btn still gefahr klein" data-aktion="loeschen">Projekt löschen</button>`;
+    } else if (t === "termine") {
+      inhalt = TERMINE.map((d) => `<div class="termin-zeile"><span>${esc(d.label)}</span><input class="eingabe" type="${d.typ}" data-termin="${d.key}" value="${esc((p.termine || {})[d.key] || "")}" aria-label="${esc(d.label)}"></div>`).join("");
+    } else {
+      inhalt = `<ul class="verlauf">${(p.verlauf || []).map((v) => { const d = new Date(v.ts); return `<li><time>${fKurz(d)} ${fUhr(d)}</time><span>${esc(v.text)}</span></li>`; }).join("")}</ul>`;
+    }
+    return `<div class="panel akte-panel"><div class="tabs" role="tablist">${tabs.map(([id, l]) => `<button role="tab" aria-selected="${t === id}" class="tab${t === id ? " an" : ""}" data-aktion="akte-tab" data-tab="${id}">${l}${id === "dateien" && dateienVon(p.id).length ? ` <small>${dateienVon(p.id).length}</small>` : ""}</button>`).join("")}</div>
+      <div class="akte-inhalt">${inhalt}</div></div>`;
+  }
+
+  function teilRendern(p) {
+    const nr = S.ansicht[p.id] || p.phase;
+    const m = $("#mission"); if (m) m.innerHTML = mission(p, nr);
+    const k = $(".karte"); if (k) k.innerHTML = levelKarte(p, nr);
+    const a = $("#akte"); if (a && !a.contains(document.activeElement)) a.innerHTML = akte(p);
+    vorschauenLaden();
+  }
+  function kopfNeu(p) { const k = $(".p-kopf"); if (k) k.outerHTML = projektKopf(p); }
+
+  /* ================================================================
+     Formular-Seite
+     ================================================================ */
+  function ansichtFormular(pid, fid) {
+    const p = finde(pid), d = Formular.def(fid);
+    if (!p || !d) return `<div class="seite"><a class="btn" href="#/projekte">← zurück</a></div>`;
+    if (Formular.vorbelegen(fid, p)) speichern(p);
+    const st = Formular.status(fid, p, dateienVon(p.id));
+    return `<div class="seite formularseite" data-projekt="${p.id}" data-formular="${fid}">
+      <header class="f-kopf panel">
+        <a class="btn still" href="#/projekt/${p.id}">← ${esc(anzeigeName(p))}</a>
+        <div class="f-titel"><p class="eyebrow">Formular · wird automatisch gespeichert</p><h1>${esc(d.titel)}</h1></div>
+        <div class="f-status" id="f-status">${formularStatusHtml(st)}</div>
+        <div class="kopf-aktionen">${d.vorlage ? `<a class="btn still" href="${esc(d.vorlage)}" target="_blank" rel="noopener" title="Original-Vorlage">Papiervorlage</a>` : ""}
+          ${fid === "abnahme" ? `<button class="btn" data-aktion="maengel">Mängel → Restarbeiten</button>` : ""}
+          <button class="btn" data-aktion="drucken" data-formular="${fid}">Drucken / PDF</button>
+          <button class="btn jetzt" data-aktion="formular-fertig">Fertig</button></div>
+      </header>
+      <div class="panel f-flaeche" id="f-flaeche">${Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k) => ablage(p, kat, k) })}</div></div>`;
+  }
+  const formularStatusHtml = (st) => `<span class="${st.vollstaendig ? "ok" : ""}">${st.vollstaendig ? "✓ vollständig" : `${st.ok} von ${st.gesamt} Pflichtfeldern`}</span>`;
+  function formularNeuZeichnen(p, fid, ganz) {
+    const st = Formular.status(fid, p, dateienVon(p.id));
+    const s = $("#f-status"); if (s) s.innerHTML = formularStatusHtml(st);
+    if (ganz) {
+      const fl = $("#f-flaeche"); if (!fl) return;
+      const y = window.scrollY;
+      fl.innerHTML = Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k) => ablage(p, kat, k) });
+      window.scrollTo(0, y); vorschauenLaden(fl); unterschriftenAn();
+    }
+  }
+  function formularWerte(p, fid) {
+    p.formulare = p.formulare || {};
+    return (p.formulare[fid] = p.formulare[fid] || { werte: {} }).werte;
+  }
+
+  /* Unterschriftenfelder */
+  function unterschriftenAn() {
+    $$(".sign").forEach((box) => {
+      const c = $("canvas", box); if (c.dataset.an) return; c.dataset.an = 1;
+      const ctx = c.getContext("2d");
+      let zieht = false, last = null, gemalt = false;
+      const pos = (e) => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * (c.width / r.width), (e.clientY - r.top) * (c.height / r.height)]; };
+      c.addEventListener("pointerdown", (e) => {
+        zieht = true; last = pos(e); c.setPointerCapture(e.pointerId);
+        const img = $("img", box); if (img) { img.remove(); ctx.clearRect(0, 0, c.width, c.height); }
+        const h = $(".sign-hinweis", box); if (h) h.remove();
+      });
+      c.addEventListener("pointermove", (e) => {
+        if (!zieht) return; const q = pos(e);
+        ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue("--tinte").trim() || "#042461";
+        ctx.lineWidth = 3.2; ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.beginPath(); ctx.moveTo(...last); ctx.lineTo(...q); ctx.stroke(); last = q; gemalt = true;
+      });
+      const ende = () => {
+        if (!zieht) return; zieht = false; if (!gemalt) return;
+        const seite = $(".formularseite"); const p = finde(seite.dataset.projekt); const fid = seite.dataset.formular;
+        aendern(p, () => { formularWerte(p, fid)[box.dataset.sign] = c.toDataURL("image/png"); });
+        box.classList.add("voll"); formularNeuZeichnen(p, fid);
+      };
+      c.addEventListener("pointerup", ende); c.addEventListener("pointercancel", ende);
+    });
   }
 
   /* ================================================================
-     Mail-Dialog
+     Drucken (Formulare, Monteurmappe)
      ================================================================ */
+  function druckKontext(p) {
+    const c = cfg();
+    return { firma: c, dateien: dateienVon(p.id), kopfzeile: `${anzeigeName(p)}${p.projektnr ? " · Projekt " + p.projektnr : ""}${p.kunde.ort ? " · " + [p.kunde.strasse, p.kunde.ort].filter(Boolean).join(", ") : ""}` };
+  }
+  function drucken(html) {
+    $("#druck").innerHTML = html;
+    const bilder = $$("#druck img");
+    Promise.all(bilder.map((i) => (i.complete ? 1 : new Promise((r) => { i.onload = i.onerror = r; })))).then(() => setTimeout(() => window.print(), 50));
+  }
+  async function monteurmappe(p) {
+    const ctx = druckKontext(p);
+    const formulare = ["projektuebersicht", "baustellenbesichtigung", "tuer", "auswahl", "fliesen", "elektro", "abriss", "baustellenplan"]
+      .filter((f) => Object.keys(Formular.werteVon(p, f)).length);
+    const bilder = [...dateienVon(p.id, "planung"), ...dateienVon(p.id, "skizzen")].filter(istBild);
+    const urls = await Promise.all(bilder.map((d) => dateiUrl(d).catch(() => null)));
+    const c = cfg(), k = p.kunde, bp = Formular.werteVon(p, "baustellenplan");
+    const deckblatt = `<section class="d-seite"><header class="d-kopf"><img src="${esc(c.logo)}" alt=""><div><strong>Monteurmappe</strong><span>${esc(ctx.kopfzeile)}</span></div></header>
+      <div class="d-inhalt"><h3>Baustelle</h3>
+        <div class="d-zeile"><b>Kunde</b><span>${esc(anzeigeName(p))}</span></div>
+        <div class="d-zeile"><b>Adresse</b><span>${esc([k.strasse, k.ort].filter(Boolean).join(", ") || "—")}</span></div>
+        <div class="d-zeile"><b>Telefon</b><span>${esc([k.telefon, k.mobil].filter(Boolean).join(" · ") || "—")}</span></div>
+        <div class="d-zeile"><b>Baustart</b><span>${esc(p.termine.baustart ? fDatum(datum(p.termine.baustart)) : "—")}</span></div>
+        <div class="d-zeile"><b>Projektleiter</b><span>${esc(namen("projektleiter"))}</span></div>
+        <div class="d-zeile"><b>Zugang</b><span>${esc(bp.schluessel || "—")}</span></div>
+        <h3>Inhalt</h3><div class="d-zeile"><b>Formulare</b><span>${formulare.map((f) => esc(Formular.def(f).titel)).join(", ") || "—"}</span></div>
+        <div class="d-zeile"><b>Pläne & Skizzen</b><span>${bilder.length} Bilder</span></div>
+        ${bp.anschluss ? `<h3>Anschlussmaße & Hinweise</h3><p>${esc(bp.anschluss).replace(/\n/g, "<br>")}</p>` : ""}
+      </div><footer class="d-fuss">${esc(c.name)} · ${esc(c.adresse.strasse)} · ${esc(c.adresse.ort)} · Tel. ${esc(c.telefon)}</footer></section>`;
+    const bildSeiten = bilder.map((d, i) => urls[i] ? `<section class="d-seite d-bild"><header class="d-kopf"><img src="${esc(c.logo)}" alt=""><div><strong>${esc(katTitel(d.kategorie))}</strong><span>${esc(d.name)}</span></div></header><img class="d-gross" src="${esc(urls[i])}" alt=""></section>` : "").join("");
+    drucken(deckblatt + formulare.map((f) => Formular.druck(f, p, ctx)).join("") + bildSeiten);
+  }
+
+  /* ================================================================
+     Dialoge
+     ================================================================ */
+  function dialog(html, setup) {
+    const alt = $("#dlg");
+    const dlg = alt.cloneNode(false); // frisches Element = keine alten Listener
+    alt.replaceWith(dlg);
+    dlg.innerHTML = html;
+    dlg.addEventListener("click", (e) => { if (e.target === dlg || e.target.closest('[data-aktion="dlg-zu"]')) dlg.close(); });
+    if (setup) setup(dlg);
+    dlg.showModal();
+    return dlg;
+  }
+
+  function neuDialog() {
+    dialog(`<form id="neu-form">
+      <div class="dlg-kopf"><div><p class="eyebrow">Level 01 · Kundenanfrage</p><h2>Neue Anfrage</h2><p>Das Nötigste reicht – der Rest kommt in die Bestandsaufnahme.</p></div><button class="btn still" type="button" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt"><div class="felder">
+        <div class="feld"><label for="n-anrede">Anrede</label><select class="eingabe" id="n-anrede" name="anrede">${opt(ANREDEN, "Herr")}</select></div>
+        <div class="feld"><label for="n-vorname">Vorname</label><input class="eingabe" id="n-vorname" name="vorname"></div>
+        <div class="feld"><label for="n-nachname">Nachname *</label><input class="eingabe" id="n-nachname" name="nachname" required></div>
+        <div class="feld"><label for="n-tel">Telefon</label><input class="eingabe" id="n-tel" name="telefon" type="tel"></div>
+        <div class="feld breit"><label for="n-mail">E-Mail</label><input class="eingabe" id="n-mail" name="email" type="email"></div>
+      </div></div>
+      <div class="dlg-fuss"><button class="btn" type="button" data-aktion="dlg-zu">Abbrechen</button><button class="btn jetzt" type="submit">Anlegen & Bestandsaufnahme starten <span class="pfeil">→</span></button></div></form>`, (dlg) => {
+      $("#neu-form", dlg).addEventListener("submit", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const d = Object.fromEntries(new FormData(e.target));
+        if (!d.nachname.trim()) return;
+        const p = neuesProjekt({ ...d, nachname: d.nachname.trim() });
+        dlg.close();
+        location.hash = `#/projekt/${p.id}/formular/bestandsaufnahme`;
+      });
+      setTimeout(() => $("#n-vorname", dlg).focus(), 30);
+    });
+  }
+
+  async function kundenLink(p) {
+    const t = await Daten.uploadLink(p);
+    const basis = cfg().cloud.portalUrl || new URL("kunde.html", location.href).href;
+    return `${basis.replace(/#.*$/, "")}#${t}`;
+  }
+  async function kundenlinkDialog(p) {
+    let link;
+    try { link = await kundenLink(p); } catch (e) { return toast("Link konnte nicht erstellt werden", "fehler"); }
+    const lokal = Daten.modus === "lokal";
+    dialog(`<div class="dlg-kopf"><div><p class="eyebrow">${esc(anzeigeName(p))}</p><h2>Persönlicher Kundenlink</h2>
+        <p>Über diesen Link lädt der Kunde Fotos und Unterlagen hoch – ohne Anmeldung, direkt vom Handy. Alles landet automatisch im richtigen Ordner dieses Projekts.</p></div>
+        <button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt">
+        <div class="link-feld"><input class="eingabe" readonly value="${esc(link)}" id="kl-link" aria-label="Kundenlink"><button class="btn voll" data-dlg="kopieren">Kopieren</button></div>
+        ${lokal ? `<p class="luecken">Lokaler Modus: Der Link funktioniert nur hier in diesem Browser (zum Ausprobieren). Für echte Kunden die Cloud einrichten – siehe Einrichtung.</p>` : ""}
+        <p class="anhang-info">Der Link steckt automatisch in der Terminbestätigung und in der Freigabe-Mail. Er ist 180 Tage gültig.</p>
+      </div>
+      <div class="dlg-fuss"><a class="btn" href="${esc(link)}" target="_blank" rel="noopener">Kundenansicht öffnen</a></div>`, (dlg) => {
+      dlg.addEventListener("click", async (e) => {
+        if (e.target.dataset.dlg === "kopieren") { await kopieren(link); toast("Link kopiert"); }
+      });
+    });
+  }
+
   function anrede(p, stil) {
-    const n = p.nachname || "‹Nachname›";
+    const n = p.kunde.nachname || "‹Nachname›";
     const t = {
-      formell:  { "Herr": `Sehr geehrter Herr ${n},`, "Frau": `Sehr geehrte Frau ${n},`, "Herr und Frau": `Sehr geehrte Frau ${n}, sehr geehrter Herr ${n},`, "Familie": `Sehr geehrte Familie ${n},` },
-      hallo:    { "Herr": `Hallo Herr ${n},`, "Frau": `Hallo Frau ${n},`, "Herr und Frau": `Hallo Frau ${n}, hallo Herr ${n},`, "Familie": `Hallo Familie ${n},` },
+      formell: { "Herr": `Sehr geehrter Herr ${n},`, "Frau": `Sehr geehrte Frau ${n},`, "Herr und Frau": `Sehr geehrte Frau ${n}, sehr geehrter Herr ${n},`, "Familie": `Sehr geehrte Familie ${n},` },
+      hallo: { "Herr": `Hallo Herr ${n},`, "Frau": `Hallo Frau ${n},`, "Herr und Frau": `Hallo Frau ${n}, hallo Herr ${n},`, "Familie": `Hallo Familie ${n},` },
       gutentag: { "Herr": `Guten Tag Herr ${n},`, "Frau": `Guten Tag Frau ${n},`, "Herr und Frau": `Guten Tag Frau und Herr ${n},`, "Familie": `Guten Tag liebe Familie ${n},` },
     };
-    return (t[stil] || t.formell)[p.anrede] || t.formell.Herr;
+    return (t[stil] || t.formell)[p.kunde.anrede] || t.formell.Herr;
   }
-  function mailBauen(m, p, optionen) {
-    const c = cfg();
-    const luecken = [];
+  function mailBauen(m, p, optionen, link) {
+    const c = cfg(), luecken = [];
     let text = m.text.replace(/\[\[(\w+)\]\]([\s\S]*?)\[\[\/\1\]\]/g, (_, id, inhalt) => (optionen[id] ? inhalt : ""));
     const label = (k) => (TERMINE.find((t) => t.key === k) || {}).label || k;
     text = text.replace(/\{([a-zA-Z.]+)\}/g, (ganz, key) => {
       const fehlt = (was) => { if (!luecken.includes(was)) luecken.push(was); return `‹${was}›`; };
       if (key === "anrede") return anrede(p, m.anredeStil);
-      if (key === "nachname") return p.nachname || fehlt("Nachname");
+      if (key === "nachname") return p.kunde.nachname || fehlt("Nachname");
       if (key === "downloadCode") return p.downloadCode || fehlt(`${c.programme.app3d}-Code`);
+      if (key === "uploadLink") return link || fehlt("Upload-Link");
       if (key === "berater") return leute("badberater")[0]?.name || fehlt("Badberater");
       if (key === "heizungsexperte") return leute("heizungsexperte")[0]?.name || fehlt("Heizungsexperte");
       if (key === "firma.name") return c.name;
@@ -442,7 +734,7 @@
       if (key === "firma.website") return c.website;
       const [tk, teil] = key.split(".");
       if (TERMINE.some((t) => t.key === tk)) {
-        const s = p.termine[tk]; const d = datum(s);
+        const s = (p.termine || {})[tk], d = datum(s);
         if (!d) return fehlt(`Termin ${label(tk)}`);
         if (teil === "wochentag") return WT[d.getDay()];
         if (teil === "uhrzeit") return hatUhrzeit(s) ? fUhr(d) : fehlt(`Uhrzeit ${label(tk)}`);
@@ -453,220 +745,130 @@
     });
     return { text: text.replace(/\n{3,}/g, "\n\n"), luecken };
   }
-
-  function mailDialog(mailId, projektId) {
+  async function mailDialog(mailId, p) {
     const m = window.MAILVORLAGEN.find((x) => x.id === mailId);
-    const p = projektId ? finde(projektId) : null;
-    const dlg = $("#dlg");
     const optionen = {};
-    const muster = p || { anrede: "Herr", nachname: "Mustermann", termine: {}, downloadCode: "" };
-
-    const zeichnen = () => {
-      const { text, luecken } = mailBauen(m, muster, optionen);
-      dlg.innerHTML = `
-        <div class="dlg-kopf"><div><p class="eyebrow">Phase ${zwei(m.phase)} · ${p ? esc(anzeigeName(p)) : "Vorschau mit Musterdaten"}</p><h2>${esc(m.titel)}</h2>
-          <p>${p && p.email ? `An: ${esc(p.email)}` : p ? "Beim Kunden ist noch keine E-Mail-Adresse hinterlegt." : "In einer Projektakte geöffnet, werden Name und Termine automatisch eingesetzt."}</p></div>
-          <button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+    let link = null;
+    if (/\{uploadLink\}/.test(m.text)) { try { link = await kundenLink(p); } catch (e) { /* Lücke */ } }
+    const mailto = (dlg) => `mailto:${encodeURIComponent(p.kunde.email || "")}?subject=${encodeURIComponent($("#mail-betreff", dlg).value)}&body=${encodeURIComponent($("#mail-text", dlg).value)}`;
+    const zeichnen = (dlg) => {
+      const { text, luecken } = mailBauen(m, p, optionen, link);
+      dlg.innerHTML = `<div class="dlg-kopf"><div><p class="eyebrow">Level ${zwei(m.phase)} · ${esc(anzeigeName(p))}</p><h2>${esc(m.titel)}</h2>
+          <p>${p.kunde.email ? `An: ${esc(p.kunde.email)}` : "Beim Kunden ist noch keine E-Mail-Adresse hinterlegt."}</p></div><button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
         <div class="dlg-inhalt">
           ${m.optionen.length ? `<div class="optionen">${m.optionen.map((o) => `<label><input type="checkbox" data-option="${o.id}"${optionen[o.id] ? " checked" : ""}> ${esc(o.label)}</label>`).join("")}</div>` : ""}
-          ${p && luecken.length ? `<div class="luecken">Noch offen: ${luecken.map(esc).join(", ")} — in der Akte nachtragen oder unten im Text ersetzen.</div>` : ""}
+          ${luecken.length ? `<div class="luecken">Noch offen: ${luecken.map(esc).join(", ")} – im Projekt nachtragen oder im Text ersetzen.</div>` : ""}
           <div class="feld"><label for="mail-betreff">Betreff</label><input class="eingabe" id="mail-betreff" value="${esc(m.betreff)}"></div>
-          <div class="feld" style="margin-top:12px"><label for="mail-text">Text</label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
-          <p class="anhang-info">Anhänge: ${m.anhaenge.map(esc).join(", ") || "keine"}. Bilder, Signatur und Anhänge stecken in der Outlook-Vorlage — Text dort einfügen oder Anhänge im Mailprogramm ergänzen. Absender: ${esc(cfg().kundenPostfach)}</p>
-        </div>
-        <div class="dlg-fuss">
-          <a class="btn links" href="${esc(m.datei)}">Outlook-Vorlage öffnen</a>
-          <button class="btn" data-aktion="kopiere-text">Text kopieren</button>
-          ${p ? `<a class="btn" data-aktion="mailto" href="mailto:${esc(p.email || "")}">Im Mailprogramm öffnen</a>
-                 <button class="btn jetzt" data-aktion="als-gesendet">Als gesendet markieren</button>` : ""}
-        </div>`;
-      const mt = $('[data-aktion="mailto"]', dlg);
-      if (mt) mt.href = `mailto:${encodeURIComponent(p.email || "")}?subject=${encodeURIComponent($("#mail-betreff", dlg).value)}&body=${encodeURIComponent($("#mail-text", dlg).value)}`;
+          <div class="feld abstand-o"><label for="mail-text">Text</label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
+          <p class="anhang-info">Anhänge: ${m.anhangDateien ? m.anhangDateien.map((f, i) => `<a href="${esc(f)}" download>${esc(m.anhaenge[i] || f.split("/").pop())}</a>`).join(", ") : m.anhaenge.map(esc).join(", ") || "keine"} · Absender: ${esc(cfg().kundenPostfach)}</p></div>
+        <div class="dlg-fuss"><a class="btn links" href="${esc(m.datei)}">Outlook-Vorlage</a><button class="btn" data-dlg="kopieren">Text kopieren</button>
+          <a class="btn" data-dlg="mailto" href="#">Im Mailprogramm öffnen</a><button class="btn jetzt" data-dlg="gesendet">Als gesendet markieren</button></div>`;
+      $('[data-dlg="mailto"]', dlg).href = mailto(dlg);
     };
-
-    dlg.onclick = async (e) => {
-      if (e.target === dlg) return dlg.close();
-      const a = e.target.closest("[data-aktion]"); if (!a) return;
-      const akt = a.dataset.aktion;
-      if (akt === "dlg-zu") dlg.close();
-      if (akt === "kopiere-text") { await kopieren(`${$("#mail-text", dlg).value}`); toast("Text kopiert — Betreff: " + $("#mail-betreff", dlg).value); }
-      if (akt === "mailto") { a.href = `mailto:${encodeURIComponent(p.email || "")}?subject=${encodeURIComponent($("#mail-betreff", dlg).value)}&body=${encodeURIComponent($("#mail-text", dlg).value)}`; }
-      if (akt === "als-gesendet") {
-        aendern(p, (x) => {
-          x.mails = x.mails || {}; x.mails[m.id] = Date.now();
-          if (m.id === "freigabe" && !x.termine.freigabeGesendet) x.termine.freigabeGesendet = isoTag(new Date());
-          const aufgabe = phase(m.phase).aufgaben.findIndex((t) => /mail|senden|versenden|Kundenerinnerung/i.test(t.t));
-          if (aufgabe >= 0) x.erledigt[`${m.phase}:${aufgabe}`] = true;
-        }, `Mail „${m.titel}" gesendet`);
-        dlg.close(); toast("Als gesendet vermerkt"); render();
-      }
-    };
-    dlg.onchange = (e) => { const o = e.target.dataset.option; if (o) { optionen[o] = e.target.checked; zeichnen(); } };
-    dlg.oninput = (e) => {
-      if (e.target.id === "mail-text" || e.target.id === "mail-betreff") {
-        const mt = $('[data-aktion="mailto"]', dlg);
-        if (mt) mt.href = `mailto:${encodeURIComponent(p.email || "")}?subject=${encodeURIComponent($("#mail-betreff", dlg).value)}&body=${encodeURIComponent($("#mail-text", dlg).value)}`;
-      }
-    };
-    zeichnen();
-    dlg.showModal();
+    dialog("", (dlg) => {
+      zeichnen(dlg);
+      dlg.addEventListener("click", async (e) => {
+        const a = e.target.closest("[data-dlg]"); if (!a) return;
+        if (a.dataset.dlg === "kopieren") { await kopieren($("#mail-text", dlg).value); toast("Text kopiert"); }
+        if (a.dataset.dlg === "mailto") a.href = mailto(dlg);
+        if (a.dataset.dlg === "gesendet") {
+          aendern(p, (x) => { x.mails = x.mails || {}; x.mails[m.id] = Date.now(); }, `Mail „${m.titel}“ gesendet`);
+          dlg.close(); toast("Als gesendet vermerkt"); teilRendern(p);
+        }
+      });
+      dlg.addEventListener("change", (e) => { const o = e.target.dataset.option; if (o) { optionen[o] = e.target.checked; zeichnen(dlg); } });
+      dlg.addEventListener("input", (e) => { if (e.target.id === "mail-text" || e.target.id === "mail-betreff") $('[data-dlg="mailto"]', dlg).href = mailto(dlg); });
+    });
   }
 
-  /* ---------- Dialog: Neue Anfrage ---------- */
-  function neuDialog() {
-    const dlg = $("#dlg");
-    dlg.innerHTML = `<form method="dialog" id="neu-form">
-      <div class="dlg-kopf"><div><p class="eyebrow">Phase 01 · Kundenanfrage</p><h2>Neue Anfrage</h2><p>Das Nötigste reicht — alles Weitere kommt in die Akte.</p></div>
-        <button class="btn still" type="button" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
-      <div class="dlg-inhalt"><div class="felder">
-        <div class="feld"><label for="n-anrede">Anrede</label><select class="eingabe" id="n-anrede" name="anrede">${opt(ANREDEN, "Herr")}</select></div>
-        <div class="feld"><label for="n-kunde">Kunde</label><select class="eingabe" id="n-kunde" name="kunde">${opt(["Neukunde", "Stammkunde"], "Neukunde")}</select></div>
-        <div class="feld"><label for="n-vorname">Vorname</label><input class="eingabe" id="n-vorname" name="vorname"></div>
-        <div class="feld"><label for="n-nachname">Nachname *</label><input class="eingabe" id="n-nachname" name="nachname" required></div>
-        <div class="feld"><label for="n-tel">Telefon</label><input class="eingabe" id="n-tel" name="telefon" type="tel"></div>
-        <div class="feld"><label for="n-mail">E-Mail</label><input class="eingabe" id="n-mail" name="email" type="email"></div>
-        <div class="feld"><label for="n-str">Straße</label><input class="eingabe" id="n-str" name="strasse"></div>
-        <div class="feld"><label for="n-ort">PLZ & Ort</label><input class="eingabe" id="n-ort" name="ort"></div>
-        <div class="feld"><label for="n-quelle">Kontakt über</label><select class="eingabe" id="n-quelle" name="quelle"><option value="">–</option>${opt(QUELLEN, "")}</select></div>
-        <div class="feld"><label for="n-wer">Zuständig</label><select class="eingabe" id="n-wer" name="zustaendig"><option value="">–</option>${opt(leute("badplanung").map((m) => m.kuerzel), "")}</select></div>
-        <div class="feld breit"><label for="n-notiz">Was soll gemacht werden?</label><textarea class="eingabe" id="n-notiz" name="notiz" rows="3" placeholder="z. B. Komplettsanierung, bodengleiche Dusche statt Wanne …"></textarea></div>
-      </div></div>
-      <div class="dlg-fuss"><button class="btn" type="button" data-aktion="dlg-zu">Abbrechen</button><button class="btn jetzt" type="submit">Anfrage anlegen <span class="pfeil">→</span></button></div></form>`;
-    dlg.onclick = (e) => { if (e.target === dlg || e.target.closest('[data-aktion="dlg-zu"]')) dlg.close(); };
-    dlg.onchange = null; dlg.oninput = null;
-    $("#neu-form").onsubmit = (e) => {
-      e.preventDefault();
-      const d = Object.fromEntries(new FormData(e.target));
-      d.nachname = d.nachname.trim();
-      if (!d.nachname) return;
-      const p = neuesProjekt(d);
-      dlg.close();
-      location.hash = `#/projekt/${p.id}`;
-      toast("Anfrage angelegt");
-    };
-    dlg.showModal();
-    setTimeout(() => $("#n-vorname").focus(), 30);
+  async function dateiDialog(d) {
+    const p = finde(d.projekt_id);
+    let url; try { url = await dateiUrl(d); } catch (e) { return toast("Datei nicht erreichbar", "fehler"); }
+    const pdf = /pdf/i.test(d.typ || d.name);
+    dialog(`<div class="dlg-kopf"><div><p class="eyebrow">${esc(katTitel(d.kategorie))}${d.quelle === "kunde" ? " · vom Kunden" : ""}</p><h2>${esc(d.name)}</h2><p>${groesse(d.groesse || 0)} · ${esc(new Date(d.am).toLocaleString("de-DE"))}</p></div><button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt vorschau">${istBild(d) ? `<img src="${esc(url)}" alt="">` : pdf ? `<iframe src="${esc(url)}" title="${esc(d.name)}"></iframe>` : `<p>Keine Vorschau – bitte herunterladen.</p>`}</div>
+      <div class="dlg-fuss"><button class="btn still gefahr links" data-dlg="loeschen">Löschen</button>
+        <select class="eingabe auto" data-dlg-kat aria-label="In Ordner verschieben">${KAT.map((k) => `<option value="${k.id}"${k.id === d.kategorie ? " selected" : ""}>${esc(k.titel)}</option>`).join("")}</select>
+        <a class="btn" href="${esc(url)}" download="${esc(d.name)}" target="_blank" rel="noopener">Herunterladen</a></div>`, (dlg) => {
+      dlg.addEventListener("click", async (e) => {
+        if (e.target.dataset.dlg !== "loeschen" || !confirm(`„${d.name}“ löschen?`)) return;
+        await Daten.dateiLoeschen(d);
+        S.dateien = S.dateien.filter((x) => x.id !== d.id);
+        aendern(p, () => {}, `Datei gelöscht: ${d.name}`);
+        dlg.close(); allesNeu();
+      });
+      dlg.addEventListener("change", async (e) => {
+        if (!e.target.matches("[data-dlg-kat]")) return;
+        try { await Daten.dateiVerschieben(d, e.target.value); toast(`Verschoben nach „${katTitel(d.kategorie)}“`); allesNeu(); }
+        catch (err) { toast("Verschieben fehlgeschlagen", "fehler"); }
+      });
+    });
+  }
+
+  /* Level geschafft */
+  function levelUp(nr) {
+    const el = $("#levelup");
+    el.innerHTML = nr ? `<span class="lu-nr">${zwei(nr)}</span><span><small>Level freigeschaltet</small><b>${esc(phase(nr).titel)}</b></span>` : `<span class="lu-nr">✓</span><span><small>Geschafft</small><b>Projekt abgeschlossen</b></span>`;
+    el.classList.remove("an"); void el.offsetWidth; el.classList.add("an");
+    setTimeout(() => el.classList.remove("an"), 2600);
   }
 
   /* ================================================================
-     ANSICHT: Ablauf (Handbuch)
-     ================================================================ */
-  function ansichtAblauf(nr) {
-    const notizen = Store.daten.notizen || {};
-    return `<div class="seite">
-      <header class="kopf"><div><p class="eyebrow">Handbuch</p><h1>So bauen wir ein Bad.</h1>
-        <p class="unter">${N} Phasen von der ersten Anfrage bis zum archivierten Projekt. Was hier steht, ist die Checkliste in jeder Projektakte.</p></div></header>
-      <div class="handbuch">
-        <ul class="index">${window.ABSCHNITTE.map((a) => `<li class="gruppe">${esc(a.titel)}</li>${PHASEN.filter((p) => p.nr >= a.von && p.nr <= a.bis).map((p) => `<li><a href="#/ablauf/${p.nr}"${p.nr === nr ? ' class="aktiv"' : ""}><span>${zwei(p.nr)}</span><span>${esc(p.titel)}</span></a></li>`).join("")}`).join("")}
-          <li class="gruppe">Sonstiges</li><li><a href="#/ablauf/notizen"><span>✎</span><span>Notizen</span></a></li></ul>
-        <div class="strang">
-          ${PHASEN.map((ph) => {
-            const mails = (ph.mails || []).map((id) => window.MAILVORLAGEN.find((m) => m.id === id)).filter(Boolean);
-            return `<section class="station${ph.nr === nr ? " hervor" : ""}" id="phase-${ph.nr}">
-              <div class="station-nr">${zwei(ph.nr)}</div>
-              <div>
-                <p class="station-abschnitt">${esc(abschnittVon(ph.nr).titel)}</p>
-                <h2>${esc(ph.titel)}</h2>
-                <p class="kurz">${esc(ph.kurz)}</p>
-                <div class="wer">${ph.wer.map((r) => `<span>${esc(rolleName(r))}: ${esc(namen(r))}</span>`).join("")}</div>
-                <ol class="schritte">${ph.aufgaben.map((a) => `<li><span><b>${esc(ersetzen(a.t))}</b>${a.d ? `<small>${esc(ersetzen(a.d))}</small>` : ""}</span></li>`).join("")}</ol>
-                ${mails.length ? `<div class="mails">${mails.map((m) => mailKnopf(m)).join("")}</div>` : ""}
-                ${ph.dokumente.length ? `<div class="doks">${ph.dokumente.map(dokKachel).join("")}</div>` : ""}
-                ${ph.ordner ? `<ul class="ordner-liste" style="margin-bottom:14px">${ph.ordner.map((o) => `<li>${esc(o)}</li>`).join("")}</ul>` : ""}
-                <div class="notiz-feld"><label for="notiz-${ph.nr}">Notiz zu dieser Phase</label><textarea class="eingabe" id="notiz-${ph.nr}" data-notiz="${ph.nr}" placeholder="Ergänzungen, Sonderfälle, Tipps fürs Team …">${esc(notizen[ph.nr] || "")}</textarea></div>
-              </div></section>`;
-          }).join("")}
-          <section class="station" id="phase-notizen"><div class="station-nr">✎</div><div>
-            <p class="station-abschnitt">Sonstiges</p><h2>Notizen</h2>
-            <p class="kurz">Alles, was nicht zu einer einzelnen Phase gehört — für alle im Büro sichtbar.</p>
-            <div class="notiz-feld"><textarea class="eingabe" data-notiz="allgemein" rows="8" style="min-height:180px" aria-label="Allgemeine Notizen">${esc(notizen.allgemein || "")}</textarea></div>
-          </div></section>
-        </div></div></div>`;
-  }
-
-  /* ================================================================
-     ANSICHT: Vorlagen
-     ================================================================ */
-  function ansichtVorlagen() {
-    const gruppen = PHASEN.filter((ph) => ph.dokumente.length || (ph.mails || []).length);
-    const gesehen = new Set();
-    return `<div class="seite">
-      <header class="kopf"><div><p class="eyebrow">Vorlagen</p><h1>Formulare & Mails</h1>
-        <p class="unter">Alle Unterlagen nach Phase sortiert. Formulare öffnen sich zum Drucken bzw. in Word, Mails mit Vorschau.</p></div></header>
-      ${gruppen.map((ph) => {
-        const doks = ph.dokumente.filter((d) => !gesehen.has(d.datei)); doks.forEach((d) => gesehen.add(d.datei));
-        const mails = (ph.mails || []).map((id) => window.MAILVORLAGEN.find((m) => m.id === id)).filter(Boolean);
-        if (!doks.length && !mails.length) return "";
-        return `<section class="vorlagen-gruppe"><div><span class="nr">${zwei(ph.nr)}</span><h2>${esc(ph.titel)}</h2></div>
-          <div>${mails.length ? `<div class="mails" style="max-width:560px;margin-bottom:${doks.length ? 18 : 0}px">${mails.map((m) => mailKnopf(m)).join("")}</div>` : ""}
-          ${doks.length ? `<div class="doks">${doks.map(dokKachel).join("")}</div>` : ""}</div></section>`;
-      }).join("")}</div>`;
-  }
-
-  /* ================================================================
-     ANSICHT: Einrichtung
+     Einrichtung
      ================================================================ */
   function ansichtEinrichtung() {
     const c = cfg();
     const f = (pfad, label, wert, typ = "text") => `<div class="feld"><label for="c-${pfad}">${label}</label><input class="eingabe" id="c-${pfad}" type="${typ}" data-cfg="${pfad}" value="${esc(wert)}"></div>`;
     const rollen = [...new Set([...window.FIRMA.team.map((t) => t.rolle), ...c.team.map((t) => t.rolle)])];
     const demo = alle().some((p) => p.demo);
-    const st = Store.dateiStatus;
+    const cloud = Daten.modus === "cloud";
     return `<div class="seite">
-      <header class="kopf"><div><p class="eyebrow">Einrichtung</p><h1>Ihre Firma.</h1>
-        <p class="unter">Hier wird das Dashboard auf einen Betrieb eingestellt. Namen und Programme landen automatisch im Ablauf-Handbuch, in den Checklisten und in den Mails.</p></div>
+      <header class="kopf"><div><p class="eyebrow">Einrichtung</p><h1>Firma & Team</h1></div>
         <div class="kopf-aktionen"><button class="btn jetzt" data-aktion="cfg-speichern">Übernehmen</button></div></header>
       <div class="einr">
-        <section class="kasten"><h3>Daten & Speicherort</h3>
-          <p>${st === "verbunden" ? `Verbunden mit der Datendatei <b>${esc(Store.dateiName)}</b>. Jede Änderung wird dort gespeichert; Änderungen der Kolleg:innen werden alle 20 Sekunden übernommen.`
-            : Store.dateiMoeglich ? "Die Projekte liegen gerade nur in diesem Browser. Für das ganze Büro: eine Datendatei auf dem Netzlaufwerk anlegen — alle, die das Dashboard öffnen und dieselbe Datei verbinden, sehen dieselben Projekte."
-            : "Dieser Browser kann keine Datendatei verbinden — die Projekte liegen nur hier. Für das Büro Chrome oder Edge verwenden. Bis dahin regelmäßig sichern."}</p>
+        <section class="panel"><h3>Betriebsart: ${cloud ? "Cloud" : "Lokal"}</h3>
+          <p class="leise">${cloud ? `Verbunden mit <b>${esc(c.cloud.url)}</b>${Daten.nutzer ? ` als <b>${esc(Daten.nutzer)}</b>` : ""}. Projekte, Dateien und Kunden-Uploads liegen in der Cloud – für alle im Team gleich.`
+            : "Projekte und Dateien liegen nur in diesem Browser. Zum Ausprobieren ideal; für mehrere Arbeitsplätze und echte Kunden-Links die Cloud einrichten: Anleitung in <code>supabase/ANLEITUNG-CLOUD.md</code>, Zugangsdaten in <code>einstellungen/firma.js</code> unter <code>cloud</code>."}</p>
           <div class="aktionen">
-            ${Store.dateiMoeglich ? (st === "verbunden" ? `<button class="btn" data-aktion="datei-trennen">Datei trennen</button>`
-              : `<button class="btn voll" data-aktion="datei-neu">Neue Datendatei anlegen</button><button class="btn" data-aktion="datei-oeffnen">Vorhandene Datei verbinden</button>${st === "getrennt" ? `<button class="btn jetzt" data-aktion="datei-wieder">Wieder verbinden</button>` : ""}`) : ""}
-            <button class="btn" data-aktion="export">Sicherung herunterladen</button>
+            ${cloud ? `<button class="btn" data-aktion="abmelden">Abmelden</button>` : ""}
+            ${cloud && !(window.FIRMA.cloud || {}).url ? `<button class="btn still gefahr" data-aktion="cloud-trennen">Cloud trennen</button>` : ""}
+            <button class="btn" data-aktion="export">Projekte sichern (JSON)</button>
             <label class="btn">Sicherung einspielen<input type="file" accept=".json,application/json" data-aktion="import" hidden></label>
             ${demo ? `<button class="btn still gefahr" data-aktion="demo-weg">Beispielprojekte entfernen</button>` : `<button class="btn still" data-aktion="demo">Beispielprojekte laden</button>`}
           </div></section>
-
-        <section class="kasten"><h3>Firma</h3><div class="felder drei">
+        ${cloud ? "" : `<section class="panel"><h3>Cloud verbinden</h3>
+          <p class="leise">Zugangsdaten aus dem Supabase-Projekt (Project Settings → API). Sie werden nur in diesem Browser gespeichert; für alle Arbeitsplätze und das Kundenportal gehören sie in <code>einstellungen/firma.js</code>.</p>
+          <div class="felder drei">
+            <div class="feld"><label for="cl-url">Project URL</label><input class="eingabe" id="cl-url" placeholder="https://xxxx.supabase.co"></div>
+            <div class="feld"><label for="cl-key">anon / publishable key</label><input class="eingabe" id="cl-key"></div>
+            <div class="feld"><label for="cl-portal">Adresse des Kundenportals</label><input class="eingabe" id="cl-portal" placeholder="https://…/kunde.html"></div>
+          </div><div class="aktionen"><button class="btn voll" data-aktion="cloud-verbinden">Verbinden</button></div></section>`}
+        <section class="panel"><h3>Firma</h3><div class="felder drei">
           ${f("name", "Firmenname", c.name)}${f("kurzname", "Kurzname (in Mails)", c.kurzname)}${f("bereich", "Untertitel", c.bereich)}
           ${f("adresse.strasse", "Straße", c.adresse.strasse)}${f("adresse.ort", "PLZ & Ort", c.adresse.ort)}${f("adresse.mapsLink", "Google-Maps-Link", c.adresse.mapsLink, "url")}
           ${f("telefon", "Telefon", c.telefon)}${f("email", "E-Mail", c.email, "email")}${f("website", "Website", c.website)}
-          ${f("kundenPostfach", "Postfach für Kundenmails", c.kundenPostfach, "email")}${f("logo", "Logo-Datei (im Ordner)", c.logo)}
+          ${f("kundenPostfach", "Postfach für Kundenmails", c.kundenPostfach, "email")}${f("logo", "Logo-Datei", c.logo)}
         </div></section>
-
-        <section class="kasten"><h3>Farben</h3><p>Eine Grundfarbe für Schrift und Leiste, ein Akzent für „jetzt dran". Mehr braucht es nicht.</p>
-          <div class="felder drei">
-            <div class="feld"><span>Grundfarbe</span><div class="farbe"><input type="color" data-cfg="farben.tinte" value="${esc(c.farben.tinte)}" aria-label="Grundfarbe"><code>${esc(c.farben.tinte)}</code></div></div>
-            <div class="feld"><span>Akzent</span><div class="farbe"><input type="color" data-cfg="farben.akzent" value="${esc(c.farben.akzent)}" aria-label="Akzentfarbe"><code>${esc(c.farben.akzent)}</code></div></div>
-          </div></section>
-
-        <section class="kasten"><h3>Team</h3><p>Rollen steuern, wer im Handbuch genannt wird. Das Kürzel steht hinter dem Kundenordner und in der Projektliste.</p>
+        <section class="panel"><h3>Farben</h3><div class="felder drei">
+          <div class="feld"><span class="lab">Grundfarbe</span><div class="farbe"><input type="color" data-cfg="farben.tinte" value="${esc(c.farben.tinte)}" aria-label="Grundfarbe"><code>${esc(c.farben.tinte)}</code></div></div>
+          <div class="feld"><span class="lab">Akzent („jetzt dran“)</span><div class="farbe"><input type="color" data-cfg="farben.akzent" value="${esc(c.farben.akzent)}" aria-label="Akzentfarbe"><code>${esc(c.farben.akzent)}</code></div></div>
+        </div></section>
+        <section class="panel"><h3>Team</h3><p class="leise">Rollen bestimmen, wer in den Schritten genannt wird und wer als Badplanerin zuständig sein kann.</p>
           <table class="team-tabelle"><thead><tr><th>Rolle</th><th>Bezeichnung</th><th>Name</th><th>Kürzel</th><th></th></tr></thead>
-          <tbody id="team">${c.team.map((m, i) => `<tr data-i="${i}">
-            <td><select class="eingabe" data-team="rolle">${opt(rollen, m.rolle)}</select></td>
-            <td><input class="eingabe" data-team="bezeichnung" value="${esc(m.bezeichnung)}"></td>
-            <td><input class="eingabe" data-team="name" value="${esc(m.name)}"></td>
-            <td><input class="eingabe" data-team="kuerzel" value="${esc(m.kuerzel)}" style="max-width:80px"></td>
-            <td><button class="btn still" data-aktion="team-weg" data-i="${i}" aria-label="Entfernen">✕</button></td></tr>`).join("")}</tbody></table>
+          <tbody id="team">${c.team.map((m) => `<tr><td><select class="eingabe" data-team="rolle">${opt(rollen, m.rolle)}</select></td><td><input class="eingabe" data-team="bezeichnung" value="${esc(m.bezeichnung)}"></td><td><input class="eingabe" data-team="name" value="${esc(m.name)}"></td><td><input class="eingabe kurz" data-team="kuerzel" value="${esc(m.kuerzel)}"></td><td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`).join("")}</tbody></table>
           <div class="aktionen"><button class="btn klein" data-aktion="team-neu">+ Person</button></div></section>
-
-        <section class="kasten"><h3>Programme & Ablage</h3><div class="felder drei">
-          ${Object.entries(c.programme).map(([k, v]) => f("programme." + k, { erp: "Warenwirtschaft / ERP", cad: "Badplanung (CAD)", cloud: "Render-Cloud", app3d: "3D-App für Kunden", laufwerk: "Netzlaufwerk", badrechner: "Kostenrechner" }[k] || k, v)).join("")}
-          ${Object.entries(c.ordner).map(([k, v]) => f("ordner." + k, { anfragen: "Ordner Anfragen", muster: "Muster-Ordner", auftraege: "Ordner Aufträge" }[k] || k, v)).join("")}
+        <section class="panel"><h3>Programme</h3><div class="felder drei">
+          ${Object.entries(c.programme).map(([k, v]) => f("programme." + k, { erp: "Warenwirtschaft / ERP", cad: "Badplanung (CAD)", app3d: "3D-App für Kunden", badrechner: "Kostenrechner" }[k] || k, v)).join("")}
         </div></section>
-
-        <section class="kasten"><h3>Fristen</h3><p>Steuern, wann etwas unter „Heute" auftaucht (in Tagen).</p><div class="felder drei">
-          ${f("fristen.erinnerungVorErstgespraech", "Fotos/Maße nachfragen — Tage vor Erstgespräch", c.fristen.erinnerungVorErstgespraech, "number")}
-          ${f("fristen.angebotsverfolgung", "Angebotsverfolgung — Tage nach Besprechung", c.fristen.angebotsverfolgung, "number")}
-          ${f("fristen.freigabeNachMaterialauswahl", "Freigabe senden — Tage nach Materialauswahl", c.fristen.freigabeNachMaterialauswahl, "number")}
-          ${f("fristen.kundenerinnerungVorBaustart", "Kundenerinnerung — Tage vor Baustart", c.fristen.kundenerinnerungVorBaustart, "number")}
+        <section class="panel"><h3>Fristen (Tage)</h3><div class="felder drei">
+          ${f("fristen.erinnerungVorErstgespraech", "Fotos fehlen – Tage vor Erstgespräch", c.fristen.erinnerungVorErstgespraech, "number")}
+          ${f("fristen.angebotsverfolgung", "Angebotsverfolgung – Tage nach Besprechung", c.fristen.angebotsverfolgung, "number")}
+          ${f("fristen.freigabeNachMaterialauswahl", "Freigabe – Tage nach Materialauswahl", c.fristen.freigabeNachMaterialauswahl, "number")}
+          ${f("fristen.kundenerinnerungVorBaustart", "Kundenerinnerung – Tage vor Baustart", c.fristen.kundenerinnerungVorBaustart, "number")}
         </div></section>
-
-        <section class="kasten"><h3>Für eine andere Firma übernehmen</h3>
-          <p>Einstellungen übernehmen, dann hier als <code>firma.js</code> herunterladen und die Datei im Ordner <code>einstellungen/</code> ersetzen — so ist es die neue Grundeinstellung. Ablauf und Mailtexte stehen in <code>einstellungen/ablauf.js</code> und <code>mailvorlagen.js</code>; die Anleitung liegt in <code>ANLEITUNG.md</code>.</p>
-          <div class="aktionen"><button class="btn" data-aktion="cfg-datei">firma.js herunterladen</button><button class="btn still gefahr" data-aktion="cfg-reset">Auf Grundeinstellung zurücksetzen</button></div></section>
+        <section class="panel"><h3>Für eine andere Firma übernehmen</h3>
+          <p class="leise">Einstellungen übernehmen, dann als <code>firma.js</code> herunterladen und im Ordner <code>einstellungen/</code> ersetzen. Level, Formulare und Mailtexte stehen in <code>ablauf.js</code>, <code>formulare.js</code> und <code>mailvorlagen.js</code> – siehe <code>ANLEITUNG.md</code>.</p>
+          <div class="aktionen"><button class="btn" data-aktion="cfg-datei">firma.js herunterladen</button><button class="btn still gefahr" data-aktion="cfg-reset">Auf firma.js zurücksetzen</button></div></section>
       </div></div>`;
   }
   function cfgSammeln() {
@@ -677,6 +879,7 @@
       ziel[pfad[0]] = el.type === "number" ? Number(el.value) || 0 : el.value.trim();
     }
     c.team = $$("#team tr").map((tr) => Object.fromEntries($$("[data-team]", tr).map((el) => [el.dataset.team, el.value.trim()]))).filter((m) => m.name || m.kuerzel);
+    delete c.cloud;
     return c;
   }
 
@@ -684,206 +887,330 @@
   function demoLaden() {
     const t = (n, h) => { const d = plusTage(new Date(), n); return h ? `${isoTag(d)}T${h}` : isoTag(d); };
     const pl = leute("badplanung").map((m) => m.kuerzel);
-    const mk = (d, phaseNr, haken) => {
-      const p = neuesProjekt({ demo: true, ...d, phase: phaseNr });
-      p.erledigt = {};
-      for (const ph of PHASEN) if (ph.nr < phaseNr) ph.aufgaben.forEach((_, i) => (p.erledigt[`${ph.nr}:${i}`] = true));
-      (haken || []).forEach((k) => (p.erledigt[k] = true));
-    };
-    mk({ anrede: "Familie", nachname: "Beispiel", ort: "71134 Aidlingen", telefon: "07031 000000", email: "familie@beispiel.de", zustaendig: pl[0] || "", quelle: "Website / Badrechner", notiz: "Komplettsanierung, bodengleiche Dusche statt Wanne.", termine: { anfrageAm: t(-4), erstgespraech: t(2, "10:00") } }, 2, ["2:0"]);
-    mk({ anrede: "Frau", vorname: "Anna", nachname: "Muster", ort: "71083 Herrenberg", email: "anna@beispiel.de", zustaendig: pl[1] || pl[0] || "", projektnr: "B-2026-031", termine: { anfrageAm: t(-30), erstgespraech: t(-21, "14:00"), angebotsbesprechung: t(-9, "16:00") } }, 5, ["5:0"]);
-    mk({ anrede: "Herr und Frau", nachname: "Probst", ort: "71032 Böblingen", email: "probst@beispiel.de", zustaendig: pl[0] || "", projektnr: "B-2026-027", downloadCode: "", termine: { anfrageAm: t(-60), erstgespraech: t(-50, "10:00"), angebotsbesprechung: t(-38, "15:00"), baustellenbesichtigung: t(-25, "09:00"), materialauswahl: t(-4, "13:30") } }, 8);
-    mk({ anrede: "Herr", vorname: "Jonas", nachname: "Vorlage", ort: "71101 Schönaich", email: "jonas@beispiel.de", zustaendig: pl[1] || pl[0] || "", projektnr: "B-2026-019", termine: { anfrageAm: t(-90), erstgespraech: t(-80, "10:00"), angebotsbesprechung: t(-70, "17:00"), baustellenbesichtigung: t(-60, "08:30"), materialauswahl: t(-45, "10:00"), freigabeGesendet: t(-40), baustart: t(5) } }, 10, ["10:0", "10:1", "10:2"]);
-    mk({ anrede: "Familie", nachname: "Testfeld", ort: "71093 Weil im Schönbuch", zustaendig: pl[0] || "", projektnr: "B-2026-011", termine: { anfrageAm: t(-120), baustart: t(-16), abnahme: t(-2, "11:00") } }, 12, ["12:0"]);
-    Store.speichern();
+    const mk = (kunde, ph, extra) => neuesProjekt(kunde, { demo: true, phase: ph, ...extra });
+    mk({ anrede: "Familie", nachname: "Beispiel", ort: "71134 Aidlingen", strasse: "Lindenweg 4", telefon: "07031 000000", email: "familie@beispiel.de" }, 1, {});
+    mk({ anrede: "Frau", vorname: "Anna", nachname: "Muster", ort: "71083 Herrenberg", strasse: "Hauptstr. 12", email: "anna@beispiel.de" }, 2,
+      { zustaendig: pl[1] || "", termine: { erstgespraech: t(2, "10:00") }, schritte: { "2:kwp-kunde": { erledigt: true, am: Date.now() } } });
+    mk({ anrede: "Herr und Frau", nachname: "Probst", ort: "71032 Böblingen", strasse: "Am Wald 3", email: "probst@beispiel.de" }, 5,
+      { zustaendig: pl[0] || "", projektnr: "B-2026-027", termine: { erstgespraech: t(-30, "10:00"), angebotsbesprechung: t(-9, "15:00") } });
+    mk({ anrede: "Herr", vorname: "Jonas", nachname: "Vorlage", ort: "71101 Schönaich", strasse: "Gartenstr. 8", email: "jonas@beispiel.de" }, 7,
+      { zustaendig: pl[1] || "", projektnr: "B-2026-019", termine: { baustellenbesichtigung: t(-12, "08:30"), materialauswahl: t(-4, "10:00") },
+        formulare: { projektuebersicht: { werte: { abriss: "ja", abrissWer: "Brüll", elektriker: "ja", fliesen: "ja", fliesenWo: ["Wand", "Boden"], decke: ["Spanndecke"], fenster: "nein", tuer: "nein" } } } });
+    mk({ anrede: "Familie", nachname: "Testfeld", ort: "71093 Weil im Schönbuch", strasse: "Schulstr. 1", email: "testfeld@beispiel.de" }, 11,
+      { zustaendig: pl[0] || "", projektnr: "B-2026-011", termine: { baustart: t(5) } });
+  }
+
+  /* ================================================================
+     Login (Cloud)
+     ================================================================ */
+  function ansichtLogin(fehler) {
+    return `<div class="login"><form class="panel login-karte" id="login-form">
+      <img src="${esc(cfg().logo)}" alt="" class="login-logo"><h1>${esc(cfg().name)}</h1><p class="leise">Bad-Dashboard · Anmeldung</p>
+      ${fehler ? `<p class="luecken">${esc(fehler)}</p>` : ""}
+      <div class="feld"><label for="l-mail">E-Mail</label><input class="eingabe" id="l-mail" type="email" autocomplete="username" required></div>
+      <div class="feld"><label for="l-pw">Passwort</label><input class="eingabe" id="l-pw" type="password" autocomplete="current-password" required></div>
+      <button class="btn jetzt gross" type="submit">Anmelden</button></form></div>`;
   }
 
   /* ================================================================
      Router & Rendern
      ================================================================ */
   function route() {
-    const teile = (location.hash.replace(/^#\/?/, "") || "heute").split("/");
-    return { name: teile[0], arg: teile[1] };
+    const [pfad, query] = location.hash.replace(/^#\/?/, "").split("?");
+    const teile = (pfad || "cockpit").split("/");
+    return { name: teile[0], arg: teile[1], sub: teile[2], subArg: teile[3], query: new URLSearchParams(query || "") };
   }
   function render() {
     anwenden();
     const r = route();
-    const main = $("#main");
+    if (r.name === "projekte" && r.query.get("abschnitt")) { S.filter.abschnitt = r.query.get("abschnitt"); S.filter.status = "offen"; }
     const html =
       r.name === "projekte" ? ansichtProjekte() :
+      r.name === "projekt" && r.sub === "formular" ? ansichtFormular(r.arg, r.subArg) :
       r.name === "projekt" ? ansichtProjekt(r.arg) :
-      r.name === "ablauf" ? ansichtAblauf(Number(r.arg) || null) :
-      r.name === "vorlagen" ? ansichtVorlagen() :
-      r.name === "einrichtung" ? ansichtEinrichtung() : ansichtHeute();
-    main.innerHTML = html;
-    const navName = r.name === "projekt" ? "projekte" : r.name;
-    $$(".nav a").forEach((a) => {
-      if (a.dataset.nav === navName) a.setAttribute("aria-current", "page");
-      else a.removeAttribute("aria-current");
-    });
-    renderSpeicher();
+      r.name === "einrichtung" ? ansichtEinrichtung() : ansichtCockpit();
+    $("#main").innerHTML = html;
+    const nav = r.name === "projekt" ? "projekte" : r.name === "einrichtung" || r.name === "projekte" ? r.name : "cockpit";
+    $$(".nav a").forEach((a) => (a.dataset.nav === nav ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+    statusLeiste();
+    vorschauenLaden();
+    unterschriftenAn();
+    if (r.name === "projekt" && !r.sub) gesehenMarkieren(r.arg);
   }
-  function renderSpeicher() {
-    const el = $("#speicher");
-    const st = Store.dateiStatus;
-    el.innerHTML = st === "verbunden"
-      ? `<span class="punkt an"></span>Gespeichert in <b>${esc(Store.dateiName)}</b>`
-      : st === "getrennt"
-        ? `<span class="punkt warn"></span>Datendatei getrennt<br><button class="btn hell klein" data-aktion="datei-wieder">Wieder verbinden</button>`
-        : st === "fehler"
-          ? `<span class="punkt warn"></span>Datei nicht erreichbar — Änderungen bleiben im Browser`
-          : `<span class="punkt"></span>Gespeichert in diesem Browser<br><a href="#/einrichtung" style="color:#fff">Für das Büro einrichten →</a>`;
+  function allesNeu() {
+    const r = route();
+    if (r.name === "projekt" && r.sub === "formular") { const p = finde(r.arg); if (p) return formularNeuZeichnen(p, r.subArg, true); }
+    if (r.name === "projekt" && !r.sub) { const p = finde(r.arg); if (p) { kopfNeu(p); return teilRendern(p); } }
+    render();
+  }
+  function statusLeiste() {
+    const el = $("#speicher"); if (!el) return;
+    el.innerHTML = Daten.modus === "cloud"
+      ? `<span class="punkt an"></span>Cloud verbunden${Daten.nutzer ? `<br><small>${esc(Daten.nutzer)}</small>` : ""}`
+      : `<span class="punkt"></span>Lokal – nur dieser Browser<br><a href="#/einrichtung">Cloud einrichten →</a>`;
+  }
+  /* „neu vom Kunden“ wird beim Öffnen als gesehen gespeichert, bleibt aber bis zum nächsten Laden hervorgehoben */
+  async function gesehenMarkieren(pid) {
+    if (!S.dateien.some((d) => d.projekt_id === pid && d.neu)) return;
+    try { await Daten.gesehen(pid); } catch (e) { /* später erneut */ }
   }
 
-  /* ---------- Ereignisse (alles per Delegation, kein Inline-JS) ---------- */
+  /* ---------- Hochladen ---------- */
+  async function hochladen(p, kat, files) {
+    files = [...files]; if (!files.length) return;
+    $$(`[data-ablage="${kat}"] .drop`).forEach((z) => z.classList.add("laedt"));
+    let ok = 0;
+    for (const f of files) {
+      if (f.size > 50e6) { toast(`${f.name} ist größer als 50 MB`, "fehler"); continue; }
+      try { const d = await Daten.hochladen(p.id, kat, f); S.dateien.push(d); ok++; }
+      catch (e) { toast(`Upload fehlgeschlagen: ${f.name}`, "fehler"); }
+    }
+    if (ok) { aendern(p, () => {}, `${ok} ${ok === 1 ? "Datei" : "Dateien"} in „${katTitel(kat)}“ abgelegt`); toast(`${ok} ${ok === 1 ? "Datei" : "Dateien"} abgelegt`); }
+    allesNeu();
+  }
+
+  /* ================================================================
+     Ereignisse
+     ================================================================ */
+  const aktuellesProjekt = () => { const el = $("#main [data-projekt]"); return el ? finde(el.dataset.projekt) : null; };
+  const schrittTitel = (key) => { const [nr, id] = key.split(":"); return (phase(Number(nr)).schritte.find((s) => s.id === id) || {}).titel || id; };
+
   document.addEventListener("click", async (e) => {
     const a = e.target.closest("[data-aktion]");
-    if (!a || a.closest("#dlg")) return;
+    if (!a || a.closest("dialog")) return;
     const akt = a.dataset.aktion;
-    const pid = $("[data-projekt]")?.dataset.projekt;
-    const p = pid ? finde(pid) : null;
+    const p = aktuellesProjekt();
 
     if (akt === "neu") return neuDialog();
-    if (akt === "mail") return mailDialog(a.dataset.mail, a.dataset.id);
-    if (akt === "drucken") return window.print();
-    if (akt === "demo") { demoLaden(); toast("Beispielprojekte geladen"); location.hash = "#/heute"; return render(); }
+    if (akt === "neu-laden") return location.reload();
+    if (akt === "kundenlink" && p) return kundenlinkDialog(p);
+    if (akt === "mappe" && p) return monteurmappe(p);
+    if (akt === "mail" && p) return mailDialog(a.dataset.mail, p);
+    if (akt === "datei") { const d = S.dateien.find((x) => x.id === a.dataset.datei); if (d) dateiDialog(d); return; }
+    if (akt === "drucken" && p) return drucken(Formular.druck(a.dataset.formular, p, druckKontext(p)));
+    if (akt === "demo") { demoLaden(); toast("Beispielprojekte geladen"); location.hash = "#/cockpit"; return render(); }
     if (akt === "demo-weg") {
       if (!confirm("Alle Beispielprojekte entfernen?")) return;
-      Store.daten.projekte.filter((x) => x.demo).forEach((x) => { x.geloescht = true; x.geaendert = Date.now(); });
-      Store.speichern(); toast("Beispiele entfernt"); return render();
+      alle().filter((x) => x.demo).forEach((x) => aendern(x, (y) => { y.geloescht = true; }));
+      toast("Beispiele entfernt"); return render();
     }
-    if (akt === "zeige-phase" && p) {
-      ansichtPhase = { id: p.id, nr: Number(a.dataset.nr) };
-      $("#phase-blatt").innerHTML = phaseBlatt(p, ansichtPhase.nr);
-      $("#akte-kopf").innerHTML = akteKopf(p);
-      return;
-    }
-    if (akt === "weiter" && p) {
-      const n = naechsteNr(p.phase);
-      aendern(p, (x) => { x.phase = n; }, `Phase ${zwei(n)} „${phase(n).titel}" begonnen`);
-      ansichtPhase = { id: p.id, nr: n };
-      toast(`Weiter mit ${phase(n).titel}`);
-      render(); window.scrollTo({ top: 0, behavior: "smooth" });
-      return;
-    }
-    if (akt === "setze-phase" && p) {
-      const n = Number(a.dataset.nr);
-      aendern(p, (x) => { x.phase = n; if (x.status === "abgeschlossen") x.status = "aktiv"; }, `Auf Phase ${zwei(n)} „${phase(n).titel}" gesetzt`);
-      ansichtPhase = { id: p.id, nr: n };
-      return render();
+    if (akt === "level" && p) {
+      const nr = Number(a.dataset.nr);
+      if (nr > p.phase) { const li = a.closest(".lv"); li.classList.remove("wackeln"); void li.offsetWidth; li.classList.add("wackeln"); return toast(`Gesperrt – erst Level ${zwei(p.phase)} abschließen`); }
+      S.ansicht[p.id] = nr; return teilRendern(p);
     }
     if (akt === "abschliessen" && p) {
-      aendern(p, (x) => { x.status = "abgeschlossen"; }, "Projekt abgeschlossen");
-      toast("Projekt abgeschlossen"); return render();
+      if (!phaseStatus(p, p.phase).komplett) return;
+      const n = naechsteNr(p.phase);
+      if (n) aendern(p, (x) => { x.phase = n; }, `Level ${zwei(n)} „${phase(n).titel}“ freigeschaltet`);
+      else aendern(p, (x) => { x.status = "abgeschlossen"; }, "Projekt abgeschlossen & archiviert");
+      S.ansicht[p.id] = p.phase; levelUp(n);
+      kopfNeu(p); teilRendern(p); window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
     }
-    if (akt === "loeschen" && p) {
-      if (!confirm(`Projekt „${anzeigeName(p)}" wirklich löschen?`)) return;
-      aendern(p, (x) => { x.geloescht = true; });
-      location.hash = "#/projekte"; return;
+    if (akt === "bestaetigen" && p) {
+      const key = a.dataset.key; const an = !((p.schritte || {})[key] || {}).erledigt;
+      aendern(p, (x) => { x.schritte = x.schritte || {}; x.schritte[key] = an ? { erledigt: true, am: Date.now(), von: Daten.nutzer || "" } : {}; }, an ? `Erledigt: ${ersetzen(schrittTitel(key))}` : null);
+      return teilRendern(p);
     }
+    if (akt === "wahl" && p) {
+      const nr = Number(a.dataset.nr), s = phase(nr).schritte.find((x) => x.id === a.dataset.schritt), o = s.optionen.find((x) => x.id === a.dataset.wert);
+      aendern(p, (x) => {
+        x.schritte = x.schritte || {}; x.schritte[a.dataset.key] = { wahl: o.id, am: Date.now() };
+        if (o.status) x.status = o.status; else if (x.status !== "aktiv" && x.status !== "abgeschlossen") x.status = "aktiv";
+        if (o.wiedervorlage) { x.wiedervorlage = isoTag(plusTage(new Date(), o.wiedervorlage)); x.wiedervorlageNotiz = `${ersetzen(s.titel)} – nachfassen`; }
+      }, `${ersetzen(s.titel)}: ${ersetzen(o.label)}`);
+      if (o.status === "verloren") toast("Projekt als abgesagt markiert");
+      else if (o.wiedervorlage) toast(`Wiedervorlage in ${o.wiedervorlage} Tagen gesetzt`);
+      kopfNeu(p); return teilRendern(p);
+    }
+    if (akt === "setze-feld" && p) { aendern(p, (x) => { x[a.dataset.feld] = a.dataset.wert; }, `Zuständig: ${a.dataset.wert}`); kopfNeu(p); return teilRendern(p); }
+    if (akt === "ersatz" && p) { aendern(p, (x) => { x.schritte = x.schritte || {}; x.schritte[a.dataset.key] = { ersatz: a.dataset.text, am: Date.now() }; }, `Abgehakt: ${a.dataset.text}`); return teilRendern(p); }
+    if (akt === "ersatz-weg" && p) { aendern(p, (x) => { delete x.schritte[a.dataset.key]; }); return teilRendern(p); }
+    if (akt === "akte-tab" && p) { S.akteTab = a.dataset.tab; $("#akte").innerHTML = akte(p); vorschauenLaden($("#akte")); if (a.closest(".p-kopf")) $("#akte").scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    if (akt === "ordner" && p) { S.ordnerOffen = S.ordnerOffen === a.dataset.kat ? null : a.dataset.kat; $("#akte").innerHTML = akte(p); vorschauenLaden($("#akte")); return; }
+    if (akt === "loeschen" && p) { if (!confirm(`Projekt „${anzeigeName(p)}“ wirklich löschen?`)) return; aendern(p, (x) => { x.geloescht = true; }); location.hash = "#/projekte"; return; }
+    if (akt === "formular-fertig" && p) {
+      const fid = $(".formularseite").dataset.formular, st = Formular.status(fid, p, dateienVon(p.id));
+      if (!st.vollstaendig && !S.zeigeFehler) {
+        S.zeigeFehler = true; formularNeuZeichnen(p, fid, true);
+        const f = $(".ff.fehlt"); if (f) f.scrollIntoView({ behavior: "smooth", block: "center" });
+        return toast(`Noch ${st.fehlend.length} Pflichtangaben offen – erneut „Fertig“ zum Verlassen`);
+      }
+      S.zeigeFehler = false; location.hash = `#/projekt/${p.id}`; return;
+    }
+    if (akt === "maengel" && p) {
+      const w = Formular.werteVon(p, "abnahme"), d = Formular.def("abnahme"), neu = [];
+      d.felder.filter((f) => f.typ === "checkliste").forEach((f) => f.punkte.forEach((pt) => { const e2 = (w[f.id] || {})[pt.id]; if (e2 && e2.s === "mangel") neu.push({ arbeit: pt.label + (e2.n ? ` – ${e2.n}` : ""), wer: "", erledigt: false }); }));
+      if (!neu.length) return toast("Keine Mängel markiert");
+      aendern(p, () => { const r = formularWerte(p, "restarbeiten"); r.offen = [...(r.offen || []), ...neu]; }, `${neu.length} Mängel in Restarbeiten übernommen`);
+      return toast(`${neu.length} Mängel in Restarbeiten übernommen`);
+    }
+    if (akt === "abmelden") { await Daten.abmelden(); location.reload(); return; }
+    if (akt === "cloud-verbinden") {
+      const k = { url: $("#cl-url").value.trim().replace(/\/$/, ""), anonKey: $("#cl-key").value.trim(), portalUrl: $("#cl-portal").value.trim() };
+      if (!/^https?:\/\//.test(k.url) || !k.anonKey) return toast("URL und Key eintragen", "fehler");
+      try { localStorage.setItem("baddashboard:cloud", JSON.stringify(k)); } catch (err) { return toast("Browser-Speicher gesperrt", "fehler"); }
+      location.hash = "#/cockpit"; location.reload(); return;
+    }
+    if (akt === "cloud-trennen") { if (!confirm("Cloud-Verbindung in diesem Browser trennen?")) return; await Daten.abmelden(); localStorage.removeItem("baddashboard:cloud"); location.reload(); return; }
 
     /* Einrichtung */
-    if (akt === "cfg-speichern") {
-      Store.daten.einstellungen = cfgSammeln(); Store.daten.einstellungenGeaendert = Date.now();
-      Store.speichern(); toast("Einstellungen übernommen"); return render();
-    }
-    if (akt === "cfg-reset") {
-      if (!confirm("Alle Änderungen aus der Einrichtung verwerfen und firma.js verwenden?")) return;
-      Store.daten.einstellungen = null; Store.daten.einstellungenGeaendert = Date.now();
-      Store.speichern(); return render();
-    }
-    if (akt === "cfg-datei") {
-      const c = cfgSammeln();
-      return herunterladen("firma.js", `/* Firma — erzeugt mit dem Bad-Dashboard am ${fDatum(new Date())}.\n   Ersetzt einstellungen/firma.js. */\n\nwindow.FIRMA = ${JSON.stringify(c, null, 2)};\n`, "text/javascript");
-    }
+    if (akt === "cfg-speichern") { S.einstellungen = cfgSammeln(); try { await Daten.einstellungenSpeichern(S.einstellungen); toast("Einstellungen übernommen"); } catch (err) { toast("Nicht gespeichert", "fehler"); } return render(); }
+    if (akt === "cfg-reset") { if (!confirm("Änderungen verwerfen und firma.js verwenden?")) return; S.einstellungen = null; await Daten.einstellungenSpeichern(null); return render(); }
+    if (akt === "cfg-datei") { const c = { ...cfgSammeln(), cloud: window.FIRMA.cloud }; return herunterladen("firma.js", `/* Firma — erzeugt mit dem Bad-Dashboard am ${fDatum(new Date())}. Ersetzt einstellungen/firma.js. */\n\nwindow.FIRMA = ${JSON.stringify(c, null, 2)};\n`, "text/javascript"); }
     if (akt === "team-neu") {
-      const tb = $("#team"); const i = tb.children.length;
       const rollen = [...new Set(cfg().team.map((t) => t.rolle))];
-      tb.insertAdjacentHTML("beforeend", `<tr data-i="${i}"><td><select class="eingabe" data-team="rolle">${opt(rollen, "badplanung")}</select></td>
-        <td><input class="eingabe" data-team="bezeichnung" placeholder="z. B. Badplanerin"></td><td><input class="eingabe" data-team="name" placeholder="Vor- und Nachname"></td>
-        <td><input class="eingabe" data-team="kuerzel" style="max-width:80px"></td><td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`);
+      $("#team").insertAdjacentHTML("beforeend", `<tr><td><select class="eingabe" data-team="rolle">${opt(rollen, "badplanung")}</select></td><td><input class="eingabe" data-team="bezeichnung" placeholder="z. B. Badplanerin"></td><td><input class="eingabe" data-team="name" placeholder="Vor- und Nachname"></td><td><input class="eingabe kurz" data-team="kuerzel"></td><td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`);
       return;
     }
     if (akt === "team-weg") return a.closest("tr").remove();
-    if (akt === "export") return herunterladen(`bad-dashboard-sicherung-${isoTag(new Date())}.json`, Store.exportText());
-    try {
-      if (akt === "datei-neu") { await Store.dateiNeu(); toast("Datendatei angelegt"); return render(); }
-      if (akt === "datei-oeffnen") { await Store.dateiOeffnen(); toast("Datendatei verbunden"); return render(); }
-      if (akt === "datei-wieder") { await Store.dateiWiederverbinden(); return render(); }
-      if (akt === "datei-trennen") { await Store.dateiTrennen(); return render(); }
-    } catch (err) { if (err.name !== "AbortError") toast("Hat nicht geklappt: " + err.message); }
+    if (akt === "export") return herunterladen(`bad-dashboard-projekte-${isoTag(new Date())}.json`, JSON.stringify({ projekte: S.projekte, einstellungen: S.einstellungen }, null, 1));
   });
 
-  document.addEventListener("change", (e) => {
-    const el = e.target;
-    if (el.closest("#dlg")) return;
-    const pid = $("[data-projekt]")?.dataset.projekt;
-    const p = pid ? finde(pid) : null;
+  /* Formular-Bedienung (Knöpfe, Chips, Checklisten) */
+  document.addEventListener("click", (e) => {
+    const seite = e.target.closest(".formularseite"); if (!seite) return;
+    const b = e.target.closest("[data-ff-wahl],[data-ff-mehr],[data-check],[data-tab-neu],[data-tab-weg],[data-sign-weg],[data-sprung]");
+    if (!b) return;
+    if (b.hasAttribute("data-sprung")) { e.preventDefault(); const z = document.getElementById(b.getAttribute("href").slice(1)); if (z) z.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+    const p = finde(seite.dataset.projekt), fid = seite.dataset.formular, w = formularWerte(p, fid);
+    aendern(p, () => {
+      if (b.dataset.ffWahl) {
+        const f = Formular.def(fid).felder.find((x) => x.id === b.dataset.ffWahl);
+        if (f && f.typ === "kunde") p.kunde[f.feld] = b.dataset.wert;
+        else w[b.dataset.ffWahl] = w[b.dataset.ffWahl] === b.dataset.wert ? "" : b.dataset.wert;
+      } else if (b.dataset.ffMehr) {
+        const arr = new Set(w[b.dataset.ffMehr] || []); arr.has(b.dataset.wert) ? arr.delete(b.dataset.wert) : arr.add(b.dataset.wert); w[b.dataset.ffMehr] = [...arr];
+      } else if (b.dataset.check) {
+        const o = (w[b.dataset.check] = w[b.dataset.check] || {}); const e2 = (o[b.dataset.punkt] = o[b.dataset.punkt] || {});
+        e2.s = b.dataset.wert === "toggle" ? !e2.s : e2.s === b.dataset.wert ? "" : b.dataset.wert;
+      } else if (b.dataset.tabNeu) { (w[b.dataset.tabNeu] = w[b.dataset.tabNeu] || []).push({}); }
+      else if (b.dataset.tabWeg) { w[b.dataset.tabWeg].splice(Number(b.dataset.zeile), 1); }
+      else if (b.dataset.signWeg) { delete w[b.dataset.signWeg]; }
+    });
+    formularNeuZeichnen(p, fid, true);
+  });
 
-    if (el.dataset.aktion === "haken" && p) {
-      const k = el.dataset.key;
-      aendern(p, (x) => { if (el.checked) x.erledigt[k] = true; else delete x.erledigt[k]; });
-      const offen = $(".phase-teil .teil-titel"); if (offen) { const nr = Number(k.split(":")[0]); offen.textContent = `Checkliste · ${erledigtAnzahl(p, nr)} von ${phase(nr).aufgaben.length}`; }
-      const fuss = $(".phase-fuss small"); if (fuss && Number(k.split(":")[0]) === p.phase) { const ph = phase(p.phase); const f = erledigtAnzahl(p, p.phase); fuss.textContent = f === ph.aufgaben.length ? "Alles abgehakt." : `Noch ${ph.aufgaben.length - f} offen.`; }
+  document.addEventListener("input", (e) => {
+    const el = e.target;
+    if (el.closest("dialog")) return;
+    const seite = el.closest(".formularseite");
+    if (seite && (el.dataset.ff || el.dataset.tab || el.dataset.checkNotiz)) {
+      const p = finde(seite.dataset.projekt), fid = seite.dataset.formular, w = formularWerte(p, fid);
+      aendern(p, () => {
+        if (el.dataset.kunde) p.kunde[el.dataset.kunde] = el.value;
+        else if (el.dataset.ff) w[el.dataset.ff] = el.value;
+        else if (el.dataset.tab) {
+          const rows = (w[el.dataset.tab] = w[el.dataset.tab] || []); const i = Number(el.dataset.zeile);
+          for (let k = 0; k <= i; k++) rows[k] = rows[k] || {};
+          rows[i][el.dataset.spalte] = el.type === "checkbox" ? el.checked : el.value;
+        } else if (el.dataset.checkNotiz) {
+          const o = (w[el.dataset.checkNotiz] = w[el.dataset.checkNotiz] || {}); (o[el.dataset.punkt] = o[el.dataset.punkt] || {}).n = el.value;
+        }
+      });
+      formularNeuZeichnen(p, fid);
       return;
     }
-    if (el.dataset.feld && p) {
-      const k = el.dataset.feld; const alt = p[k];
-      aendern(p, (x) => { x[k] = el.value.trim(); }, k === "status" ? `Status: ${STATUS.find((s) => s.id === el.value)?.label}` : null);
-      if (["anrede", "vorname", "nachname", "strasse", "ort", "telefon", "mobil", "email", "projektnr", "zustaendig", "status"].includes(k) && alt !== el.value) $("#akte-kopf").innerHTML = akteKopf(p);
-      if (k === "status") $("#phase-blatt").innerHTML = phaseBlatt(p, ansichtPhase.nr);
+    if (el.dataset.filter === "suche") { S.filter.suche = el.value; $("#projektliste").innerHTML = projektListe(); return; }
+    if (el.type === "color") { document.documentElement.style.setProperty(el.dataset.cfg === "farben.tinte" ? "--tinte" : "--akzent", el.value); el.nextElementSibling.textContent = el.value; }
+  });
+
+  document.addEventListener("change", async (e) => {
+    const el = e.target;
+    if (el.closest("dialog")) return;
+    const p = aktuellesProjekt();
+    if (el.dataset.upload && p) { await hochladen(p, el.dataset.upload, el.files); el.value = ""; return; }
+    const seite = el.closest(".formularseite");
+    if (seite) {
+      /* Bedingungen (z. B. „wenn Mehrfamilienhaus“) neu auswerten, sobald ein Feld fertig ist */
+      if ((el.dataset.ff && el.tagName === "SELECT") || (el.dataset.tab && el.type === "checkbox")) formularNeuZeichnen(finde(seite.dataset.projekt), seite.dataset.formular, true);
       return;
     }
     if (el.dataset.termin && p) {
       const def = TERMINE.find((t) => t.key === el.dataset.termin);
-      aendern(p, (x) => { if (el.value) x.termine[def.key] = el.value; else delete x.termine[def.key]; }, el.value ? `${def.label}: ${fTermin(el.value)}` : `${def.label} entfernt`);
-      return;
+      aendern(p, (x) => { x.termine = x.termine || {}; if (el.value) x.termine[def.key] = el.value; else delete x.termine[def.key]; }, el.value ? `${def.label}: ${fTermin(el.value)}` : `${def.label} entfernt`);
+      return teilRendern(p);
     }
-    if (el.dataset.filter) { filter[el.dataset.filter] = el.value; $("#projektliste").innerHTML = projektListe(); return; }
+    if (el.dataset.pfeld && p) {
+      const k = el.dataset.pfeld;
+      aendern(p, (x) => { x[k] = el.value.trim(); }, k === "status" ? `Status: ${STATUS.find((s) => s.id === el.value)?.label}` : k === "projektnr" ? `Projektnummer: ${el.value.trim()}` : k === "downloadCode" ? `Download-Code: ${el.value.trim()}` : null);
+      kopfNeu(p); return teilRendern(p);
+    }
+    if (el.dataset.kfeld && p) { aendern(p, (x) => { x.kunde[el.dataset.kfeld] = el.value.trim(); }); kopfNeu(p); return; }
+    if (el.dataset.filter) { S.filter[el.dataset.filter] = el.value; $("#projektliste").innerHTML = projektListe(); return; }
     if (el.dataset.aktion === "import" && el.files[0]) {
-      el.files[0].text().then((t) => { Store.importieren(t); toast("Sicherung eingespielt"); render(); }).catch((err) => toast("Fehler: " + err.message));
+      try {
+        const d = JSON.parse(await el.files[0].text());
+        for (const q of d.projekte || []) { const alt = S.projekte.find((x) => x.id === q.id); if (!alt || (q.geaendert || 0) > (alt.geaendert || 0)) { if (alt) Object.assign(alt, q); else S.projekte.push(q); speichern(alt || q); } }
+        toast("Sicherung eingespielt"); render();
+      } catch (err) { toast("Keine gültige Sicherung", "fehler"); }
     }
     if (el.type === "color") el.nextElementSibling.textContent = el.value;
   });
 
-  let notizTimer;
-  document.addEventListener("input", (e) => {
-    const el = e.target;
-    if (el.dataset.filter === "suche") { filter.suche = el.value; $("#projektliste").innerHTML = projektListe(); return; }
-    if (el.dataset.notiz) {
-      clearTimeout(notizTimer);
-      notizTimer = setTimeout(() => {
-        Store.daten.notizen = { ...(Store.daten.notizen || {}), [el.dataset.notiz]: el.value };
-        Store.daten.notizenGeaendert = Date.now(); Store.speichern();
-      }, 500);
-    }
-    if (el.type === "color") {
-      document.documentElement.style.setProperty(el.dataset.cfg === "farben.tinte" ? "--tinte" : "--akzent", el.value);
-      el.nextElementSibling.textContent = el.value;
-    }
+  /* Drag & Drop auf Ablagen */
+  document.addEventListener("dragover", (e) => { const z = e.target.closest && e.target.closest(".drop"); if (z) { e.preventDefault(); z.classList.add("ueber"); } });
+  document.addEventListener("dragleave", (e) => { const z = e.target.closest && e.target.closest(".drop"); if (z) z.classList.remove("ueber"); });
+  document.addEventListener("drop", (e) => {
+    const z = e.target.closest && e.target.closest(".drop"); if (!z) return;
+    e.preventDefault(); z.classList.remove("ueber");
+    const p = aktuellesProjekt(); if (p) hochladen(p, z.closest("[data-ablage]").dataset.ablage, e.dataTransfer.files);
   });
 
-  /* fehlendes Vorschaubild → schlichtes Papier statt kaputtem Bild */
-  document.addEventListener("error", (e) => { if (e.target.classList && e.target.classList.contains("dok-thumb")) e.target.remove(); }, true);
-
-  window.addEventListener("hashchange", () => {
-    render();
-    const r = route();
-    if (r.name === "ablauf" && r.arg) { const z = document.getElementById("phase-" + r.arg); if (z) z.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }
-    else window.scrollTo(0, 0);
-    $("#main").focus({ preventScroll: true });
+  document.addEventListener("submit", async (e) => {
+    if (e.target.id !== "login-form") return;
+    e.preventDefault();
+    try { await Daten.anmelden($("#l-mail").value, $("#l-pw").value); await laden(); render(); }
+    catch (err) { $("#main").innerHTML = ansichtLogin(err.message); }
   });
 
-  /* Abgleich mit der Datendatei: bei Fokus und alle 20 Sekunden */
+  window.addEventListener("hashchange", () => { S.zeigeFehler = false; render(); window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); });
+
+  /* ---------- Abgleich: Kolleg:innen & Kunden-Uploads ---------- */
   const beschaeftigt = () => $("#dlg").open || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
-  async function abgleich() { if (await Store.abgleichen() && !beschaeftigt()) render(); }
+  async function abgleich() {
+    if (!Daten.angemeldet) return;
+    let neu = false;
+    try {
+      if (Daten.modus === "cloud") {
+        for (const q of await Daten.abgleichen()) {
+          if (offen.has(q.id)) continue;
+          const i = S.projekte.findIndex((x) => x.id === q.id);
+          if (i < 0) S.projekte.push(q); else if ((q.geaendert || 0) > (S.projekte[i].geaendert || 0)) S.projekte[i] = q;
+          neu = true;
+        }
+        if (neu) S.dateien = await Daten.alleDateien();
+      } else if (!offen.size) {
+        const l = await Daten.projekteLaden();
+        if (l.map((x) => x.geaendert).join() !== S.projekte.map((x) => x.geaendert).join()) { S.projekte = l; neu = true; }
+        const d = await Daten.alleDateien();
+        if (d.length !== S.dateien.length) { S.dateien = d; neu = true; }
+      }
+    } catch (e) { /* offline – später erneut */ }
+    if (neu && !beschaeftigt()) allesNeu();
+  }
   window.addEventListener("focus", abgleich);
-  setInterval(abgleich, 20000);
-  Store.beobachten(renderSpeicher);
+  window.addEventListener("storage", abgleich);
+  setInterval(abgleich, 15000);
 
-  Store.start().then(() => {
+  async function laden() {
+    S.einstellungen = await Daten.einstellungenLaden();
+    S.projekte = await Daten.projekteLaden();
+    S.dateien = await Daten.alleDateien();
+  }
+
+  /* ---------- Start ---------- */
+  (async () => {
+    anwenden();
+    try {
+      const ok = await Daten.start();
+      if (!ok) { $("#main").innerHTML = ansichtLogin(); return; }
+      await laden();
+    } catch (e) {
+      $("#main").innerHTML = `<div class="seite"><div class="panel startfeld"><h2>Keine Verbindung</h2><p>${esc(e.message || e)}</p><button class="btn" data-aktion="neu-laden">Erneut versuchen</button></div></div>`;
+      return;
+    }
     render();
-    const r = route();
-    if (r.name === "ablauf" && r.arg) document.getElementById("phase-" + r.arg)?.scrollIntoView();
-  });
+  })();
 })();

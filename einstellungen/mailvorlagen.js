@@ -1,7 +1,7 @@
 /* ==========================================================================
    MAILVORLAGEN
    --------------------------------------------------------------------------
-   Texte 1:1 aus den Outlook-Vorlagen (.oft) übernommen. Das Dashboard setzt
+   Texte aus den Outlook-Vorlagen (.oft) übernommen, ergänzt um den Upload-Link. Das Dashboard setzt
    Kundendaten und Termine ein; dann „Text kopieren" oder „In Mailprogramm
    öffnen". Bilder, Signatur und Anhänge bleiben in der Original-.oft —
    die liegt unter „datei" und kann jederzeit geöffnet werden.
@@ -17,7 +17,10 @@
      {downloadCode}         PaletteMove-Code aus der Projektakte
      {firma.name} {firma.adresse} {firma.mapsLink} {firma.website}
      {berater} {heizungsexperte}
+     {uploadLink}           persönlicher Link, über den der Kunde Dateien
+                            direkt in sein Projekt hochlädt
 
+   anhangDateien: Dateien im Ordner vorlagen/, die im Dialog zum Herunterladen angeboten werden.
    Optionale Absätze: [[id]] … [[/id]] — im Dashboard per Häkchen an/aus.
    Felder, die noch leer sind, erscheinen als markierte Lücke ‹…›.
    ========================================================================== */
@@ -29,6 +32,12 @@ window.MAILVORLAGEN = [
     titel: "Terminbestätigung Erstgespräch",
     datei: "vorlagen/02-terminbestaetigung/Mail-Terminbestaetigung.oft",
     anhaenge: ["Broschüre Bad", "Fotoanleitung Bad", "Broschüre Heizung", "Fotoanleitung Heizung"],
+    anhangDateien: [
+      "vorlagen/02-terminbestaetigung/anhaenge/Broschuere_Bad.pdf",
+      "vorlagen/02-terminbestaetigung/anhaenge/Fotoanleitung_Bad.pdf",
+      "vorlagen/02-terminbestaetigung/anhaenge/Broschuere_Heizung.pdf",
+      "vorlagen/02-terminbestaetigung/anhaenge/Fotoanleitung_Heizung.pdf",
+    ],
     anredeStil: "formell",
     betreff: "Ihr persönliches Traumbad und Ihre sparsame Heizung werden Wirklichkeit …",
     optionen: [],
@@ -61,10 +70,13 @@ und unserem Badexperten Herr {berater}:
 
 📌 Anfahrt leicht gemacht: Hier geht’s zur Adresse auf Google Maps: {firma.mapsLink}
 
-Damit wir Sie optimal beraten können, freuen wir uns über folgende Unterlagen vorab per E-Mail:
+Damit wir Sie optimal beraten können, freuen wir uns vorab über folgende Unterlagen:
 •  einen Grundriss und einige Fotos Ihres aktuellen Badezimmers
 •  Fotos von Ihrem Heizraum sowie von Ihrem Haus (Außenansicht)
 •  Angaben zur Wohnfläche und zum bisherigen Heizungsverbrauch
+
+Am einfachsten laden Sie alles über Ihren persönlichen Link hoch – direkt vom Handy, ohne Anmeldung:
+👉 {uploadLink}
 
 Bringen Sie auch gerne Ihre Ideen und Wünsche mit – so können wir direkt starten und gemeinsam Ihr persönliches Bad- und Heizkonzept gestalten.
 
@@ -104,7 +116,8 @@ Teilen Sie uns außerdem noch mit, welche Sitzhöhe für das WC gewünscht ist u
 Sollten Sie Fragen haben oder etwas unklar sein, melden Sie sich bitte unbedingt bei uns! Änderungen, die nach Ihrer Freigabe erfolgen, können nicht mehr umgesetzt werden.
 Gerne können Sie auch Anmerkungen handschriftlich direkt in der Planung ergänzen.
 
-Bitte senden Sie die unterschriebene Planung (Exposé) sowie das unterschriebene Angebot als PDF, Scan oder Foto an uns zurück.
+Bitte senden Sie uns die unterschriebene Planung (Exposé) sowie das unterschriebene Angebot als PDF, Scan oder Foto zurück – am einfachsten über Ihren persönlichen Link:
+👉 {uploadLink}
 
 Vielen Dank und herzliche Grüße`,
   },

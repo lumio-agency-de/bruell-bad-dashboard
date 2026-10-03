@@ -44,24 +44,25 @@ window.FIRMA = {
     { rolle: "heizungsexperte", bezeichnung: "Heizungsexperte",  name: "André Winterfeld", kuerzel: "AW" },
   ],
 
-  /* Programme & Orte — im Ablauf als {programm.erp}, {programm.cad} … */
+  /* Programme, die neben dem Dashboard weiterlaufen — im Ablauf als {programm.erp} … */
   programme: {
-    erp: "KWP",                       // Kunden, Termine, Angebote, Bestellwesen
+    erp: "KWP",                       // Kunden, Angebote, Bestellwesen, Rechnungen
     cad: "Palette CAD",               // 3D-Badplanung
-    cloud: "Palette Cloud",           // Upload der Renderings
     app3d: "PaletteMove",             // Kunden-App für die 3D-Ansicht
-    laufwerk: "MOMO1",                // Netzlaufwerk mit den Kundenordnern
     badrechner: "Badrechner auf der Website",
   },
 
-  /* Ordnerpfade auf dem Laufwerk (Anzeige im Handbuch) */
-  ordner: {
-    anfragen: "MOMO1 → Bad → Badanfragen",
-    muster: "MOMO1 → Bad → Badanfragen → 1 Muster_Anfragen",
-    auftraege: "MOMO1 → Bad → Badaufträge",
+  /* Cloud (Supabase): Projekte, Dateien und Kunden-Uploads für alle im Büro.
+     Leer lassen = lokaler Modus (nur dieser Browser). Einrichtung: supabase/ANLEITUNG-CLOUD.md
+     Der „anonKey" ist öffentlich und darf hier stehen — geschützt wird über Login + Datenbankregeln. */
+  cloud: {
+    url: "",
+    anonKey: "",
+    /* Adresse, unter der kunde.html öffentlich erreichbar ist (für den Kunden-Upload-Link) */
+    portalUrl: "",
   },
 
-  /* Fristen in Tagen — steuern die „Heute fällig"-Liste */
+  /* Fristen in Tagen — steuern das Cockpit */
   fristen: {
     erinnerungVorErstgespraech: 3,    // Fotos & Maße nachfragen
     angebotsverfolgung: 7,            // nach Angebotsbesprechung

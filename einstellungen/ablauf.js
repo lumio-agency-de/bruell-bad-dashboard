@@ -1,29 +1,58 @@
 /* ==========================================================================
-   ABLAUF — die Phasen eines Badbaus
+   ABLAUF — die Phasen eines Badbaus als Arbeitsschritte
    --------------------------------------------------------------------------
-   Quelle: „Badablauf Brüll GmbH_angepasst.docx".
+   Jede Phase besteht aus Schritten. Eine Phase ist abgeschlossen, wenn alle
+   Pflicht-Schritte erledigt sind — erst dann wird die nächste freigeschaltet.
 
-   So ist eine Phase aufgebaut:
-     nr         laufende Nummer (bestimmt die Reihenfolge)
-     titel      Name der Phase
-     abschnitt  einer der vier ABSCHNITTE unten (gruppiert die Projektübersicht)
-     kurz       ein Satz: worum geht es
-     wer        Rolle(n) aus firma.js, die hier hauptsächlich dran sind
-     termin     welches Datum des Projekts zu dieser Phase gehört (optional)
-     aufgaben   Checkliste. t = Aufgabe, d = Erklärung (optional)
-     dokumente  Formulare/Dateien aus dem Ordner vorlagen/
-     mails      IDs aus mailvorlagen.js
-     ordner     Ordnerstruktur, die in dieser Phase angelegt wird (optional)
+   Schritt-Typen
+     formular     ein digitales Formular ausfüllen        { formular: "id" }
+     dateien      Dateien in einen Projektordner laden     { kategorie: "id", min: 1 }
+                    kundenlink: true  → Kunde kann über seinen Link hochladen
+                    ersatz: "Text"    → alternativ mit Begründung abhaken
+                    vorlage: "pfad"   → Vorlage zum Herunterladen (z. B. Lieferantenformular)
+     termin       einen Termin setzen                      { termin: "key" }
+     mail         Kundenmail senden                        { mail: "id" }
+     erledigt     etwas außerhalb des Dashboards tun (z. B. in KWP) und bestätigen
+     entscheidung eine Auswahl treffen                      { optionen: [...] }
+                    option.weiter: false   → Schritt bleibt offen (z. B. „Kunde überlegt noch")
+                    option.status: "pausiert" | "verloren"
+                    option.wiedervorlage: Tage → setzt eine Wiedervorlage
+     feld         ein Projektfeld ausfüllen                 { feld: "projektnr" | "zustaendig" | "downloadCode" }
 
-   Platzhalter in geschweiften Klammern werden aus firma.js ersetzt:
-     {badberater} {badplanung} {badplanung.kuerzel} {projektleiter}
-     {heizungsexperte} {programm.erp} {programm.cad} {programm.cloud}
-     {programm.laufwerk} {programm.badrechner} {ordner.anfragen}
-     {ordner.muster} {ordner.auftraege} {kundenPostfach}
+   portal: [...]    → Ordner, in die der Kunde in diesem Level über seinen Link hochladen kann
+   pflicht: false   → optionaler Schritt (blockiert nicht)
+   wenn             → Schritt gilt nur, wenn eine Bedingung erfüllt ist:
+                      { schritt: "id", wert: "option" }
+                      { formular: "id", feld: "feld", wert: "ja" }
 
-   Eine Phase hinzufügen/entfernen: Block kopieren bzw. löschen, Nummern
-   anpassen. Bereits angelegte Projekte behalten ihren Stand.
+   Platzhalter in Texten: {badberater} {badplanung} {projektleiter}
+   {programm.erp} {programm.cad} … (siehe firma.js)
    ========================================================================== */
+
+/* Projektordner — ersetzen die Ordnerstruktur auf dem alten Laufwerk */
+/* kunde: Ordner kann im Kundenportal angeboten werden; hinweis: Text für den Kunden */
+window.KATEGORIEN = [
+  { id: "bilder-alt",  titel: "Bilder alt",               kunde: true, kundeTitel: "Fotos Ihres jetzigen Badezimmers",
+    hinweis: "Gern aus mehreren Blickwinkeln – mit Fenster, Tür, Dusche/Wanne, WC und Waschtisch." },
+  { id: "grundriss",   titel: "Grundriss & Maße",         kunde: true, kundeTitel: "Grundriss & Maße",
+    hinweis: "Ein Grundriss oder eine Handskizze mit Maßen genügt. Gern auch Angaben zur Wohnfläche." },
+  { id: "heizung",     titel: "Heizraum & Haus",          kunde: true, kundeTitel: "Heizraum & Haus",
+    hinweis: "Fotos vom Heizraum, der Heizung mit Typenschild und vom Haus von außen. Gern auch die letzte Heizkostenabrechnung." },
+  { id: "skizzen",     titel: "Skizzen" },
+  { id: "planung",     titel: "Planung & Renderings" },
+  { id: "angebot",     titel: "Angebote" },
+  { id: "auftrag",     titel: "Auftrag unterschrieben",   kunde: true, kundeTitel: "Unterschriebenes Angebot",
+    hinweis: "Als PDF, Scan oder einfach ein gut lesbares Foto jeder Seite." },
+  { id: "baustelle",   titel: "Bilder + Notizen Baustelle" },
+  { id: "auswahl",     titel: "Auswahl & Bestellungen" },
+  { id: "expose",      titel: "Exposé" },
+  { id: "freigabe",    titel: "Freigabe unterschrieben",  kunde: true, kundeTitel: "Unterschriebene Planung & Angebot",
+    hinweis: "Das unterschriebene Exposé und – falls geändert – das unterschriebene Angebot. PDF, Scan oder Foto." },
+  { id: "rechnungen",  titel: "Rechnungen" },
+  { id: "fertig",      titel: "Bilder fertiges Bad" },
+  { id: "sonstiges",   titel: "Sonstiges",                kunde: true, kundeTitel: "Sonstiges",
+    hinweis: "Alles, was Sie uns sonst noch zeigen möchten – Ideen, Inspirationsbilder, Unterlagen." },
+];
 
 window.ABSCHNITTE = [
   { id: "anfrage",   titel: "Anfrage",                von: 1,  bis: 3 },
@@ -34,265 +63,168 @@ window.ABSCHNITTE = [
 
 window.ABLAUF = [
   {
-    nr: 1,
-    titel: "Kundenanfrage & Erstkontakt",
-    abschnitt: "anfrage",
-    kurz: "Am Telefon die ersten Infos aufnehmen und den Anfrageordner anlegen.",
-    wer: ["badplanung"],
-    termin: "anfrageAm",
-    aufgaben: [
-      { t: "Im Telefongespräch erste Informationen zum Badumbau aufnehmen",
-        d: "Dabei das Formular „Bestandsaufnahme Bad\" ausfüllen." },
-      { t: "Anfrageordner anlegen",
-        d: "{ordner.muster} kopieren und die Kopie in „Anfrage_Kundennachname\" umbenennen." },
-      { t: "Bestandsaufnahme im neuen Kundenordner öffnen und alle bekannten Infos eintragen" },
-      { t: "Prüfen, ob ein Erstgesprächstermin in der Ausstellung vereinbart werden kann",
-        d: "Wer bei den Kosten noch unsicher ist, wird auf den {programm.badrechner} verwiesen — dann vorerst keinen Termin vereinbaren." },
+    nr: 1, titel: "Kundenanfrage", abschnitt: "anfrage",
+    ziel: "Bestand aufnehmen und klären, ob es zum Erstgespräch kommt.",
+    schritte: [
+      { id: "bestand", typ: "formular", formular: "bestandsaufnahme", titel: "Bestandsaufnahme Bad ausfüllen" },
+      { id: "termin-ok", typ: "entscheidung", titel: "Kommt ein Erstgespräch in der Ausstellung zustande?",
+        optionen: [
+          { id: "ja", label: "Ja, Termin vereinbart" },
+          { id: "badrechner", label: "Kosten unklar – auf {programm.badrechner} verwiesen", status: "pausiert", wiedervorlage: 14, weiter: false },
+          { id: "nein", label: "Kein Interesse", status: "verloren", weiter: false },
+        ] },
+      { id: "eg-termin", typ: "termin", termin: "erstgespraech", titel: "Termin Erstgespräch eintragen", wenn: { schritt: "termin-ok", wert: "ja" } },
     ],
-    dokumente: [
-      { titel: "Bestandsaufnahme Bad", datei: "vorlagen/01-kundenanfrage/Bestandsaufnahme-Bad.docx" },
-    ],
-    mails: [],
   },
-
   {
-    nr: 2,
-    titel: "Terminbestätigung",
-    abschnitt: "anfrage",
-    kurz: "Kunde anlegen, Termin bestätigen und Fotos & Maße vor dem Gespräch einsammeln.",
-    wer: ["badplanung"],
-    termin: "erstgespraech",
-    aufgaben: [
-      { t: "Neukunden mit Adresse und Kontaktdaten in {programm.erp} anlegen und mit dem Termin verknüpfen" },
-      { t: "Terminbestätigung per E-Mail senden",
-        d: "Entwurf „Ihr persönliches Traumbad wird Wirklichkeit …\" aus {kundenPostfach} verwenden, Anrede und genauen Termin eintragen, von dort aus senden." },
-      { t: "Eingang von Fotos und Maßen im Blick behalten",
-        d: "Nach Eingang auf Vollständigkeit prüfen und im Anfrageordner unter „Bilder alt\" ablegen." },
-      { t: "Bei Bedarf bemaßten Grundriss in {programm.cad} erstellen und ausdrucken",
-        d: "Den nutzt {badberater} im Gespräch zum Skizzieren des neuen Bades." },
-      { t: "Einige Tage vorher anrufen, falls noch keine Fotos/Maße da sind",
-        d: "An den Beratungstermin erinnern und erneut um Fotos und Maße bitten — macht, wer die Anfrage bearbeitet ({badplanung})." },
+    nr: 2, titel: "Terminbestätigung", abschnitt: "anfrage",
+    ziel: "Termin bestätigen und Fotos & Maße vom Kunden einsammeln.",
+    portal: ["bilder-alt", "grundriss", "heizung"],
+    schritte: [
+      { id: "kwp-kunde", typ: "erledigt", titel: "Kunde in {programm.erp} angelegt und mit dem Termin verknüpft" },
+      { id: "mail-termin", typ: "mail", mail: "terminbestaetigung", titel: "Terminbestätigung mit Upload-Link senden" },
+      { id: "fotos", typ: "dateien", kategorie: "bilder-alt", kundenlink: true, titel: "Fotos & Maße vom Kunden",
+        hinweis: "Kommt über den Kundenlink automatisch hier an. Kurz vor dem Termin ggf. anrufen und erinnern.",
+        ersatz: "Kunde bringt Unterlagen zum Termin mit" },
+      { id: "grundriss", typ: "dateien", kategorie: "grundriss", pflicht: false, titel: "Bemaßter Grundriss aus {programm.cad} für {badberater}",
+        hinweis: "Zum Skizzieren im Erstgespräch – ausdrucken und bereitlegen." },
     ],
-    dokumente: [
-      { titel: "Broschüre Bad", datei: "vorlagen/02-terminbestaetigung/anhaenge/Broschuere_Bad.pdf", hinweis: "Anhang der Mail" },
-      { titel: "Fotoanleitung Bad", datei: "vorlagen/02-terminbestaetigung/anhaenge/Fotoanleitung_Bad.pdf", hinweis: "Anhang der Mail" },
-      { titel: "Broschüre Heizung", datei: "vorlagen/02-terminbestaetigung/anhaenge/Broschuere_Heizung.pdf", hinweis: "Anhang der Mail" },
-      { titel: "Fotoanleitung Heizung", datei: "vorlagen/02-terminbestaetigung/anhaenge/Fotoanleitung_Heizung.pdf", hinweis: "Anhang der Mail" },
-    ],
-    mails: ["terminbestaetigung"],
   },
-
   {
-    nr: 3,
-    titel: "Erstgespräch in der Ausstellung",
-    abschnitt: "anfrage",
-    kurz: "Wünsche aufnehmen, skizzieren und die Badplanung an eine Planerin übergeben.",
-    wer: ["badberater", "badplanung"],
-    termin: "erstgespraech",
-    aufgaben: [
-      { t: "Gespräch mit Formular „Erstgesprächs-Notizen\" und ausgedrucktem Grundriss führen" },
-      { t: "Termin zur Angebots- & Planungsbesprechung vereinbaren" },
-      { t: "Alle Infos im Kundenordner ablegen" },
-      { t: "Zuständigkeit festlegen",
-        d: "Mit {badplanung} besprechen, wer die 3D-Planung in {programm.cad} und das Angebot in {programm.erp} übernimmt. Kürzel ({badplanung.kuerzel}) hinter den Kundenordner schreiben." },
+    nr: 3, titel: "Erstgespräch", abschnitt: "anfrage",
+    ziel: "Wünsche aufnehmen und die Planung an eine Badplanerin übergeben.",
+    schritte: [
+      { id: "notizen", typ: "formular", formular: "erstgespraech", titel: "Erstgesprächs-Notizen" },
+      { id: "skizze", typ: "dateien", kategorie: "skizzen", pflicht: false, titel: "Skizze fotografieren & hochladen" },
+      { id: "planerin", typ: "feld", feld: "zustaendig", titel: "Zuständige Badplanerin festlegen" },
+      { id: "ab-termin", typ: "termin", termin: "angebotsbesprechung", titel: "Termin Angebots- & Planungsbesprechung" },
     ],
-    dokumente: [
-      { titel: "Erstgesprächs-Notizen", datei: "vorlagen/03-erstgespraech/Erstgespraechs-Notizen.docx" },
-    ],
-    mails: [],
   },
-
   {
-    nr: 4,
-    titel: "Angebots- & Planungserstellung",
-    abschnitt: "planung",
-    kurz: "3D-Planung rendern und das Angebot aus dem Musterangebot ableiten.",
-    wer: ["badplanung"],
-    termin: "angebotsbesprechung",
-    aufgaben: [
-      { t: "Prüftermin „Angebot & Planung prüfen\" einige Tage vor der Besprechung in den Kalender von {badberater} eintragen" },
-      { t: "Badplanung laut Notizen & Skizze in {programm.cad} erstellen" },
-      { t: "Entwurf in Highend-Fotorealistik rendern und in die {programm.cloud} hochladen",
-        d: "Optisch noch einmal prüfen; bei Unklarheiten {badberater} vor dem Angebot fragen." },
-      { t: "Projekt in {programm.erp} anlegen",
-        d: "Titel meist „Realisierung Ihres Traumbades\", Abteilung „Bad/Sanitär\", rote Farbe (= Auftrag noch nicht erteilt)." },
-      { t: "Musterangebot hinterlegen und Titel für Titel an die 3D-Planung anpassen",
-        d: "Nicht benötigte Titel (z. B. Schreinerarbeiten, Spanndecke) löschen, Positionen, Artikel und Mengen anpassen." },
-      { t: "{badberater} Bescheid geben, dass alles zur Prüfung bereit ist" },
+    nr: 4, titel: "Angebot & Planung erstellen", abschnitt: "planung",
+    ziel: "3D-Planung rendern und das Angebot aus dem Musterangebot ableiten.",
+    schritte: [
+      { id: "pruefslot", typ: "erledigt", titel: "Prüftermin „Angebot & Planung prüfen“ bei {badberater} im Kalender eingetragen" },
+      { id: "planung", typ: "dateien", kategorie: "planung", titel: "Planung aus {programm.cad} (Renderings) hochladen" },
+      { id: "kwp-projekt", typ: "erledigt", titel: "Projekt in {programm.erp} angelegt",
+        hinweis: "Titel „Realisierung Ihres Traumbades“, Abteilung Bad/Sanitär, rote Farbe. Musterangebot Titel für Titel anpassen." },
+      { id: "projektnr", typ: "feld", feld: "projektnr", titel: "Projektnummer aus {programm.erp}" },
+      { id: "angebot", typ: "dateien", kategorie: "angebot", titel: "Angebot als PDF ablegen" },
+      { id: "freigabe-intern", typ: "erledigt", titel: "{badberater} hat Angebot & Planung geprüft" },
     ],
-    dokumente: [],
-    mails: [],
   },
-
   {
-    nr: 5,
-    titel: "Angebots- & Planungsbesprechung",
-    abschnitt: "planung",
-    kurz: "Planung in der Ausstellung vorstellen und dranbleiben, bis entschieden ist.",
-    wer: ["badberater", "badplanung"],
-    termin: "angebotsbesprechung",
-    aufgaben: [
-      { t: "Bei sofortigem Auftrag: unterschriebenes Angebot einscannen und im Kundenordner speichern" },
-      { t: "Kundenordner nach „Badaufträge\" verschieben und umbenennen",
-        d: "Von {ordner.anfragen} nach {ordner.auftraege}; „Anfrage_\" vor dem Nachnamen entfernen." },
-      { t: "Termin zur Baustellenbesichtigung vereinbaren und bei {projektleiter} im Kalender eintragen" },
-      { t: "Angebotsverfolgung nach ca. 1 Woche",
-        d: "Ohne Rückmeldung nachfragen, ob Fragen offen sind oder schon eine Entscheidung steht. Braucht der Kunde Zeit, die Erinnerung verschieben und regelmäßig wieder nachfragen." },
+    nr: 5, titel: "Angebotsbesprechung", abschnitt: "planung",
+    ziel: "Planung vorstellen und dranbleiben, bis der Auftrag kommt.",
+    portal: ["auftrag"],
+    schritte: [
+      { id: "ergebnis", typ: "entscheidung", titel: "Ergebnis der Besprechung",
+        optionen: [
+          { id: "auftrag", label: "Auftrag erteilt" },
+          { id: "ueberlegt", label: "Kunde überlegt noch – in 7 Tagen nachfassen", wiedervorlage: 7, weiter: false },
+          { id: "abgesagt", label: "Abgesagt", status: "verloren", weiter: false },
+        ] },
+      { id: "unterschrift", typ: "dateien", kategorie: "auftrag", kundenlink: true, titel: "Unterschriebenes Angebot einscannen / hochladen", wenn: { schritt: "ergebnis", wert: "auftrag" } },
+      { id: "bb-termin", typ: "termin", termin: "baustellenbesichtigung", titel: "Baustellenbesichtigung mit {projektleiter} vereinbaren", wenn: { schritt: "ergebnis", wert: "auftrag" } },
     ],
-    dokumente: [],
-    mails: [],
   },
-
   {
-    nr: 6,
-    titel: "Baustellenbesichtigung",
-    abschnitt: "auftrag",
-    kurz: "Vor Ort aufmessen und die Bausituation an die Planung zurückspielen.",
-    wer: ["projektleiter", "badplanung"],
-    termin: "baustellenbesichtigung",
-    aufgaben: [
-      { t: "Nach Unterschrift des Angebots Termin vereinbaren" },
-      { t: "Besichtigung mit der Checkliste durchführen",
-        d: "Fotos, Aufmaß Bad/WC, Fenster- und Türmaße, Wasserzähler, Heizkörperanschluss, Estrichhöhe, Sicherungskasten, Zugang/Parken, Entsorgungswege, Absperrhähne, Hausverwaltung." },
-      { t: "{projektleiter} bespricht die Bausituation mit der zuständigen Planerin" },
-      { t: "Genaue Raummaße in {programm.cad} übernehmen bzw. Planung bei Abweichungen anpassen" },
+    nr: 6, titel: "Baustellenbesichtigung", abschnitt: "auftrag",
+    ziel: "Vor Ort aufmessen und alles für Planung und Monteure festhalten.",
+    schritte: [
+      { id: "checkliste", typ: "formular", formular: "baustellenbesichtigung", titel: "Checkliste Baustellenbesichtigung" },
+      { id: "tuer", typ: "formular", formular: "tuer", titel: "Angaben zur Tür", wenn: { formular: "baustellenbesichtigung", feld: "tuertausch", wert: "ja" } },
+      { id: "masse", typ: "erledigt", titel: "Raummaße in {programm.cad} übernommen, Planung angepasst" },
+      { id: "ma-termin", typ: "termin", termin: "materialauswahl", titel: "Termin Materialauswahl in der Ausstellung" },
     ],
-    dokumente: [
-      { titel: "Checkliste Baustellenbesichtigung", datei: "vorlagen/06-baustellenbesichtigung/Checkliste-Baustellenbesichtigung.docx", hinweis: "inkl. Raumskizze & Angaben zur Tür" },
-    ],
-    mails: [],
   },
-
   {
-    nr: 7,
-    titel: "Materialauswahl in der Ausstellung",
-    abschnitt: "auftrag",
-    kurz: "Alles auswählen, in den Formularen festhalten und Angebot & Planung nachziehen.",
-    wer: ["badberater", "badplanung"],
-    termin: "materialauswahl",
-    aufgaben: [
-      { t: "Materialauswahl in den Formularen zusammenfassen",
-        d: "Projekt-Übersicht, Traumbad-Auswahlgespräch und je nach Gewerk Fliesen, Elektro, Abriss, Spanndecke." },
-      { t: "Angebot in {programm.erp} an die Auswahl anpassen" },
-      { t: "Planung in {programm.cad} an die Auswahl anpassen" },
+    nr: 7, titel: "Materialauswahl", abschnitt: "auftrag",
+    ziel: "Alles auswählen und festhalten — die Formulare zeigen, welche Gewerke nötig sind.",
+    schritte: [
+      { id: "uebersicht", typ: "formular", formular: "projektuebersicht", titel: "Projekt-Übersicht: Was wird benötigt?" },
+      { id: "auswahl", typ: "formular", formular: "auswahl", titel: "Traumbad-Auswahlgespräch" },
+      { id: "fliesen", typ: "formular", formular: "fliesen", titel: "Fliesenarbeiten", wenn: { formular: "projektuebersicht", feld: "fliesen", wert: "ja" } },
+      { id: "elektro", typ: "formular", formular: "elektro", titel: "Elektroarbeiten", wenn: { formular: "projektuebersicht", feld: "elektriker", wert: "ja" } },
+      { id: "abriss", typ: "formular", formular: "abriss", titel: "Abrissarbeiten", wenn: { formular: "projektuebersicht", feld: "abriss", wert: "ja" } },
+      { id: "decke", typ: "dateien", kategorie: "auswahl", titel: "Bestellformular Spanndecke (DPS) ausgefüllt hochladen",
+        vorlage: [
+          { titel: "Bestellformular Decke", datei: "vorlagen/07-materialauswahl/Bestellformular-Spanndecke.pdf" },
+          { titel: "Bestellformular Zubehör", datei: "vorlagen/07-materialauswahl/Bestellformular-Spanndecke-Zubehoer.pdf" },
+        ],
+        wenn: { formular: "projektuebersicht", feld: "decke", wert: "Spanndecke" } },
+      { id: "angebot-neu", typ: "erledigt", titel: "Angebot in {programm.erp} an die Auswahl angepasst" },
+      { id: "planung-neu", typ: "erledigt", titel: "Planung in {programm.cad} an die Auswahl angepasst" },
     ],
-    dokumente: [
-      { titel: "Projekt-Übersicht", datei: "vorlagen/07-materialauswahl/Projekt-Uebersicht.pdf", hinweis: "Was wird benötigt?" },
-      { titel: "Traumbad-Auswahlgespräch", datei: "vorlagen/07-materialauswahl/Traumbad-Auswahlgespraech.pdf", hinweis: "5 Seiten, mit Gäste-WC" },
-      { titel: "Fliesenarbeiten", datei: "vorlagen/07-materialauswahl/Fliesenarbeiten.pdf" },
-      { titel: "Elektroarbeiten", datei: "vorlagen/07-materialauswahl/Elektroarbeiten.pdf" },
-      { titel: "Abrissarbeiten", datei: "vorlagen/07-materialauswahl/Abrissarbeiten.pdf" },
-      { titel: "Bestellformular Spanndecke", datei: "vorlagen/07-materialauswahl/Bestellformular-Spanndecke.pdf", hinweis: "Lieferant DPS" },
-      { titel: "Bestellformular Zubehör", datei: "vorlagen/07-materialauswahl/Bestellformular-Spanndecke-Zubehoer.pdf", hinweis: "Lieferant DPS" },
-    ],
-    mails: [],
   },
-
   {
-    nr: 8,
-    titel: "Angebot & Exposé zur Freigabe",
-    abschnitt: "auftrag",
-    kurz: "Exposé und ggf. geändertes Angebot zur Prüfung schicken, Unterschrift zurückholen.",
-    wer: ["badplanung"],
-    termin: "freigabeGesendet",
-    aufgaben: [
-      { t: "Exposé mit 2D-Ansichten als PDF erstellen und den {programm.app3d}-Download-Code bereitlegen" },
-      { t: "Bei Änderungen: aktualisiertes Angebot zur Unterschrift beilegen" },
-      { t: "Mail „Ihre Badplanung zur Prüfung und Freigabe\" senden",
-        d: "Optionale Absätze (Deckenspots, WC-Sitzhöhe, Maße Waschtisch/Spiegelschrank) nur drinlassen, wenn sie zutreffen." },
-      { t: "Unterschriebenes Exposé und Angebot zurückerhalten und im Kundenordner ablegen" },
+    nr: 8, titel: "Freigabe durch den Kunden", abschnitt: "auftrag",
+    ziel: "Exposé (und ggf. neues Angebot) zur Unterschrift schicken.",
+    portal: ["freigabe"],
+    schritte: [
+      { id: "expose", typ: "dateien", kategorie: "expose", titel: "Exposé mit 2D-Ansichten als PDF ablegen" },
+      { id: "code", typ: "feld", feld: "downloadCode", titel: "{programm.app3d}-Download-Code" },
+      { id: "mail-freigabe", typ: "mail", mail: "freigabe", titel: "Planung zur Prüfung & Freigabe senden" },
+      { id: "freigabe", typ: "dateien", kategorie: "freigabe", kundenlink: true, titel: "Unterschriebenes Exposé & Angebot zurück",
+        hinweis: "Der Kunde lädt es über seinen Link hoch – oder hier selbst ablegen, wenn es per Post/Mail kam." },
     ],
-    dokumente: [],
-    mails: ["freigabe"],
   },
-
   {
-    nr: 9,
-    titel: "Materialbestellung",
-    abschnitt: "auftrag",
-    kurz: "Bestellungen aus dem Angebot erzeugen, prüfen und rausschicken.",
-    wer: ["badplanung"],
-    aufgaben: [
-      { t: "In {programm.erp} die Artikel aus dem Angebot ins Bestellwesen übertragen und alle Bestellungen anlegen" },
-      { t: "Lieferant, Lieferadresse, Wunsch-Liefertermin und Bezeichnung eintragen" },
-      { t: "Bestellungen mit den Auswahllisten abgleichen" },
-      { t: "Bestellungen per E-Mail oder Onlineshop rausschicken (ggf. über IDS)" },
+    nr: 9, titel: "Materialbestellung", abschnitt: "auftrag",
+    ziel: "Bestellungen aus dem Angebot erzeugen, prüfen und rausschicken.",
+    schritte: [
+      { id: "bestellwesen", typ: "erledigt", titel: "Artikel aus dem Angebot ins Bestellwesen ({programm.erp}) übertragen" },
+      { id: "angaben", typ: "erledigt", titel: "Lieferant, Lieferadresse, Wunschtermin und Bezeichnung eingetragen" },
+      { id: "abgleich", typ: "erledigt", titel: "Bestellungen mit der Auswahl abgeglichen",
+        hinweis: "Die Auswahl aus Phase 7 ist hier in der Akte unter „Formulare“ jederzeit aufrufbar." },
+      { id: "raus", typ: "erledigt", titel: "Bestellungen versendet (E-Mail, Onlineshop oder IDS)" },
     ],
-    dokumente: [],
-    mails: [],
   },
-
   {
-    nr: 10,
-    titel: "Baustellenablauf planen",
-    abschnitt: "auftrag",
-    kurz: "Termin, Subunternehmer, Abschlag und Monteurordner vorbereiten.",
-    wer: ["projektleiter"],
-    termin: "baustart",
-    aufgaben: [
-      { t: "Umsetzungstermin festlegen" },
-      { t: "Subunternehmer einplanen" },
-      { t: "Abschlagsrechnung stellen" },
-      { t: "Monteurordner mit Anschlussmaßen etc. zusammenstellen",
-        d: "Auswahl, Pläne & Zeichnungen, Fotos und die Protokolle für Abnahme und Restarbeiten." },
+    nr: 10, titel: "Baustelle planen", abschnitt: "auftrag",
+    ziel: "Termin, Subunternehmer, Abschlag — und die Monteurmappe steht.",
+    schritte: [
+      { id: "baustart", typ: "termin", termin: "baustart", titel: "Umsetzungstermin (Baustart)" },
+      { id: "plan", typ: "formular", formular: "baustellenplan", titel: "Subunternehmer & Ablauf einplanen" },
+      { id: "abschlag", typ: "dateien", kategorie: "rechnungen", titel: "Abschlagsrechnung ablegen" },
+      { id: "mappe", typ: "erledigt", titel: "Monteurmappe geprüft und ausgedruckt",
+        hinweis: "Über „Monteurmappe“ oben in der Akte: alle Formulare, Maße und Pläne auf einen Blick." },
     ],
-    ordner: ["Auswahl", "Bilder alt", "Bilder+Notizen Baustelle", "Pläne&Zeichnungen", "Restarbeiten", "Bilder fertiges Bad"],
-    dokumente: [
-      { titel: "Abnahmeprotokoll Fertigmontage", datei: "vorlagen/10-baustellenablauf/Abnahmeprotokoll-Fertigmontage.pdf", hinweis: "für den Monteurordner" },
-      { titel: "Restarbeiten-Protokoll", datei: "vorlagen/10-baustellenablauf/Restarbeiten-Protokoll.pdf", hinweis: "für den Monteurordner" },
-    ],
-    mails: [],
   },
-
   {
-    nr: 11,
-    titel: "Ausführung",
-    abschnitt: "baustelle",
-    kurz: "Kunden eine Woche vorher einstimmen, dann bauen und Restarbeiten abarbeiten.",
-    wer: ["projektleiter"],
-    termin: "baustart",
-    aufgaben: [
-      { t: "Kundenerinnerung 1 Woche vor Baustart",
-        d: "Mail „Das Warten hat bald ein Ende …\" mit Aushang für die Nachbarn." },
-      { t: "Auftretende Reklamationen bearbeiten" },
-      { t: "Restarbeiten aufnehmen und zeitnah erledigen" },
+    nr: 11, titel: "Ausführung", abschnitt: "baustelle",
+    ziel: "Kunden einstimmen, bauen, Restarbeiten erledigen.",
+    schritte: [
+      { id: "mail-baustart", typ: "mail", mail: "baustart", titel: "Kundenerinnerung 1 Woche vor Baustart" },
+      { id: "fotos-bau", typ: "dateien", kategorie: "baustelle", pflicht: false, titel: "Bilder & Notizen von der Baustelle" },
+      { id: "rest", typ: "formular", formular: "restarbeiten", titel: "Restarbeiten & Reklamationen erledigt" },
     ],
-    dokumente: [
-      { titel: "Restarbeiten-Protokoll", datei: "vorlagen/10-baustellenablauf/Restarbeiten-Protokoll.pdf" },
-    ],
-    mails: ["baustart"],
   },
-
   {
-    nr: 12,
-    titel: "Abnahme & Übergabe",
-    abschnitt: "baustelle",
-    kurz: "Abnahme protokollieren und die Schlussrechnung schicken.",
-    wer: ["projektleiter", "badplanung"],
-    termin: "abnahme",
-    aufgaben: [
-      { t: "Abnahmeprotokoll ausfüllen und vom Kunden unterschreiben lassen" },
-      { t: "Schlussrechnung schreiben und mit der Vorlage versenden" },
+    nr: 12, titel: "Abnahme & Übergabe", abschnitt: "baustelle",
+    ziel: "Abnahme protokollieren und abrechnen.",
+    schritte: [
+      { id: "abnahme-termin", typ: "termin", termin: "abnahme", titel: "Abnahmetermin" },
+      { id: "protokoll", typ: "formular", formular: "abnahme", titel: "Abnahmeprotokoll mit Unterschrift" },
+      { id: "rechnung", typ: "dateien", kategorie: "rechnungen", min: 2, titel: "Schlussrechnung ablegen",
+        hinweis: "Zweite Rechnung im Ordner (nach der Abschlagsrechnung)." },
+      { id: "mail-rechnung", typ: "mail", mail: "schlussrechnung", titel: "Schlussrechnung mit Bitte um Bewertung senden" },
     ],
-    dokumente: [
-      { titel: "Abnahmeprotokoll Fertigmontage", datei: "vorlagen/10-baustellenablauf/Abnahmeprotokoll-Fertigmontage.pdf" },
-    ],
-    mails: ["schlussrechnung"],
   },
-
   {
-    nr: 13,
-    titel: "Abschluss",
-    abschnitt: "baustelle",
-    kurz: "Bewertung, Bilder fürs Showroom und sauber archivieren.",
-    wer: ["badplanung"],
-    aufgaben: [
-      { t: "Bewertung des Kunden abwarten, darauf reagieren, ggf. erinnern" },
-      { t: "Bilder vom neuen Bad in den Showroom laden" },
-      { t: "Evtl. Interview mit dem Kunden für Social Media" },
-      { t: "Alle Ordner unter Kundenadresse und Projektnummer archivieren" },
+    nr: 13, titel: "Abschluss", abschnitt: "baustelle",
+    ziel: "Bewertung, Bilder fürs Showroom — dann archivieren.",
+    schritte: [
+      { id: "bewertung", typ: "entscheidung", titel: "Google-Bewertung",
+        optionen: [
+          { id: "erhalten", label: "Bewertung erhalten & beantwortet" },
+          { id: "erinnert", label: "Erinnert – keine Bewertung" },
+          { id: "warten", label: "Noch warten – in 7 Tagen erinnern", wiedervorlage: 7, weiter: false },
+        ] },
+      { id: "fotos-fertig", typ: "dateien", kategorie: "fertig", titel: "Bilder vom neuen Bad" },
+      { id: "showroom", typ: "erledigt", titel: "Bilder in den Showroom geladen" },
+      { id: "interview", typ: "entscheidung", pflicht: false, titel: "Interview für Social Media?",
+        optionen: [{ id: "ja", label: "Ja, gemacht" }, { id: "nein", label: "Nein" }] },
     ],
-    dokumente: [],
-    mails: [],
   },
 ];
