@@ -57,7 +57,7 @@ Anmeldefenster zum Anklicken anbietet. Ohne `?demo=1` beginnt das Dashboard mit 
 | **Cockpit** | Zahlen je Abschnitt, was **fällig** ist (Nachfassen, Erinnerungen), was **als Nächstes** zu tun ist (je Projekt der nächste offene Schritt), **Neu vom Kunden**, Termine der nächsten 14 Tage, Fliesenspiegel aller Bäder. |
 | **Projekte** | Alle Bäder nach Abschnitt, mit Suche und Filtern. |
 | **Projekt** | Die Spielfläche: oben die Level-Karte, links die Schritte des aktuellen Levels, rechts die Akte (Dateien-Ordner, Kunde, Termine, Verlauf). |
-| **Unternehmen** | (nur Geschäftsführung) Jahresziel, Umsatz, Deckungsbeitrag, Quote, Dauer, Auftragsbestand, offene Forderungen, Kapazität der nächsten 8 Wochen, Vertriebstrichter — jeweils mit Vergleich zum Vorzeitraum. Euro-Beträge pro Projekt unter Akte → Zahlen. |
+| **Unternehmen** | (nur Geschäftsführung) Ordner wie am iPhone: Finanzen, Vertrieb, Zeit & Ablauf, Kapazität & Team, Nachkalkulation. Darin: Jahresziel, Umsatz, Deckungsbeitrag, Quote, Dauer, Auftragsbestand, offene Forderungen, Kapazität der nächsten 8 Wochen, Vertriebstrichter — jeweils mit Vergleich zum Vorzeitraum. Euro-Beträge pro Projekt unter Akte → Zahlen. |
 | **Konten** | (nur Geschäftsführung) Mitarbeiter und Partner, Ebenen, Zugänge anlegen/zurücksetzen/sperren, Tabelle „Wer sieht was“. |
 | **Einrichtung** | (nur Geschäftsführung) Firma, Farben, Ziele, Programme, Fristen, Cloud, Sicherung. |
 | **Meine Baustellen / Meine Einsätze** | Startseite für Monteure bzw. externe Partner. |
@@ -97,6 +97,39 @@ Punkte als offene Restarbeiten.
 
 **Monteurmappe** (oben im Projekt) druckt Deckblatt mit Adresse und Zugang, alle
 Auswahl- und Gewerke-Formulare sowie Pläne und Skizzen in einem Rutsch.
+
+## Mehrere Personen gleichzeitig (Schreibschutz)
+
+Öffnet jemand ein Projekt, ist es für diese Person reserviert. Alle anderen sehen
+„**Schreibgeschützt** – Karin Kaufmann bearbeitet dieses Projekt seit 10:42 Uhr“ und können
+nur mitlesen; Änderungen erscheinen laufend. Verlässt die Person das Projekt (oder schließt
+den Browser), wird es nach spätestens 90 Sekunden frei. Die Geschäftsführung kann die
+Bearbeitung übernehmen.
+
+## Arbeitszeit
+
+Oben im Projekt **Arbeitszeit starten** – mit Pause, Fortsetzen und Beenden (optional mit
+Tätigkeit). Ist man länger als 10 Minuten nicht aktiv (einstellbar in `firma.js`,
+`arbeitszeit`), pausiert der Timer **rückwirkend ab der letzten Aktivität** – auch wenn der
+Browser zwischendurch zu war. Beim Zurückkommen: weiter stempeln, Pause verwerfen
+(„habe weitergearbeitet“, z. B. in KWP) oder beenden. Alle Einträge stehen im Akte-Reiter
+**Zeiten** und fließen in die Nachkalkulation.
+
+## Nachkalkulation (Geschäftsführung)
+
+Im Projekt unter Akte → **Nachkalkulation** → „Nachkalkulation öffnen“: Erlöse, Stunden
+eigener Mitarbeiter (aus dem Timer + Zusatzstunden × Kostensatz), Zeiten und Kosten
+externer Partner, Material (kalkuliert/tatsächlich), sonstige Kosten, Dauer. Ergebnis:
+Deckungsbeitrag, Marge, DB pro Stunde. Alle Nachkalkulationen sammelt
+**Unternehmen → Nachkalkulation**. Den Standard-Kostensatz setzt die Einrichtung.
+
+## Outlook
+
+- **In Outlook öffnen** (im Mail-Fenster) erzeugt einen fertigen Entwurf inkl. Anhängen
+  (Broschüren, neuestes Exposé/Angebot/Rechnung). Datei öffnen → Outlook zeigt die Mail
+  zum Prüfen und Absenden.
+- **📅 In Outlook-Kalender** neben jedem Termin erzeugt einen Kalendereintrag mit Ort
+  (Ausstellung bzw. Kundenadresse) und Telefonnummer.
 
 ## Kundenlink
 
