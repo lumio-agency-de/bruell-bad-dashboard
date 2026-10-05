@@ -46,6 +46,13 @@ create table if not exists public.upload_links (
   gueltig_bis timestamptz not null default now() + interval '180 days'
 );
 
+-- Zahlen je Projekt (Angebot, Auftrag, Rechnung, Kosten) — nur Geschäftsführung
+create table if not exists public.kennzahlen (
+  projekt_id text primary key references public.projekte(id) on delete cascade,
+  daten      jsonb not null default '{}'::jsonb,
+  geaendert  bigint not null default 0
+);
+
 -- Wer darf rein, auf welcher Ebene? (wird in der Einrichtung gepflegt)
 create table if not exists public.mitglieder (
   email     text primary key,
@@ -101,6 +108,7 @@ alter table public.dateien       enable row level security;
 alter table public.einstellungen enable row level security;
 alter table public.upload_links  enable row level security;
 alter table public.mitglieder    enable row level security;
+alter table public.kennzahlen    enable row level security;
 
 drop policy if exists team_projekte on public.projekte;
 drop policy if exists team_dateien on public.dateien;
@@ -133,6 +141,9 @@ drop policy if exists e_lesen on public.einstellungen;
 create policy e_lesen on public.einstellungen for select to authenticated using (true);
 drop policy if exists e_schreiben on public.einstellungen;
 create policy e_schreiben on public.einstellungen for all to authenticated using (ist_gf()) with check (ist_gf());
+
+drop policy if exists k_gf on public.kennzahlen;
+create policy k_gf on public.kennzahlen for all to authenticated using (ist_gf()) with check (ist_gf());
 
 drop policy if exists l_buero on public.upload_links;
 create policy l_buero on public.upload_links for all to authenticated using (ist_buero()) with check (ist_buero());

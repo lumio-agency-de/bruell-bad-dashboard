@@ -121,6 +121,9 @@
     ichSetzen(id) { try { localStorage.setItem("baddashboard:ich", id); } catch (e) { /* egal */ } },
     async mitgliederSpeichern() { return true; },
     partnerAuftraege: null,  // lokal berechnet app.js den Auszug selbst
+    /* Kennzahlen (Umsatz, Kosten) – nur Geschäftsführung */
+    async zahlenLaden() { return lesen("baddashboard:zahlen", {}); },
+    async zahlenSpeichern(pid, daten) { const z = lesen("baddashboard:zahlen", {}); z[pid] = daten; schreiben("baddashboard:zahlen", z); },
     /* Portal (lokal: gleicher Browser) */
     async portalInfo(t) {
       const pid = lesen(LS.links, {})[t];
@@ -176,6 +179,15 @@
         const behalten = new Set([...rows.map((r) => r.email), (this.nutzer || "").toLowerCase()]);
         const weg = (data || []).map((r) => r.email).filter((e) => !behalten.has(e));
         if (weg.length) await sb.from("mitglieder").delete().in("email", weg);
+      },
+      async zahlenLaden() {
+        const { data, error } = await sb.from("kennzahlen").select("projekt_id,daten");
+        if (error) throw error;
+        return Object.fromEntries((data || []).map((r) => [r.projekt_id, r.daten]));
+      },
+      async zahlenSpeichern(pid, daten) {
+        const { error } = await sb.from("kennzahlen").upsert({ projekt_id: pid, daten, geaendert: Date.now() });
+        if (error) throw error;
       },
       async partnerAuftraege() {
         const { data, error } = await sb.rpc("partner_auftraege");

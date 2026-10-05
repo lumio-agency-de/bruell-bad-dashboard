@@ -14,7 +14,7 @@
    ========================================================================== */
 
 window.FIRMA = {
-  name: "Daniel Brüll GmbH",
+  name: "Brüll GmbH",
   kurzname: "Brüll",
   bereich: "Bad & Heizung",
   logo: "app/img/logo.svg",

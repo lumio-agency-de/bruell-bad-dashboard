@@ -591,3 +591,34 @@ fieldset.f-flaeche[disabled] .sign canvas { cursor: default; }
 @media (max-width: 1180px) { .ebenen { grid-template-columns: 1fr 1fr; } }
 @media (max-width: 760px) { .ebenen { grid-template-columns: 1fr; } .karten { grid-template-columns: 1fr; } }
 [hidden] { display: none !important; }
+
+/* ---------- Kennzahlen (nur Geschäftsführung) ---------- */
+.i-kennzahlen { background: linear-gradient(currentColor, currentColor) 2px 100% / 3px 45% no-repeat, linear-gradient(currentColor, currentColor) 7px 100% / 3px 80% no-repeat, linear-gradient(currentColor, currentColor) 12px 100% / 3px 60% no-repeat; }
+.kpis.vier { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.kpi-zahl.klein { font-size: 1.65rem; white-space: nowrap; }
+.hbalken { list-style: none; margin: 0; padding: 0 18px 16px; }
+.hbalken li { position: relative; display: grid; grid-template-columns: minmax(150px, 1fr) minmax(0, 1.4fr) 64px; gap: 10px; align-items: center; padding: 4px 0; border-radius: var(--radius); outline-offset: 2px; }
+.hbalken li:hover { background: var(--tinte-weich); }
+.hb-label { font-size: .8rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hb-spur { height: 14px; display: block; }
+.hb-balken { display: block; height: 100%; background: var(--tinte); border-radius: 0 4px 4px 0; transition: width 500ms var(--ease-out); }
+.hb-wert { font-size: .8rem; color: var(--leise); text-align: right; white-space: nowrap; }
+.vbalken { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; height: 170px; padding: 0 18px; }
+.vb { position: relative; display: grid; grid-template-rows: 1fr auto; height: 100%; gap: 4px; border-radius: var(--radius); }
+.vb-spur { display: flex; align-items: flex-end; border-bottom: 1px solid var(--fuge-stark); }
+.vb-balken { display: block; width: 100%; background: var(--tinte); border-radius: 4px 4px 0 0; transition: height 500ms var(--ease-out); }
+.vb:hover .vb-balken, .vb:focus-visible .vb-balken { background: color-mix(in oklab, var(--tinte) 78%, #fff); }
+.vb-monat { font-size: .68rem; color: var(--leise); text-align: center; }
+.vb-max { font-size: .76rem; color: var(--leise); margin: 8px 18px 14px; }
+.hbalken .tip, .vb .tip { position: absolute; bottom: calc(100% + 4px); left: 50%; translate: -50% 0; z-index: 4; background: var(--text); color: #fff; font-size: .74rem; padding: 4px 8px; border-radius: var(--radius); white-space: nowrap; opacity: 0; scale: .96; pointer-events: none; transition: opacity 140ms var(--ease-out), scale 140ms var(--ease-out); }
+.hbalken li:hover .tip, .hbalken li:focus-visible .tip, .vb:hover .tip, .vb:focus-visible .tip { opacity: 1; scale: 1; }
+.kz-tab { width: 100%; border-collapse: collapse; font-size: .84rem; }
+.kz-tab th { text-align: left; font-size: .66rem; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; color: var(--leise); padding: 6px 18px; border-bottom: 1px solid var(--fuge-stark); }
+.kz-tab td { padding: 7px 18px; border-bottom: 1px solid var(--fuge); }
+.kz-tab .r { text-align: right; }
+.kz-tab a { color: var(--tinte); font-weight: 600; text-decoration: none; }
+.kz-tab a:hover { text-decoration: underline; }
+.kz-tab.breit { min-width: 760px; margin-bottom: 8px; }
+.tab-wrap.ohne-rand { border: 0; }
+.zahl-summe { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--fuge-stark); }
+@media (max-width: 1180px) { .kpis.vier { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
