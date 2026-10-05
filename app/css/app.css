@@ -719,3 +719,29 @@ code.pw { font-size: 1.05rem; padding: 3px 8px; background: var(--akzent-weich);
 .eingabe.ungueltig { border-color: var(--rot); box-shadow: 0 0 0 3px color-mix(in oklab, var(--rot) 20%, transparent); }
 .feld-fehler { margin: 6px 0 0; padding: 7px 10px; font-size: .82rem; font-weight: 600; color: var(--rot); background: color-mix(in oklab, var(--rot) 9%, var(--blatt)); border-left: 3px solid var(--rot); border-radius: 2px; }
 .termin-zeile + .feld-fehler { margin-bottom: 6px; }
+
+/* ---------- Arbeitszeit, Slideshow, Reiter, Verlauf ---------- */
+.timer-box { display: inline-flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.timer { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: var(--radius); background: var(--tinte); color: #fff; font-weight: 700; font-size: .9rem; font-variant-numeric: tabular-nums; }
+.timer.pause { background: var(--papier-2); color: var(--tinte); }
+.timer-punkt { width: 8px; height: 8px; border-radius: 50%; background: #7fc79a; animation: blinken 1.6s ease-in-out infinite; }
+.timer.pause .timer-punkt { background: var(--akzent); animation: none; }
+@keyframes blinken { 50% { opacity: .3; } }
+.rail-timer { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 7px 9px; border-radius: var(--radius); background: color-mix(in oklab, #fff 10%, transparent); color: #fff; text-decoration: none; font-size: .8rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rail-timer:hover { background: color-mix(in oklab, #fff 16%, transparent); }
+.verlauf .von { display: block; font-size: .72rem; color: var(--leise); }
+.verlauf.zeiten li { grid-template-columns: 84px 1fr; }
+.verlauf.zeiten .btn { margin-left: 6px; }
+.slideshow { position: relative; }
+.slide-pfeil { position: absolute; top: 50%; translate: 0 -50%; z-index: 2; width: 44px; height: 44px; border-radius: 50%; border: 0; background: color-mix(in oklab, var(--tinte) 80%, transparent); color: #fff; font-size: 1.6rem; line-height: 1; cursor: pointer; transition: background-color 150ms ease, transform 150ms var(--ease-out); }
+.slide-pfeil:hover { background: var(--tinte); }
+.slide-pfeil:active { transform: scale(.94); }
+.slide-pfeil.links { left: 10px; } .slide-pfeil.rechts { right: 10px; }
+.slide-leiste { display: flex; gap: 6px; overflow-x: auto; padding: 8px 22px; background: var(--tinte-weich); border-top: 1px solid var(--fuge); }
+.slide-mini { flex: 0 0 56px; height: 56px; padding: 0; border: 2px solid transparent; border-radius: var(--radius); overflow: hidden; cursor: pointer; background: var(--papier-2); }
+.slide-mini img { width: 100%; height: 100%; object-fit: cover; }
+.slide-mini.an { border-color: var(--akzent); }
+.seg.reiter .seg-k small { font-weight: 600; opacity: .7; margin-left: 2px; }
+.ff-tab tr.eigen th { padding: 3px 4px; }
+.ff-tab tr.eigen th .eingabe { font-weight: 600; min-width: 140px; }
+.tabs { overflow-x: auto; scrollbar-width: thin; } .tab { flex: 1 0 auto; padding: 11px 10px; }

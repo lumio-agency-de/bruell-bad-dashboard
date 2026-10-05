@@ -215,7 +215,7 @@
   }
   function aendern(p, fn, log) {
     fn(p);
-    if (log) { p.verlauf = p.verlauf || []; p.verlauf.unshift({ ts: Date.now(), text: log }); }
+    if (log) { p.verlauf = p.verlauf || []; p.verlauf.unshift({ ts: Date.now(), text: log, von: S.ich ? S.ich.name : "" }); }
     speichern(p);
   }
   function neuesProjekt(kunde, extra = {}) {
@@ -267,6 +267,39 @@
     if (p.status === "abgeschlossen") return "Abgeschlossen";
     const st = phaseStatus(p, p.phase);
     return st.komplett ? "Bereit für das nächste Level" : ersetzen(st.offen[0].s.titel);
+  }
+
+  /* ---------- Arbeitszeit: Timer je Person und Projekt ---------- */
+  const zeitDarf = () => istBuero() || ebene() === "monteur";
+  const pauseLaeuft = (z) => (z.pausen || []).some((x) => !x.ende);
+  const dauerMs = (z) => Math.max(0, (z.ende || Date.now()) - z.start - (z.pausen || []).reduce((a, x) => a + ((x.ende || z.ende || Date.now()) - x.start), 0));
+  const hms = (ms) => { const t = Math.floor(ms / 1000); return `${zwei(Math.floor(t / 3600))}:${zwei(Math.floor((t % 3600) / 60))}:${zwei(t % 60)}`; };
+  const stunden = (ms) => `${(ms / 36e5).toFixed(2).replace(".", ",")} h`;
+  const meineZeit = (p) => S.ich && (p.zeiten || []).find((z) => z.wer === S.ich.id && !z.ende);
+  const meinLaufender = () => alle().map((p) => ({ p, z: meineZeit(p) })).find((x) => x.z);
+  function timerHtml(p) {
+    if (!zeitDarf()) return "";
+    const z = meineZeit(p);
+    if (!z) return `<button class="btn" data-aktion="zeit-start">▶ Arbeitszeit starten</button>`;
+    const pause = pauseLaeuft(z);
+    return `<span class="timer${pause ? " pause" : ""}" title="Meine Arbeitszeit an diesem Projekt"><span class="timer-punkt" aria-hidden="true"></span><span data-timer="${p.id}">${hms(dauerMs(z))}</span>${pause ? " · Pause" : ""}</span>
+      ${pause ? `<button class="btn" data-aktion="zeit-weiter">Fortsetzen</button>` : `<button class="btn" data-aktion="zeit-pause">Pause</button>`}<button class="btn voll" data-aktion="zeit-stop">Beenden</button>`;
+  }
+  setInterval(() => {
+    $$("[data-timer]").forEach((el) => { const p = finde(el.dataset.timer); const z = p && meineZeit(p); if (z) el.textContent = hms(dauerMs(z)); });
+  }, 1000);
+  function zeitStopDialog(p) {
+    const z = meineZeit(p); if (!z) return;
+    dialog(`<form id="zeit-form"><div class="dlg-kopf"><div><p class="eyebrow">${esc(anzeigeName(p))}</p><h2>Arbeitszeit beenden</h2><p>${hms(dauerMs(z))} erfasst${(z.pausen || []).length ? ` (ohne ${z.pausen.length} ${z.pausen.length === 1 ? "Pause" : "Pausen"})` : ""}.</p></div><button class="btn still" type="button" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt"><div class="feld"><label for="zt">Was wurde gemacht? (optional)</label><input class="eingabe" id="zt" placeholder="z. B. Abriss, Vorwand, Fertigmontage, Angebot erstellt …"></div></div>
+      <div class="dlg-fuss"><button class="btn" type="button" data-aktion="dlg-zu">Weiterlaufen lassen</button><button class="btn jetzt" type="submit">Beenden & speichern</button></div></form>`, (dlg) => {
+      $("#zeit-form", dlg).addEventListener("submit", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const notiz = $("#zt", dlg).value.trim(), jetzt = Date.now();
+        aendern(p, () => { (z.pausen || []).forEach((x) => { if (!x.ende) x.ende = jetzt; }); z.ende = jetzt; z.notiz = notiz; }, `Arbeitszeit ${stunden(dauerMs(z))}${notiz ? " – " + notiz : ""}`);
+        dlg.close(); toast(`${stunden(dauerMs(z))} gespeichert`); kopfNeu(p); teilRendern(p);
+      });
+    });
   }
 
   /* ---------- Termine prüfen: Reihenfolge, Wochentag, Geschäftszeiten ---------- */
@@ -667,12 +700,14 @@
     }
     const f = S.filter;
     return `<div class="seite">
-      <header class="kopf"><div><p class="eyebrow">Projekte</p><h1>Alle Bäder</h1></div></header>
+      <header class="kopf"><div><p class="eyebrow">Projekte</p><h1>Alle Bäder</h1></div>
+        <div class="kopf-aktionen"><div class="seg reiter" role="tablist">${[["offen", "In Bearbeitung"], ["abgeschlossen", "Abgeschlossen"], ["verloren", "Abgesagt"]].map(([id, l]) => {
+          const n = alle().filter((p) => (id === "offen" ? p.status === "aktiv" || p.status === "pausiert" : p.status === id)).length;
+          return `<button class="seg-k${(f.status === id || (id === "offen" && !["abgeschlossen", "verloren"].includes(f.status))) ? " an" : ""}" role="tab" data-aktion="projekte-reiter" data-wert="${id}">${l} <small>${n}</small></button>`; }).join("")}</div></div></header>
       <div class="werkzeuge">
         <input class="eingabe feld-suche" type="search" placeholder="Name, Ort, Projektnummer …" data-filter="suche" value="${esc(f.suche)}" aria-label="Suchen">
         <select class="eingabe auto" data-filter="abschnitt" aria-label="Abschnitt"><option value="">Alle Abschnitte</option>${opt(window.ABSCHNITTE.map((a) => ({ id: a.id, label: a.titel })), f.abschnitt)}</select>
         <select class="eingabe auto" data-filter="wer" aria-label="Zuständig"><option value="">Alle Zuständigen</option>${opt(kuerzelListe(), f.wer)}</select>
-        <select class="eingabe auto" data-filter="status" aria-label="Status">${opt([{ id: "offen", label: "Laufende" }, ...STATUS, { id: "alle", label: "Alle" }], f.status)}</select>
       </div>
       <div id="projektliste">${projektListe()}</div></div>`;
   }
@@ -686,6 +721,16 @@
       return true;
     });
     if (!liste.length) return `<p class="leer-hinweis">Keine Projekte für diese Auswahl.</p>`;
+    if (f.status === "abgeschlossen" || f.status === "verloren") {
+      const fertig = f.status === "abgeschlossen";
+      const sortiert = liste.sort((a, b) => (fertig ? (abschlussZeit(b) || 0) - (abschlussZeit(a) || 0) : (b.geaendert || 0) - (a.geaendert || 0)));
+      return `<section class="abschnitt"><div class="abschnitt-kopf"><h2>${fertig ? "Abgeschlossene Bäder" : "Abgesagte Anfragen"}</h2><span class="anzahl">${sortiert.length}</span></div>
+        ${sortiert.map((p) => { const a = levelZeit(p, ersteNr), e = fertig ? abschlussZeit(p) : p.geaendert; return `<a class="projekt-zeile" href="#/projekt/${p.id}">
+          <span><span class="p-name">${esc(anzeigeName(p))}</span>${p.demo ? `<span class="status-chip">Beispiel</span>` : ""}<br><span class="p-ort">${esc([p.projektnr, p.kunde.ort].filter(Boolean).join(" · ") || "—")}</span></span>
+          <span class="p-phase">${fertig ? "Abgeschlossen" : `Abgesagt in Level ${zwei(p.phase)}`}<small>${a ? "Erstkontakt " + fDatum(new Date(a)) : ""}${e ? ` · ${fertig ? "fertig" : "zuletzt"} ${fDatum(new Date(e))}` : ""}${fertig && a && e ? ` · ${tageText(tage(a, e))}` : ""}</small></span>
+          ${fliesen(p)}<span class="p-termin">${(p.zeiten || []).length ? stunden((p.zeiten || []).reduce((x, z) => x + dauerMs(z), 0)) : ""}</span>
+          <span class="kuerzel" title="Zuständig">${esc(p.zustaendig || "–")}</span></a>`; }).join("")}</section>`;
+    }
     return window.ABSCHNITTE.filter((a) => !f.abschnitt || a.id === f.abschnitt).map((a) => {
       const teil = liste.filter((p) => p.phase >= a.von && p.phase <= a.bis).sort((x, y) => y.phase - x.phase || x.kunde.nachname.localeCompare(y.kunde.nachname, "de"));
       if (!teil.length) return "";
@@ -733,6 +778,7 @@
           ${p.zustaendig ? `<span class="kuerzel klein" title="Zuständig">${esc(p.zustaendig)}</span>` : ""}
         </div></div>
       <div class="kopf-aktionen">
+        <span class="timer-box" id="timer-box">${timerHtml(p)}</span>
         ${neu && istBuero() ? `<button class="btn jetzt" data-aktion="akte-tab" data-tab="dateien">${neu} neu vom Kunden</button>` : ""}
         ${istBuero() ? `<button class="btn" data-aktion="kundenlink">Kundenlink</button>` : ""}
         <button class="btn" data-aktion="mappe">Monteurmappe</button>
@@ -849,10 +895,10 @@
 
   /* Akte rechts: Dateien, Kunde, Termine, Verlauf */
   function akte(p) {
-    if (!istBuero() && !["dateien", "kunde", "termine"].includes(S.akteTab)) S.akteTab = "dateien";
+    if (!istBuero() && !["dateien", "kunde", "termine", "zeiten"].includes(S.akteTab)) S.akteTab = "dateien";
     const t = S.akteTab;
     if (S.akteTab === "zahlen" && !istGF()) S.akteTab = "dateien";
-    const tabs = istBuero() ? [["dateien", "Dateien"], ["kunde", "Kunde"], ["team", "Team"], ["termine", "Termine"], ["verlauf", "Verlauf"], ...(istGF() ? [["zahlen", "Zahlen"]] : [])] : [["dateien", "Dateien"], ["kunde", "Kunde"], ["termine", "Termine"]];
+    const tabs = istBuero() ? [["dateien", "Dateien"], ["kunde", "Kunde"], ["team", "Team"], ["termine", "Termine"], ["zeiten", "Zeiten"], ["verlauf", "Verlauf"], ...(istGF() ? [["zahlen", "Zahlen"]] : [])] : [["dateien", "Dateien"], ["kunde", "Kunde"], ["termine", "Termine"], ["zeiten", "Zeiten"]];
     let inhalt = "";
     if (!istBuero() && (t === "kunde" || t === "termine")) {
       const k = p.kunde;
@@ -860,6 +906,15 @@
         ? `<dl class="infos"><dt>Kunde</dt><dd>${esc(anzeigeName(p))}</dd><dt>Adresse</dt><dd>${esc([k.strasse, k.ort].filter(Boolean).join(", ") || "—")}${k.strasse ? ` · <a href="https://maps.google.com/?q=${encodeURIComponent([k.strasse, k.ort].join(" "))}" target="_blank" rel="noopener">Karte</a>` : ""}</dd>
            <dt>Telefon</dt><dd>${[k.telefon, k.mobil].filter(Boolean).map((x) => `<a href="tel:${esc(x.replace(/[^\d+]/g, ""))}">${esc(x)}</a>`).join(" · ") || "—"}</dd><dt>Zuständig im Büro</dt><dd>${esc(p.zustaendig || "—")}</dd></dl>`
         : `<dl class="infos">${TERMINE.map((d) => `<dt>${esc(d.label)}</dt><dd>${esc(fTermin((p.termine || {})[d.key]) || "—")}</dd>`).join("")}</dl>`;
+    } else if (t === "zeiten") {
+      const alleZ = (p.zeiten || []).filter((z) => istBuero() || z.wer === S.ich.id).sort((a, b) => b.start - a.start);
+      const proPerson = {};
+      alleZ.forEach((z) => { proPerson[z.name] = (proPerson[z.name] || 0) + dauerMs(z); });
+      const summe = alleZ.reduce((a, z) => a + dauerMs(z), 0);
+      inhalt = `<p class="leise klein-text">Jede Zeit wird mit Person, Start, Ende und Pausen gespeichert${istGF() ? "; nur die Geschäftsführung kann Einträge löschen" : ""}.</p>
+        <dl class="infos zahl-summe"><dt>Gesamt</dt><dd><b>${stunden(summe)}</b></dd>${Object.entries(proPerson).map(([n, ms]) => `<dt>${esc(n)}</dt><dd>${stunden(ms)}</dd>`).join("")}</dl>
+        <ul class="verlauf zeiten">${alleZ.map((z) => { const a = new Date(z.start); return `<li><time>${fKurz(a)} ${fUhr(a)}</time><span><b>${z.ende ? stunden(dauerMs(z)) : `läuft · ${hms(dauerMs(z))}`}</b> · ${esc(z.name)}${z.ende ? ` · bis ${fUhr(new Date(z.ende))}` : ""}${(z.pausen || []).length ? ` · ${z.pausen.length} Pause${z.pausen.length > 1 ? "n" : ""}` : ""}${z.notiz ? `<small class="von">${esc(z.notiz)}</small>` : ""}
+          ${istGF() && z.ende ? `<button class="btn klein still gefahr" data-aktion="zeit-loeschen" data-zeit="${z.id}">Löschen</button>` : ""}</span></li>`; }).join("") || '<li class="leer-hinweis">Noch keine Arbeitszeit erfasst. Oben im Projekt „Arbeitszeit starten“.</li>'}</ul>`;
     } else if (t === "zahlen") {
       const z = S.zahlen[p.id] || {}, g = geld(p);
       const feld = (f) => `<div class="feld"><label for="z-${f.k}">${esc(f.l)}</label><input class="eingabe" id="z-${f.k}" type="number" inputmode="decimal" min="0" step="1" data-zahl="${f.k}" value="${esc(z[f.k] ?? "")}" placeholder="€"></div>`;
@@ -902,7 +957,7 @@
     } else if (t === "termine") {
       inhalt = TERMINE.map((d) => `<div class="termin-zeile"><span>${esc(d.label)}</span><input class="eingabe" type="${d.typ}" data-termin="${d.key}" value="${esc((p.termine || {})[d.key] || "")}" aria-label="${esc(d.label)}"></div>`).join("");
     } else {
-      inhalt = `<ul class="verlauf">${(p.verlauf || []).map((v) => { const d = new Date(v.ts); return `<li><time>${fKurz(d)} ${fUhr(d)}</time><span>${esc(v.text)}</span></li>`; }).join("")}</ul>`;
+      inhalt = `<ul class="verlauf">${(p.verlauf || []).map((v) => { const d = new Date(v.ts); return `<li><time>${fKurz(d)} ${fUhr(d)}</time><span>${esc(v.text)}${v.von ? `<small class="von">${esc(v.von)}</small>` : ""}</span></li>`; }).join("")}</ul>`;
     }
     return `<div class="panel akte-panel"><div class="tabs" role="tablist">${tabs.map(([id, l]) => `<button role="tab" aria-selected="${t === id}" class="tab${t === id ? " an" : ""}" data-aktion="akte-tab" data-tab="${id}">${l}${id === "dateien" && dateienVon(p.id).length ? ` <small>${dateienVon(p.id).length}</small>` : ""}</button>`).join("")}</div>
       <div class="akte-inhalt">${inhalt}</div></div>`;
@@ -915,7 +970,7 @@
     const a = $("#akte"); if (a && !a.contains(document.activeElement)) a.innerHTML = akte(p);
     vorschauenLaden();
   }
-  function kopfNeu(p) { const k = $(".p-kopf"); if (k) k.outerHTML = projektKopf(p); }
+  function kopfNeu(p) { const k = $(".p-kopf"); if (k) k.outerHTML = projektKopf(p); statusLeiste(); }
 
   /* ================================================================
      Formular-Seite
@@ -1023,6 +1078,8 @@
   function dialog(html, setup) {
     const alt = $("#dlg");
     const dlg = alt.cloneNode(false); // frisches Element = keine alten Listener
+    dlg.removeAttribute("open");
+    if (alt.open) alt.close();
     alt.replaceWith(dlg);
     dlg.innerHTML = html;
     dlg.addEventListener("click", (e) => { if (e.target === dlg || e.target.closest('[data-aktion="dlg-zu"]')) dlg.close(); });
@@ -1157,11 +1214,28 @@
     const p = finde(d.projekt_id);
     let url; try { url = await dateiUrl(d); } catch (e) { return toast("Datei nicht erreichbar", "fehler"); }
     const pdf = /pdf/i.test(d.typ || d.name);
-    dialog(`<div class="dlg-kopf"><div><p class="eyebrow">${esc(katTitel(d.kategorie))}${d.quelle === "kunde" ? " · vom Kunden" : ""}</p><h2>${esc(d.name)}</h2><p>${groesse(d.groesse || 0)} · ${esc(new Date(d.am).toLocaleString("de-DE"))}</p></div><button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
-      <div class="dlg-inhalt vorschau">${istBild(d) ? `<img src="${esc(url)}" alt="">` : pdf ? `<iframe src="${esc(url)}" title="${esc(d.name)}"></iframe>` : `<p>Keine Vorschau – bitte herunterladen.</p>`}</div>
+    /* Slideshow: alle Bilder desselben Ordners */
+    const bilder = istBild(d) ? dateienVon(d.projekt_id, d.kategorie).filter(istBild) : [];
+    const pos = bilder.findIndex((x) => x.id === d.id);
+    const pfeile = bilder.length > 1;
+    dialog(`<div class="dlg-kopf"><div><p class="eyebrow">${esc(katTitel(d.kategorie))}${d.quelle === "kunde" ? " · vom Kunden" : d.quelle === "partner" ? " · vom Partner" : ""}${pfeile ? ` · Bild ${pos + 1} von ${bilder.length}` : ""}</p><h2>${esc(d.name)}</h2><p>${groesse(d.groesse || 0)} · ${esc(new Date(d.am).toLocaleString("de-DE"))}</p></div><button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt vorschau${pfeile ? " slideshow" : ""}">${pfeile ? `<button class="slide-pfeil links" data-dlg="zurueck" aria-label="Vorheriges Bild">‹</button>` : ""}${istBild(d) ? `<img src="${esc(url)}" alt="">` : pdf ? `<iframe src="${esc(url)}" title="${esc(d.name)}"></iframe>` : `<p>Keine Vorschau – bitte herunterladen.</p>`}${pfeile ? `<button class="slide-pfeil rechts" data-dlg="vor" aria-label="Nächstes Bild">›</button>` : ""}</div>
+      ${pfeile ? `<div class="slide-leiste">${bilder.map((x, i) => `<button class="slide-mini${i === pos ? " an" : ""}" data-dlg="bild" data-i="${i}" aria-label="Bild ${i + 1}"><img data-vorschau="${esc(x.id)}" alt=""></button>`).join("")}</div>` : ""}
       <div class="dlg-fuss"><button class="btn still gefahr links" data-dlg="loeschen">Löschen</button>
         <select class="eingabe auto" data-dlg-kat aria-label="In Ordner verschieben">${KAT.map((k) => `<option value="${k.id}"${k.id === d.kategorie ? " selected" : ""}>${esc(k.titel)}</option>`).join("")}</select>
         <a class="btn" href="${esc(url)}" download="${esc(d.name)}" target="_blank" rel="noopener">Herunterladen</a></div>`, (dlg) => {
+      if (pfeile) {
+        vorschauenLaden(dlg);
+        const geh = (i) => dateiDialog(bilder[(i + bilder.length) % bilder.length]);
+        dlg.addEventListener("click", (e) => {
+          const b = e.target.closest("[data-dlg]"); if (!b) return;
+          if (b.dataset.dlg === "vor") geh(pos + 1);
+          if (b.dataset.dlg === "zurueck") geh(pos - 1);
+          if (b.dataset.dlg === "bild") geh(Number(b.dataset.i));
+        });
+        dlg.addEventListener("keydown", (e) => { if (e.key === "ArrowRight") { e.preventDefault(); geh(pos + 1); } if (e.key === "ArrowLeft") { e.preventDefault(); geh(pos - 1); } });
+        setTimeout(() => { const v = $('[data-dlg="vor"]', dlg); if (v) v.focus(); }, 30);
+      }
       dlg.addEventListener("click", async (e) => {
         if (e.target.dataset.dlg !== "loeschen" || !confirm(`„${d.name}“ löschen?`)) return;
         await Daten.dateiLoeschen(d);
@@ -1385,6 +1459,15 @@
     });
   }
 
+  /* Je ein Übungsprojekt für Karin und Judith, beide in Level 01 */
+  function musterProjekte() {
+    [["Karin", "KK"], ["Judith", "JR"]].forEach(([vorname, kz]) => {
+      if (alle().some((p) => p.muster === kz)) return;
+      neuesProjekt({ anrede: "Frau", vorname, nachname: "Musterprojekt", ort: "71134 Aidlingen", strasse: "Übungsweg 1", email: `${vorname.toLowerCase()}@beispiel.de`, telefon: "07056 000000" },
+        { demo: true, muster: kz, zustaendig: kz, notiz: `Übungsprojekt für ${vorname} – zum Ausprobieren aller Level.` });
+    });
+  }
+
   /* ---------- Beispielprojekte ---------- */
   function demoLaden() {
     const t = (n, h) => { const d = plusTage(new Date(), n); if (d.getDay() === 6) d.setDate(d.getDate() + 2); if (d.getDay() === 0) d.setDate(d.getDate() + 1); return h ? `${isoTag(d)}T${h}` : isoTag(d); };
@@ -1416,6 +1499,7 @@
     });
     [["Herr", "Peter", "Absage", 200, "Website / Badrechner"], ["Frau", "Maria", "Vergleich", 100, "Social Media"]].forEach(([anrede, vorname, nachname, vor, kontakt]) =>
       neuesProjekt({ anrede, vorname, nachname, ort: "71088 Holzgerlingen" }, { demo: true, phase: 5, status: "verloren", angelegt: Date.now() - vor * TAG, level: { 1: Date.now() - vor * TAG }, formulare: { bestandsaufnahme: { werte: { kontakt } } } }));
+    musterProjekte();
     mk({ anrede: "Familie", nachname: "Beispiel", ort: "71134 Aidlingen", strasse: "Lindenweg 4", telefon: "07031 000000", email: "familie@beispiel.de" }, 1, {});
     mk({ anrede: "Frau", vorname: "Anna", nachname: "Muster", ort: "71083 Herrenberg", strasse: "Hauptstr. 12", email: "anna@beispiel.de" }, 2,
       { zustaendig: pl[1] || "", termine: { erstgespraech: t(2, "10:00") }, schritte: { "2:kwp-kunde": { erledigt: true, am: Date.now() } } });
@@ -1434,12 +1518,13 @@
   }
 
   const keinZugang = () => `<div class="login"><div class="panel login-karte"><h1>Kein Zugang</h1><p>Dieses Konto ist keiner Ebene zugeordnet oder gesperrt. Bitte an die Geschäftsführung wenden – sie verwaltet die Zugänge unter „Konten“.</p><button class="btn" data-aktion="abmelden">Abmelden</button></div></div>`;
-  const DEMO_KONTEN = [["chef", "DB"], ["karin", "KK"], ["steven", "SW"], ["monteur", "MO"], ["elektro", "p-elektro"], ["fliesen", "p-fliesen"]];
+  const DEMO_KONTEN = [["chef", "DB"], ["karin", "KK"], ["judith", "JR"], ["steven", "SW"], ["monteur", "MO"], ["elektro", "p-elektro"], ["fliesen", "p-fliesen"]];
   const DEMO_PW = "demo1234";
   const istDemo = () => { try { return localStorage.getItem("baddashboard:demo") === "1"; } catch (e) { return false; } };
   async function demoKontenAnlegen() {
+    const vorhanden = new Set((await Daten.konten()).map((k) => k.id));
     for (const [b, id] of DEMO_KONTEN) {
-      const m = mitgliedZu(id); if (!m) continue;
+      const m = mitgliedZu(id); if (!m || vorhanden.has(id)) continue;
       await Daten.kontoAnlegen({ benutzer: b, passwort: DEMO_PW, id, ebene: m.ebene, name: m.name, formulare: m.ebene === "partner" ? ((cfg().gewerke || {})[m.gewerk] || []) : [] }, true);
     }
     try { localStorage.setItem("baddashboard:demo", "1"); } catch (e) { /* egal */ }
@@ -1541,6 +1626,7 @@
     if (!S.ich) { el.innerHTML = ""; return; }
     const cloud = Daten.modus === "cloud";
     el.innerHTML = `<div class="ich"><span class="ich-k">${esc((S.ich.name || "?").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase())}</span><span><b>${esc(S.ich.name)}</b><small>${esc(EBENE_TITEL[S.ich.ebene] || "")}</small></span></div>
+      ${(() => { const l = meinLaufender(); return l ? `<a class="rail-timer" href="#/projekt/${l.p.id}"><span class="timer-punkt" aria-hidden="true"></span>${esc(l.p.kunde.nachname)} · <span data-timer="${l.p.id}">${hms(dauerMs(l.z))}</span>${pauseLaeuft(l.z) ? " · Pause" : ""}</a>` : ""; })()}
       <div class="ich-aktionen"><button class="btn klein hell" data-aktion="passwort">Passwort ändern</button><button class="btn klein hell" data-aktion="abmelden">Abmelden</button></div>
       <p class="sp-zeile"><span class="punkt${cloud ? " an" : ""}"></span>${cloud ? "Cloud verbunden" : "Demo – Daten nur in diesem Browser"}</p>`;
   }
@@ -1578,6 +1664,7 @@
     const p = aktuellesProjekt();
 
     if (akt === "neu") return istBuero() ? neuDialog() : null;
+    if (akt === "projekte-reiter") { S.filter.status = a.dataset.wert; if (a.dataset.wert !== "offen") S.filter.abschnitt = ""; return render(); }
     if (akt === "nur-meine") { S.nurMeine = a.dataset.wert === "1"; return render(); }
     if (akt === "kz-zeitraum") { S.kzZeitraum = a.dataset.wert; return render(); }
     if (akt === "zuweisen" && p && istBuero()) {
@@ -1618,6 +1705,24 @@
       const nr = Number(a.dataset.nr);
       if (nr > p.phase) { const li = a.closest(".lv"); li.classList.remove("wackeln"); void li.offsetWidth; li.classList.add("wackeln"); return toast(`Gesperrt – erst Level ${zwei(p.phase)} abschließen`); }
       S.ansicht[p.id] = nr; return teilRendern(p);
+    }
+    if (akt === "zeit-start" && p && zeitDarf()) {
+      const lauf = meinLaufender();
+      if (lauf && lauf.p.id !== p.id) {
+        if (!confirm(`Bei „${anzeigeName(lauf.p)}“ läuft noch deine Arbeitszeit (${hms(dauerMs(lauf.z))}). Dort beenden und hier starten?`)) return;
+        const jetzt = Date.now();
+        aendern(lauf.p, () => { (lauf.z.pausen || []).forEach((x) => { if (!x.ende) x.ende = jetzt; }); lauf.z.ende = jetzt; }, `Arbeitszeit ${stunden(dauerMs(lauf.z))}`);
+      }
+      aendern(p, (x) => { x.zeiten = x.zeiten || []; x.zeiten.push({ id: uid(), wer: S.ich.id, name: S.ich.name, start: Date.now(), ende: null, pausen: [], level: x.phase }); }, "Arbeitszeit gestartet");
+      kopfNeu(p); statusLeiste(); return teilRendern(p);
+    }
+    if (akt === "zeit-pause" && p) { const z = meineZeit(p); if (z) aendern(p, () => { z.pausen = [...(z.pausen || []), { start: Date.now(), ende: null }]; }); kopfNeu(p); statusLeiste(); return teilRendern(p); }
+    if (akt === "zeit-weiter" && p) { const z = meineZeit(p); if (z) aendern(p, () => { (z.pausen || []).forEach((x) => { if (!x.ende) x.ende = Date.now(); }); }); kopfNeu(p); statusLeiste(); return teilRendern(p); }
+    if (akt === "zeit-stop" && p) return zeitStopDialog(p);
+    if (akt === "zeit-loeschen" && p && istGF()) {
+      const z = (p.zeiten || []).find((x) => x.id === a.dataset.zeit); if (!z || !confirm("Diesen Zeiteintrag löschen?")) return;
+      aendern(p, (x) => { x.zeiten = x.zeiten.filter((y) => y.id !== z.id); }, `Zeiteintrag gelöscht: ${z.name}, ${stunden(dauerMs(z))}`);
+      return teilRendern(p);
     }
     if (akt === "offen-zeigen" && p) {
       const st = phaseStatus(p, p.phase);
@@ -1750,7 +1855,12 @@
       } else if (b.dataset.check) {
         const o = (w[b.dataset.check] = w[b.dataset.check] || {}); const e2 = (o[b.dataset.punkt] = o[b.dataset.punkt] || {});
         e2.s = b.dataset.wert === "toggle" ? !e2.s : e2.s === b.dataset.wert ? "" : b.dataset.wert;
-      } else if (b.dataset.tabNeu) { (w[b.dataset.tabNeu] = w[b.dataset.tabNeu] || []).push({}); }
+      } else if (b.dataset.tabNeu) {
+        const rows = (w[b.dataset.tabNeu] = w[b.dataset.tabNeu] || []);
+        const fd = Formular.def(fid).felder.find((x) => x.id === b.dataset.tabNeu);
+        if (fd && fd.zeilen) while (rows.length < fd.zeilen.length) rows.push({});
+        rows.push({});
+      }
       else if (b.dataset.tabWeg) { w[b.dataset.tabWeg].splice(Number(b.dataset.zeile), 1); }
       else if (b.dataset.signWeg) { delete w[b.dataset.signWeg]; }
     });
@@ -1915,8 +2025,13 @@
       S.einstellungen = await Daten.einstellungenLaden();
       /* Vorschau-Link mit ?demo=1: Demo-Zugänge, Beispielprojekte und ein Beispielziel */
       if (new URLSearchParams(location.search).has("demo") && Daten.modus === "lokal") {
-        if (Daten.ersteinrichtungNoetig()) await demoKontenAnlegen();
-        if (!(await Daten.projekteLaden()).length) {
+        await demoKontenAnlegen();
+        const vorhanden = await Daten.projekteLaden();
+        if (vorhanden.length && !vorhanden.some((p) => p.muster)) {
+          S.projekte = vorhanden; musterProjekte();
+          clearTimeout(speicherTimer); offen.clear(); await Daten.projektSpeichern(null, S.projekte);
+        }
+        if (!vorhanden.length) {
           S.projekte = []; demoLaden();
           clearTimeout(speicherTimer); offen.clear(); await Daten.projektSpeichern(null, S.projekte);
           if (!(cfg().ziele || {}).jahresumsatz) { S.einstellungen = { ...(S.einstellungen || {}), ziele: { jahresumsatz: 320000 } }; await Daten.einstellungenSpeichern(S.einstellungen); }

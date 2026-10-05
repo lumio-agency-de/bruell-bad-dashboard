@@ -13,7 +13,8 @@
      unterschrift  Unterschriftenfeld (Maus, Finger, Stift)
      tabelle     { spalten: [{ id, titel, typ }], zeilen: ["Armatur", …] }
                  ohne zeilen → Zeilen frei hinzufügen
-     checkliste  { punkte: [{ id, label, optional }], modus: "haken" | "pruefung" }
+     checkliste  { punkte: [{ id, label, optional }], modus: "haken" | "janein" | "pruefung" }
+                 Tabellen mit festen Zeilen bekommen automatisch „+ Eigene Zeile“
 
    Optionen pro Feld
      pflicht: true       muss ausgefüllt sein, damit das Formular als erledigt gilt
@@ -35,6 +36,7 @@
     { id: id + "-noetig", typ: "auswahl", label: "Wird benötigt?", optionen: ["ja", "entfällt"], pflicht: true, breite: "halb" },
     { id, typ: "tabelle", label: titel, spalten: AUSWAHL_SPALTEN, zeilen, wenn: { feld: id + "-noetig", wert: "ja" } },
     ...extra.map((f) => ({ ...f, wenn: { feld: id + "-noetig", wert: "ja" } })),
+    { id: id + "-notiz", typ: "textarea", label: `Notizen ${titel.replace(/^\d+\.\s*/, "")}`, wenn: { feld: id + "-noetig", wert: "ja" } },
   ];
 
   window.FORMULARE = {
@@ -125,7 +127,7 @@
       felder: [
         { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:baustellenbesichtigung" },
         { typ: "abschnitt", titel: "Vor Ort erledigt" },
-        { id: "check", typ: "checkliste", modus: "haken", label: "Checkliste", pflicht: true, punkte: [
+        { id: "check", typ: "checkliste", modus: "janein", label: "Checkliste", pflicht: true, punkte: [
           { id: "fotoBad", label: "Fotos vom Bad" },
           { id: "fotoWc", label: "Fotos vom WC", optional: true },
           { id: "aufmassBad", label: "Aufmaß Bad" },
@@ -250,6 +252,8 @@
         ]),
         ...abschnittAuswahl("gwc", "6. Gäste-WC – WC", ["UP Montage", "WC", "Sitz", "Drücker"]),
         ...abschnittAuswahl("sonst", "7. Sonstiges", ["Heizkörper", "Zubehör", "Handtuchhalter"]),
+        { typ: "abschnitt", titel: "Eigene Notizen" },
+        { id: "notizen", typ: "textarea", label: "Notizen zum Auswahlgespräch" },
         { typ: "abschnitt", titel: "Bestätigung" },
         { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:materialauswahl" },
         { id: "unterschrift", typ: "unterschrift", label: "Unterschrift Kunde", pflicht: true },

@@ -95,7 +95,10 @@
           <button type="button" class="btn klein still" data-sign-weg="${esc(f.id)}">Löschen</button></div>`);
       case "tabelle": {
         const rows = Array.isArray(v) ? v : [];
-        const zeilen = f.zeilen ? f.zeilen.map((z, i) => ({ label: z, r: rows[i] || {}, i })) : rows.map((r, i) => ({ r, i }));
+        const fest = f.zeilen ? f.zeilen.length : 0;
+        const zeilen = f.zeilen
+          ? [...f.zeilen.map((z, i) => ({ label: z, r: rows[i] || {}, i })), ...rows.slice(fest).map((r, k) => ({ eigen: true, r: r || {}, i: fest + k }))]
+          : rows.map((r, i) => ({ r, i }));
         const zelle = (s, r, i) => {
           const val = r[s.id];
           const a = `data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="${esc(s.id)}"`;
@@ -103,19 +106,21 @@
           if (s.typ === "janein") return `<td><select class="eingabe" ${a}><option value=""></option><option value="ja"${val === "ja" ? " selected" : ""}>ja</option><option value="nein"${val === "nein" ? " selected" : ""}>nein</option></select></td>`;
           return `<td><input class="eingabe" ${a} value="${esc(val)}"${s.typ === "zahl" ? ' inputmode="decimal"' : ""} aria-label="${esc(s.titel)}"></td>`;
         };
-        return wrap(`${lab}<div class="tab-wrap"><table class="ff-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}${f.zeilen ? "" : "<th></th>"}</tr></thead>
-          <tbody>${zeilen.map(({ label, r, i }) => `<tr>${label ? `<th scope="row">${esc(label)}</th>` : ""}${f.spalten.map((s) => zelle(s, r, i)).join("")}${f.zeilen ? "" : `<td class="mitte"><button type="button" class="btn klein still" data-tab-weg="${esc(f.id)}" data-zeile="${i}" aria-label="Zeile entfernen">✕</button></td>`}</tr>`).join("")}</tbody></table></div>
-          ${f.zeilen ? "" : `<button type="button" class="btn klein" data-tab-neu="${esc(f.id)}">+ Zeile</button>`}`, "breit-tab");
+        return wrap(`${lab}<div class="tab-wrap"><table class="ff-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}${!f.zeilen || rows.length > fest ? "<th></th>" : ""}</tr></thead>
+          <tbody>${zeilen.map(({ label, eigen, r, i }) => `<tr${eigen ? ' class="eigen"' : ""}>${label ? `<th scope="row">${esc(label)}</th>` : eigen ? `<th scope="row"><input class="eingabe" data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="_label" value="${esc(r._label || "")}" placeholder="Eigene Zeile" aria-label="Bezeichnung"></th>` : ""}${f.spalten.map((s) => zelle(s, r, i)).join("")}${!f.zeilen || eigen ? `<td class="mitte"><button type="button" class="btn klein still" data-tab-weg="${esc(f.id)}" data-zeile="${i}" aria-label="Zeile entfernen">✕</button></td>` : f.zeilen && rows.length > fest ? "<td></td>" : ""}</tr>`).join("")}</tbody></table></div>
+          <button type="button" class="btn klein" data-tab-neu="${esc(f.id)}">${f.zeilen ? "+ Eigene Zeile" : "+ Zeile"}</button>`, "breit-tab");
       }
       case "checkliste": {
         const o = v || {};
         return wrap(`${lab}<ul class="ff-check">${f.punkte.map((pt) => {
           const e = o[pt.id] || {};
-          const knoepfe = f.modus === "pruefung"
-            ? `<div class="seg klein">${[["ok", "In Ordnung"], ["mangel", "Mangel"], ["entfaellt", "Entfällt"]].map(([k, l]) => `<button type="button" class="seg-k${e.s === k ? " an " + k : ""}" data-check="${esc(f.id)}" data-punkt="${esc(pt.id)}" data-wert="${k}">${l}</button>`).join("")}</div>`
+          if (e.s === true) e.s = "ja"; // ältere Einträge mit Häkchen
+          const seg = (opts) => `<div class="seg klein">${opts.map(([k, l]) => `<button type="button" class="seg-k${e.s === k ? " an " + k : ""}" data-check="${esc(f.id)}" data-punkt="${esc(pt.id)}" data-wert="${k}">${l}</button>`).join("")}</div>`;
+          const knoepfe = f.modus === "pruefung" ? seg([["ok", "In Ordnung"], ["mangel", "Mangel"], ["entfaellt", "Entfällt"]])
+            : f.modus === "janein" ? seg([["ja", "Ja"], ["nein", "Nein"]])
             : `<button type="button" class="haken-k${e.s ? " an" : ""}" data-check="${esc(f.id)}" data-punkt="${esc(pt.id)}" data-wert="toggle" aria-pressed="${!!e.s}"><span></span></button>`;
           const offen = ctx.zeigeFehler && f.pflicht && !pt.optional && !e.s;
-          return `<li class="${e.s === "mangel" ? "mangel" : ""}${offen ? " fehlt" : ""}">${f.modus === "pruefung" ? "" : knoepfe}<span class="ck-label">${esc(pt.label)}${pt.optional ? ' <small>(bei Bedarf)</small>' : ""}</span>${f.modus === "pruefung" ? knoepfe : ""}
+          return `<li class="${e.s === "mangel" ? "mangel" : ""}${offen ? " fehlt" : ""}">${f.modus === "haken" || !f.modus ? knoepfe : ""}<span class="ck-label">${esc(pt.label)}${pt.optional ? ' <small>(bei Bedarf)</small>' : ""}</span>${f.modus === "haken" || !f.modus ? "" : knoepfe}
             <input class="eingabe ck-notiz" placeholder="Notiz (optional)" data-check-notiz="${esc(f.id)}" data-punkt="${esc(pt.id)}" value="${esc(e.n || "")}"></li>`;
         }).join("")}</ul>`, "breit-tab");
       }
@@ -167,13 +172,13 @@
       if (f.typ === "abschnitt") return `<h3>${esc(f.titel)}</h3>`;
       if (f.typ === "tabelle") {
         const rows = Array.isArray(v) ? v : [];
-        const zeilen = f.zeilen ? f.zeilen.map((z, i) => ({ label: z, r: rows[i] || {} })) : rows.map((r) => ({ r }));
+        const zeilen = f.zeilen ? [...f.zeilen.map((z, i) => ({ label: z, r: rows[i] || {} })), ...rows.slice(f.zeilen.length).filter((r) => r && Object.values(r).some((x) => x)).map((r) => ({ label: r._label || "Eigene Zeile", r }))] : rows.map((r) => ({ r }));
         if (!zeilen.length) return `<div class="d-zeile"><b>${esc(f.label)}</b><span class="d-leer">keine Einträge</span></div>`;
         return `<table class="d-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}</tr></thead><tbody>${zeilen.map(({ label, r }) => `<tr>${label ? `<th>${esc(label)}</th>` : ""}${f.spalten.map((s) => `<td>${s.typ === "haken" ? (r[s.id] ? "✓" : "") : esc(r[s.id] || "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
       }
       if (f.typ === "checkliste") {
         const o = v || {};
-        const txt = { true: "✓", ok: "in Ordnung", mangel: "MANGEL", entfaellt: "entfällt" };
+        const txt = { true: "✓", ja: "Ja", nein: "Nein", ok: "in Ordnung", mangel: "MANGEL", entfaellt: "entfällt" };
         return `<table class="d-tab d-check"><tbody>${f.punkte.map((pt) => { const e = o[pt.id] || {}; return `<tr><td>${esc(pt.label)}</td><td class="${e.s === "mangel" ? "d-mangel" : ""}">${e.s ? txt[e.s] : "☐"}</td><td>${esc(e.n || "")}</td></tr>`; }).join("")}</tbody></table>`;
       }
       return `<div class="d-zeile${f.typ === "unterschrift" ? " d-unterschrift" : ""}"><b>${esc(f.label)}</b><span>${druckWert(f, v, ctx)}</span></div>`;
