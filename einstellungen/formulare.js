@@ -164,6 +164,7 @@
 
     tuer: {
       titel: "Angaben zur Tür",
+      blatt: "tuer",   // Original-Blatt „Angaben zur Türen-Bestellung“ als Ansicht (siehe app/js/formular.js)
       felder: [
         { id: "anschlag", typ: "auswahl", label: "Anschlag", optionen: ["DIN links", "DIN rechts"], pflicht: true, breite: "halb" },
         { id: "riegel", typ: JN, label: "mit WC-Riegel", pflicht: true, breite: "halb" },
@@ -173,13 +174,13 @@
         { id: "wand", typ: "auswahl", label: "Wandstärke (Normzarge, Verstellbereich +1,7 cm)", pflicht: true, optionen: ["9,0 cm", "12,0 cm", "14,0 cm", "16,0 cm", "20,0 cm", "26,5 cm", "33,0 cm"] },
         { id: "farbeFront", typ: "text", label: "Farbe Frontseite", breite: "halb" },
         { id: "farbeRueck", typ: "text", label: "Farbe Rückseite", breite: "halb" },
-        { id: "schiebe", typ: JN, label: "Schiebetür?", pflicht: true, breite: "halb" },
-        { id: "durchgang", typ: "text", label: "Durchgangsmaß H × B", breite: "halb", wenn: { feld: "schiebe", wert: "ja" } },
-        { id: "blatt", typ: "text", label: "Türblattmaß H × B", breite: "halb", wenn: { feld: "schiebe", wert: "ja" } },
-        { id: "montage", typ: "auswahl", label: "Montage", optionen: ["im Bad", "auf der Flurseite"], breite: "drittel", wenn: { feld: "schiebe", wert: "ja" } },
-        { id: "richtung", typ: "auswahl", label: "öffnet nach", optionen: ["links", "rechts"], breite: "drittel", wenn: { feld: "schiebe", wert: "ja" } },
-        { id: "material", typ: "auswahl", label: "Material", optionen: ["Holz", "Glas"], breite: "drittel", wenn: { feld: "schiebe", wert: "ja" } },
-        { id: "notizen", typ: "textarea", label: "Allgemeine Notizen" },
+        { id: "schiebe", typ: JN, label: "Schiebetür?", pflicht: true, breite: "halb", ausserhalbBlatt: true },
+        { id: "durchgang", typ: "text", label: "Durchgangsmaß H × B", breite: "halb", wenn: { feld: "schiebe", wert: "ja" }, ausserhalbBlatt: true },
+        { id: "blatt", typ: "text", label: "Türblattmaß H × B", breite: "halb", wenn: { feld: "schiebe", wert: "ja" }, ausserhalbBlatt: true },
+        { id: "montage", typ: "auswahl", label: "Montage", optionen: ["im Bad", "auf der Flurseite"], breite: "drittel", wenn: { feld: "schiebe", wert: "ja" }, ausserhalbBlatt: true },
+        { id: "richtung", typ: "auswahl", label: "öffnet nach", optionen: ["links", "rechts"], breite: "drittel", wenn: { feld: "schiebe", wert: "ja" }, ausserhalbBlatt: true },
+        { id: "material", typ: "auswahl", label: "Material", optionen: ["Holz", "Glas"], breite: "drittel", wenn: { feld: "schiebe", wert: "ja" }, ausserhalbBlatt: true },
+        { id: "notizen", typ: "textarea", label: "Allgemeine Notizen", ausserhalbBlatt: true },
       ],
     },
 

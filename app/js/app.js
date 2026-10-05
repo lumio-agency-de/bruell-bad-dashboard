@@ -991,7 +991,7 @@
           <button class="btn" data-aktion="drucken" data-formular="${fid}">Drucken / PDF</button>
           ${lesen ? `<a class="btn voll" href="#/projekt/${p.id}">Zurück</a>` : `<button class="btn jetzt" data-aktion="formular-fertig">Fertig</button>`}</div>
       </header>
-      <fieldset class="panel f-flaeche" id="f-flaeche"${lesen ? " disabled" : ""}>${Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k) => ablage(p, kat, k) })}</fieldset></div>`;
+      <fieldset class="panel f-flaeche" id="f-flaeche"${lesen ? " disabled" : ""}>${Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k) => ablage(p, kat, k), firma: cfg(), projektName: anzeigeName(p), projektNr: p.projektnr || "" })}</fieldset></div>`;
   }
   const formularStatusHtml = (st) => `<span class="${st.vollstaendig ? "ok" : ""}">${st.vollstaendig ? "✓ vollständig" : `${st.ok} von ${st.gesamt} Pflichtfeldern`}</span>`;
   function formularNeuZeichnen(p, fid, ganz) {
@@ -1000,13 +1000,39 @@
     if (ganz) {
       const fl = $("#f-flaeche"); if (!fl) return;
       const y = window.scrollY;
-      fl.innerHTML = Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k) => ablage(p, kat, k) });
-      window.scrollTo(0, y); vorschauenLaden(fl); unterschriftenAn();
+      fl.innerHTML = Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k) => ablage(p, kat, k), firma: cfg(), projektName: anzeigeName(p), projektNr: p.projektnr || "" });
+      window.scrollTo(0, y); vorschauenLaden(fl); unterschriftenAn(); blattStiftAn();
     }
   }
   function formularWerte(p, fid) {
     p.formulare = p.formulare || {};
     return (p.formulare[fid] = p.formulare[fid] || { werte: {} }).werte;
+  }
+
+  /* Original-Blatt: Stift-Ebene */
+  function blattStiftAn() {
+    $$("canvas[data-blatt-stift]").forEach((c) => {
+      if (c.dataset.an) return; c.dataset.an = 1;
+      const box = c.closest(".blatt"), ctx = c.getContext("2d");
+      const alt = $(".bl-zeichnung", box);
+      if (alt) { const img = new Image(); img.onload = () => { ctx.drawImage(img, 0, 0, c.width, c.height); alt.remove(); }; img.src = alt.src; }
+      box.dataset.modus = S.blattModus || "fuellen";
+      let zieht = false, last = null, gemalt = false;
+      const pos = (e) => { const r = c.getBoundingClientRect(); return [(e.clientX - r.left) * (c.width / r.width), (e.clientY - r.top) * (c.height / r.height)]; };
+      c.addEventListener("pointerdown", (e) => { if (box.dataset.modus === "fuellen") return; zieht = true; last = pos(e); c.setPointerCapture(e.pointerId); e.preventDefault(); });
+      c.addEventListener("pointermove", (e) => {
+        if (!zieht) return; const q = pos(e), radier = box.dataset.modus === "radierer";
+        ctx.globalCompositeOperation = radier ? "destination-out" : "source-over";
+        ctx.strokeStyle = "#c0262d"; ctx.lineWidth = radier ? 26 : (e.pressure && e.pointerType === "pen" ? 1.5 + e.pressure * 3 : 2.6); ctx.lineCap = "round"; ctx.lineJoin = "round";
+        ctx.beginPath(); ctx.moveTo(...last); ctx.lineTo(...q); ctx.stroke(); last = q; gemalt = true;
+      });
+      const ende = () => {
+        if (!zieht) return; zieht = false; if (!gemalt) return; gemalt = false;
+        const seite = $(".formularseite"); const p = finde(seite.dataset.projekt); const fid = seite.dataset.formular;
+        aendern(p, () => { formularWerte(p, fid).blattZeichnung = c.toDataURL("image/png"); });
+      };
+      c.addEventListener("pointerup", ende); c.addEventListener("pointercancel", ende);
+    });
   }
 
   /* Unterschriftenfelder */
@@ -1042,7 +1068,7 @@
      ================================================================ */
   function druckKontext(p) {
     const c = cfg();
-    return { firma: c, dateien: dateienVon(p.id), kopfzeile: `${anzeigeName(p)}${p.projektnr ? " · Projekt " + p.projektnr : ""}${p.kunde.ort ? " · " + [p.kunde.strasse, p.kunde.ort].filter(Boolean).join(", ") : ""}` };
+    return { firma: c, projektName: anzeigeName(p), projektNr: p.projektnr || "", dateien: dateienVon(p.id), kopfzeile: `${anzeigeName(p)}${p.projektnr ? " · Projekt " + p.projektnr : ""}${p.kunde.ort ? " · " + [p.kunde.strasse, p.kunde.ort].filter(Boolean).join(", ") : ""}` };
   }
   function drucken(html) {
     $("#druck").innerHTML = html;
@@ -1605,6 +1631,7 @@
     statusLeiste();
     vorschauenLaden();
     unterschriftenAn();
+    blattStiftAn();
     if (r.name === "projekt" && !r.sub && istBuero()) gesehenMarkieren(r.arg);
   }
   function navRendern() {
@@ -1836,6 +1863,27 @@
     }
     if (akt === "team-weg") return a.closest("tr").remove();
     if (akt === "export") return herunterladen(`bad-dashboard-projekte-${isoTag(new Date())}.json`, JSON.stringify({ projekte: S.projekte, einstellungen: S.einstellungen }, null, 1));
+  });
+
+  /* Original-Blatt: Werkzeuge */
+  document.addEventListener("click", (e) => {
+    const m = e.target.closest("[data-blatt-modus]");
+    if (m) {
+      S.blattModus = m.dataset.blattModus;
+      $$("[data-blatt-modus]").forEach((b) => b.classList.toggle("an", b === m));
+      $$(".blatt").forEach((b) => (b.dataset.modus = S.blattModus));
+      return;
+    }
+    const l = e.target.closest("[data-blatt-leeren]");
+    if (l && confirm("Alle Zeichnungen auf dem Blatt löschen?")) {
+      const seite = $(".formularseite"), p = finde(seite.dataset.projekt), fid = seite.dataset.formular;
+      aendern(p, () => { delete formularWerte(p, fid).blattZeichnung; });
+      formularNeuZeichnen(p, fid, true);
+    }
+  });
+  document.addEventListener("keydown", (e) => {
+    const z = e.target.closest && e.target.closest("tr[data-ff-wahl]");
+    if (z && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); z.click(); }
   });
 
   /* Formular-Bedienung (Knöpfe, Chips, Checklisten) */

@@ -128,9 +128,66 @@
     return "";
   }
 
+  /* ---------------- Original-Blätter ----------------
+     Das Papierformular originalgetreu nachgebaut – mit denselben Daten wie das
+     Formular, zum Antippen/Ausfüllen und mit Stift-Ebene zum Zeichnen. */
+  const BLAETTER = {
+    tuer(p, w, ctx, lesen) {
+      const f = ctx.firma, adr = f.adresse || {};
+      const kreuz = (feld, wert, text) => {
+        const an = w[feld] === wert;
+        return lesen ? `<span class="bl-check${an ? " an" : ""}"><i></i>${esc(text)}</span>`
+          : `<button type="button" class="bl-check${an ? " an" : ""}" data-ff-wahl="${feld}" data-wert="${esc(wert)}" aria-pressed="${an}"><i></i>${esc(text)}</button>`;
+      };
+      const zeile = (feld, wert, a, b) => {
+        const an = w[feld] === wert;
+        return `<tr class="${an ? "an" : ""}"${lesen ? "" : ` data-ff-wahl="${feld}" data-wert="${esc(wert)}" tabindex="0" role="button" aria-pressed="${an}"`}><td>${esc(a)}</td><td>${esc(b)}</td></tr>`;
+      };
+      const eingabe = (feld, wert, cls = "") => lesen ? `<span class="bl-wert ${cls}">${esc(wert || "")}</span>` : `<input class="bl-eingabe ${cls}" data-ff="${feld}" value="${esc(wert || "")}">`;
+      const B = [["62,5–66,5 cm → 61,0 cm", "62,5 cm – 66,5 cm", "61,0 cm"], ["75,0–79,0 cm → 73,5 cm", "75,0 cm – 79,0 cm", "73,5 cm"], ["87,5–91,5 cm → 86,0 cm", "87,5 cm – 91,5 cm", "86,0 cm"], ["100,0–104,0 cm → 98,5 cm", "100,0 cm – 104,0 cm", "98,5 cm"]];
+      const H = [["200,0–202,5 cm → 198,5 cm", "200,0 cm – 202,5 cm", "198,5 cm"], ["212,5–215,0 cm → 211,0 cm", "212,5 cm – 215,0 cm", "211,0 cm"]];
+      const WS = [["9,0 cm", "9,0 cm – 10,7 cm"], ["12,0 cm", "12,0 cm – 13,7 cm"], ["14,0 cm", "14,0 cm – 15,7 cm"], ["16,0 cm", "16,0 cm – 17,7 cm"], ["20,0 cm", "20,0 cm – 21,7 cm"], ["26,5 cm", "26,5 cm – 28,2 cm"], ["33,0 cm", "33,0 cm – 34,7 cm"]];
+      return `<div class="blatt" data-blatt="tuer">
+        <div class="bl-seite">
+          <header class="bl-kopf"><h4>Angaben zur Türen-Bestellung:</h4><img src="${esc(f.logo)}" alt="" class="bl-logo"></header>
+          <div class="bl-reihe"><span>Projektname:</span>${eingabe("blattProjekt", w.blattProjekt ?? ctx.projektName, "linie")}<span>Projektnummer:</span>${eingabe("blattNr", w.blattNr ?? ctx.projektNr, "linie")}</div>
+          <div class="bl-reihe oben"><span>Lieferadresse:</span><div class="bl-adresse">${esc(f.name)}<br>${esc(f.bereich || "")}<br>${esc(adr.strasse || "")}<br>${esc(adr.ort || "")}</div></div>
+          <div class="bl-mitte">
+            <figure class="bl-tuer"><img src="app/img/tuer.jpg" alt="Tür, Höhe und Breite Türblatt"><figcaption>Abbildung DIN links</figcaption></figure>
+            <div class="bl-rechts">
+              <div class="bl-optionen"><span><u>Anschlag</u>:</span> <span class="bl-stapel">${kreuz("anschlag", "DIN links", "DIN links")}${kreuz("anschlag", "DIN rechts", "DIN rechts")}</span>
+                <span><u>mit WC-Riegel</u>:</span> <span class="bl-stapel">${kreuz("riegel", "ja", "ja")}${kreuz("riegel", "nein", "nein")}</span></div>
+              <div class="bl-optionen"><span><u>Tür öffnet</u>:</span> ${kreuz("oeffnet", "in Raum / nach innen", "in Raum/nach innen")}${kreuz("oeffnet", "in Flur / nach außen", "in Flur/nach außen")}</div>
+              <p class="bl-titel"><u>Angaben zur Breite</u>:</p>
+              <table class="bl-tab"><thead><tr><th>Maueröffnung<br>min. – max.</th><th>Türblattaußenmaß<br>B (nach DIN 18101)</th></tr></thead><tbody>${B.map(([v, a, b]) => zeile("breite", v, a, b)).join("")}</tbody></table>
+              <p class="bl-titel"><u>Angaben zur Höhe</u>:</p>
+              <table class="bl-tab"><thead><tr><th>Maueröffnung<br>min. – max.</th><th>Türblattaußenmaß<br>H (nach DIN 18101)</th></tr></thead><tbody>${H.map(([v, a, b]) => zeile("hoehe", v, a, b)).join("")}</tbody></table>
+            </div>
+          </div>
+          <div class="bl-unten">
+            <div><p class="bl-titel"><u>Angaben zur Wandstärke</u>:</p>
+              <table class="bl-tab"><thead><tr><th>Normzarge<br>Wandstärke in cm</th><th>Verstellbereich<br>+1,7 cm / von - bis</th></tr></thead><tbody>${WS.map(([v, b]) => zeile("wand", v, v, b)).join("")}</tbody></table></div>
+            <div><p class="bl-titel"><u>Farbangaben</u>:</p>
+              <table class="bl-tab farbe"><tbody><tr><th>Frontseite</th><td>${eingabe("farbeFront", w.farbeFront)}</td></tr><tr><th>Rückseite</th><td>${eingabe("farbeRueck", w.farbeRueck)}</td></tr></tbody></table></div>
+          </div>
+          <footer class="bl-fuss"><span>${esc(adr.strasse || "")}<br>${esc(adr.ort || "")}</span><span>Tel. ${esc(f.telefon || "")}</span><span>${esc(f.email || "")}<br>${esc(f.website || "")}</span></footer>
+        </div>
+        ${w.blattZeichnung ? `<img class="bl-zeichnung" src="${esc(w.blattZeichnung)}" alt="">` : ""}
+        ${lesen ? "" : `<canvas class="bl-stift" width="900" height="1273" data-blatt-stift="tuer" aria-label="Zeichenfläche"></canvas>`}
+      </div>`;
+    },
+  };
+
   function editor(id, p, ctx) {
     const d = def(id); def.aktuell = d;
     const w = werteVon(p, id);
+    if (d.blatt) {
+      const original = (w._ansicht || "original") === "original";
+      const umschalter = `<div class="bl-umschalter"><div class="seg" role="radiogroup" aria-label="Ansicht">${[["original", "Original-Blatt"], ["formular", "Formular"]].map(([k, l]) => `<button type="button" class="seg-k${(w._ansicht || "original") === k ? " an" : ""}" data-ff-wahl="_ansicht" data-wert="${k}">${l}</button>`).join("")}</div>
+        ${original ? `<div class="bl-werkzeug" role="toolbar" aria-label="Werkzeuge"><button type="button" class="btn klein an" data-blatt-modus="fuellen">Ausfüllen</button><button type="button" class="btn klein" data-blatt-modus="stift">✎ Stift</button><button type="button" class="btn klein" data-blatt-modus="radierer">Radierer</button><button type="button" class="btn klein still gefahr" data-blatt-leeren="tuer">Zeichnung löschen</button></div>` : ""}</div>`;
+      if (original) return `${umschalter}<div class="bl-rahmen">${BLAETTER[d.blatt](p, w, ctx)}</div><div class="ff-raster bl-rest">${d.felder.filter((f) => f.ausserhalbBlatt).map((f) => feldHtml(f, p, w, ctx)).join("")}</div>`;
+      return `${umschalter}<div class="ff-raster">${d.felder.map((f) => feldHtml(f, p, w, ctx)).join("")}</div>`;
+    }
     const abschnitte = d.felder.filter((f) => f.typ === "abschnitt");
     return `<div class="ff-layout">
       ${abschnitte.length > 2 ? `<nav class="ff-index" aria-label="Abschnitte">${abschnitte.map((a) => `<a href="#abs-${esc(a.titel.replace(/\W+/g, "-"))}" data-sprung>${esc(a.titel)}</a>`).join("")}</nav>` : ""}
@@ -167,6 +224,7 @@
   function druck(id, p, ctx) {
     const d = def(id); def.aktuell = d;
     const w = werteVon(p, id);
+    if (d.blatt && (w._ansicht || "original") === "original") return `<section class="d-seite d-blatt">${BLAETTER[d.blatt](p, w, ctx, true)}</section>`;
     const teile = d.felder.filter((f) => sichtbar(f, w, p)).map((f) => {
       const v = wert(p, f, w);
       if (f.typ === "abschnitt") return `<h3>${esc(f.titel)}</h3>`;
