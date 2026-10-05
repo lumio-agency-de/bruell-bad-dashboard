@@ -100,7 +100,7 @@
     const e = S.einstellungen;
     if (!e) return basis;
     const out = { ...basis, ...e };
-    for (const k of ["adresse", "farben", "programme", "fristen"]) out[k] = { ...basis[k], ...(e[k] || {}) };
+    for (const k of ["adresse", "farben", "programme", "fristen", "ziele"]) out[k] = { ...(basis[k] || {}), ...(e[k] || {}) };
     out.team = e.team || basis.team;
     out.partner = e.partner || basis.partner || [];
     out.cloud = Daten.konf || basis.cloud;
@@ -176,12 +176,13 @@
   const tageText = (n) => (n == null ? "—" : `${n < 10 ? n.toFixed(1).replace(".", ",") : Math.round(n)} ${Math.round(n) === 1 ? "Tag" : "Tage"}`);
   const prozent = (n) => (n == null || isNaN(n) ? "—" : `${Math.round(n * 100)} %`);
   const ZAHLFELDER = [
-    { k: "angebot", l: "Angebotssumme (netto)" }, { k: "auftrag", l: "Auftragswert (netto)" }, { k: "rechnung", l: "Schlussrechnung (netto)" },
+    { k: "angebot", l: "Angebotssumme (netto)" }, { k: "auftrag", l: "Auftragswert (netto)" }, { k: "abschlag", l: "Abschlagsrechnung (netto)" }, { k: "rechnung", l: "Schlussrechnung (netto, nach Abschlag)" },
     { k: "material", l: "Material", kosten: true }, { k: "sub", l: "Subunternehmer", kosten: true }, { k: "lohn", l: "Montage / Lohn", kosten: true }, { k: "sonst", l: "Sonstige Kosten", kosten: true },
   ];
   function geld(p) {
     const z = S.zahlen[p.id] || {}, n = (k) => Number(z[k]) || 0;
-    const umsatz = n("rechnung") || n("auftrag");
+    /* Umsatz = Abschlag + Schlussrechnung (Restbetrag); solange nicht abgerechnet: Auftragswert */
+    const umsatz = n("rechnung") ? n("rechnung") + n("abschlag") : n("auftrag");
     const kosten = ZAHLFELDER.filter((f) => f.kosten).reduce((a, f) => a + n(f.k), 0);
     return { angebot: n("angebot"), auftrag: n("auftrag"), umsatz, kosten, hatKosten: kosten > 0, db: umsatz - kosten, marge: umsatz && kosten ? (umsatz - kosten) / umsatz : null };
   }
@@ -417,33 +418,90 @@
      Kennzahlen (nur Geschäftsführung)
      ================================================================ */
   function ansichtKennzahlen() {
-    const zr = S.kzZeitraum;
-    const ab = zr === "12m" ? Date.now() - 365 * TAG : zr === "jahr" ? new Date(new Date().getFullYear(), 0, 1).getTime() : 0;
+    const zr = S.kzZeitraum, jetzt = Date.now();
+    const jahrStart = new Date(new Date().getFullYear(), 0, 1).getTime();
+    /* Zeitraum + Vergleichszeitraum gleicher Länge davor */
+    const [ab, bis, vAb, vBis] = zr === "12m" ? [jetzt - 365 * TAG, jetzt, jetzt - 730 * TAG, jetzt - 365 * TAG]
+      : zr === "jahr" ? [jahrStart, jetzt, jahrStart - 365 * TAG, jetzt - 365 * TAG] : [0, jetzt, null, null];
     const projekte = S.projekte.filter((p) => !p.geloescht);
-    const fertig = projekte.filter((p) => p.status === "abgeschlossen" && (abschlussZeit(p) || 0) >= ab);
-    const anfragen = projekte.filter((p) => (levelZeit(p, ersteNr) || 0) >= ab);
-    const auftraege = anfragen.filter((p) => p.status === "abgeschlossen" || p.phase >= 6);
-    const abgesagt = anfragen.filter((p) => p.status === "verloren");
-    const entschieden = auftraege.length + abgesagt.length;
-    const gF = fertig.map(geld);
-    const umsatz = gF.reduce((a, g) => a + g.umsatz, 0);
-    const mitKosten = gF.filter((g) => g.umsatz && g.hatKosten);
-    const dbSumme = mitKosten.reduce((a, g) => a + g.db, 0), umsatzMitKosten = mitKosten.reduce((a, g) => a + g.umsatz, 0);
-    const dauerGesamt = schnitt(fertig.map((p) => tage(levelZeit(p, ersteNr), abschlussZeit(p))));
-    const dauerAuftrag = schnitt(auftraege.map((p) => tage(levelZeit(p, ersteNr), levelZeit(p, 6))));
+    const erreicht = (p, nr) => p.status === "abgeschlossen" || p.phase >= nr || !!(p.level && p.level[nr]);
+
+    function werte(von, bis2) {
+      const fertig = projekte.filter((p) => p.status === "abgeschlossen" && (abschlussZeit(p) || 0) >= von && (abschlussZeit(p) || 0) < bis2);
+      const anfragen = projekte.filter((p) => { const t = levelZeit(p, ersteNr) || 0; return t >= von && t < bis2; });
+      const auftraege = anfragen.filter((p) => erreicht(p, 6));
+      const abgesagt = anfragen.filter((p) => p.status === "verloren");
+      const g = fertig.map(geld), mitK = g.filter((x) => x.umsatz && x.hatKosten);
+      const umsatzK = mitK.reduce((a, x) => a + x.umsatz, 0), db = mitK.reduce((a, x) => a + x.db, 0);
+      return {
+        fertig, anfragen, auftraege, abgesagt,
+        umsatz: g.reduce((a, x) => a + x.umsatz, 0), db: mitK.length ? db : null, marge: umsatzK ? db / umsatzK : null,
+        proBad: schnitt(g.map((x) => x.umsatz || null)), kostenProBad: schnitt(mitK.map((x) => x.kosten)),
+        quote: auftraege.length + abgesagt.length ? auftraege.length / (auftraege.length + abgesagt.length) : null,
+        dauer: schnitt(fertig.map((p) => tage(levelZeit(p, ersteNr), abschlussZeit(p)))),
+        dauerAuftrag: schnitt(auftraege.map((p) => tage(levelZeit(p, ersteNr), levelZeit(p, 6)))),
+      };
+    }
+    const W = werte(ab, bis), V = vAb != null ? werte(vAb, vBis) : null;
+
+    /* Pfeil zum Vorzeitraum; „besser“ hängt an der Kennzahl (kürzere Dauer = besser) */
+    const delta = (jetztW, vorW, art = "mehr") => {
+      if (!V || jetztW == null || vorW == null || vorW === 0) return "";
+      const d = (jetztW - vorW) / Math.abs(vorW);
+      if (Math.abs(d) < 0.005) return `<span class="delta gleich">± 0 %</span>`;
+      const gut = art === "mehr" ? d > 0 : d < 0;
+      return `<span class="delta ${gut ? "gut" : "schlecht"}">${d > 0 ? "▲" : "▼"} ${Math.abs(Math.round(d * 100))} %</span>`;
+    };
+    const vgl = zr === "12m" ? "ggü. Vorjahreszeitraum" : zr === "jahr" ? "ggü. Vorjahr bis heute" : "";
+
+    /* Bestand & Pipeline */
     const laufend = projekte.filter((p) => p.status === "aktiv" || p.status === "pausiert");
     const offeneAngebote = laufend.filter((p) => p.phase >= 4 && p.phase <= 5).reduce((a, p) => a + geld(p).angebot, 0);
-    const laufendeAuftraege = laufend.filter((p) => p.phase >= 6).reduce((a, p) => a + (geld(p).auftrag || geld(p).angebot), 0);
-    const fehlend = fertig.filter((p) => !geld(p).umsatz).length;
+    const bestand = laufend.filter((p) => p.phase >= 6).reduce((a, p) => a + (geld(p).auftrag || geld(p).angebot), 0);
+    const monatsSchnitt = (() => { const w = werte(jetzt - 365 * TAG, jetzt); return w.umsatz / 12; })();
+    const reichweite = monatsSchnitt ? bestand / monatsSchnitt : null;
 
-    /* Wo geht die Zeit hin: Ø Tage je Level */
+    /* Jahresziel */
+    const ziel = Number((cfg().ziele || {}).jahresumsatz) || 0;
+    const istJahr = werte(jahrStart, jetzt).umsatz;
+    const prognose = istJahr + bestand;
+    const zielBalken = ziel ? `<div class="ziel">
+        <div class="ziel-spur"><span class="ziel-ist" style="width:${Math.min(100, (istJahr / ziel) * 100)}%"></span><span class="ziel-bestand" style="width:${Math.max(0, Math.min(100 - (istJahr / ziel) * 100, (bestand / ziel) * 100))}%"></span></div>
+        <div class="ziel-legende"><span><i class="ist"></i>Abgerechnet ${eur(istJahr)} · ${prozent(istJahr / ziel)}</span><span><i class="bestand"></i>Auftragsbestand ${eur(bestand)}</span><span>Ziel ${eur(ziel)} · Prognose ${prozent(prognose / ziel)}</span></div></div>`
+      : `<p class="leise">Noch kein Jahresziel hinterlegt – unter Einrichtung → Ziele eintragen.</p>`;
+
+    /* Offene Forderungen */
+    const forderungen = [];
+    projekte.forEach((p) => {
+      const z = S.zahlen[p.id] || {};
+      if (Number(z.abschlag) && !z.abschlagBezahlt) forderungen.push({ p, art: "Abschlag", betrag: Number(z.abschlag), seit: levelZeit(p, 10) });
+      if (Number(z.rechnung) && !z.rechnungBezahlt) forderungen.push({ p, art: "Schlussrechnung", betrag: Number(z.rechnung), seit: levelZeit(p, 12) || abschlussZeit(p) });
+    });
+    forderungen.sort((a, b) => (a.seit || 0) - (b.seit || 0));
+    const fSumme = forderungen.reduce((a, f) => a + f.betrag, 0);
+
+    /* Vertriebstrichter */
+    const stufen = [[ersteNr, "Anfrage"], [3, "Erstgespräch"], [5, "Angebot besprochen"], [6, "Auftrag"]];
+    const trichter = [...stufen.map(([nr, l]) => ({ l, n: W.anfragen.filter((p) => erreicht(p, nr)).length })), { l: "Abgeschlossen", n: W.anfragen.filter((p) => p.status === "abgeschlossen").length }];
+    const maxT = Math.max(1, trichter[0].n);
+
+    /* Kapazität: nächste 8 Kalenderwochen */
+    const montag = (d) => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
+    const kw = (d) => { const x = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const t = x.getUTCDay() || 7; x.setUTCDate(x.getUTCDate() + 4 - t); const j = new Date(Date.UTC(x.getUTCFullYear(), 0, 1)); return Math.ceil(((x - j) / TAG + 1) / 7); };
+    const wochen = Array.from({ length: 8 }, (_, i) => { const s = montag(new Date()); s.setDate(s.getDate() + i * 7); return s; });
+    const baustellen = laufend.filter((p) => (p.termine || {}).baustart).map((p) => {
+      const s = datum(p.termine.baustart), e = datum(p.termine.abnahme) || plusTage(s, 14);
+      return { p, s, e };
+    });
+    const zeilen = [...monteure().map((m) => ({ id: m.kuerzel, name: m.name })), { id: null, name: "ohne Monteur" }];
+    const kap = zeilen.map((z) => ({ ...z, wochen: wochen.map((w) => { const we = plusTage(w, 7); return baustellen.filter((b) => b.s < we && b.e >= w && (z.id ? (b.p.zugriff || []).includes(z.id) : !monteure().some((m) => (b.p.zugriff || []).includes(m.kuerzel)))); }) })).filter((z) => z.id || z.wochen.some((l) => l.length));
+
+    /* Zeit je Level, Umsatz je Monat, Kontaktwege */
     const proLevel = PHASEN.map((ph, i) => {
-      const werte = projekte.map((p) => { const a = levelZeit(p, ph.nr); if (!a || a < ab) return null; return tage(a, i < N - 1 ? levelZeit(p, PHASEN[i + 1].nr) : abschlussZeit(p)); }).filter((v) => v != null);
-      return { ph, d: schnitt(werte), n: werte.length };
+      const l = projekte.map((p) => { const a = levelZeit(p, ph.nr); if (!a || a < ab) return null; return tage(a, i < N - 1 ? levelZeit(p, PHASEN[i + 1].nr) : abschlussZeit(p)); }).filter((v) => v != null);
+      return { ph, d: schnitt(l), n: l.length };
     });
     const maxL = Math.max(1, ...proLevel.map((x) => x.d || 0));
-
-    /* Umsatz je Monat (letzte 12) */
     const heuteM = new Date(); heuteM.setDate(1); heuteM.setHours(0, 0, 0, 0);
     const monate = Array.from({ length: 12 }, (_, i) => { const d = new Date(heuteM); d.setMonth(d.getMonth() - 11 + i); return { d, summe: 0, n: 0 }; });
     projekte.filter((p) => p.status === "abgeschlossen").forEach((p) => {
@@ -453,26 +511,44 @@
     });
     const maxM = Math.max(1, ...monate.map((m) => m.summe));
     const MON = ["Jan", "Feb", "Mär", "Apr", "Mai", "Jun", "Jul", "Aug", "Sep", "Okt", "Nov", "Dez"];
-
-    /* Kontaktwege */
     const wege = {};
-    anfragen.forEach((p) => { const k = Formular.werteVon(p, "bestandsaufnahme").kontakt || "nicht erfasst"; const w = (wege[k] = wege[k] || { n: 0, auftrag: 0, verloren: 0 }); w.n++; if (p.status === "abgeschlossen" || p.phase >= 6) w.auftrag++; if (p.status === "verloren") w.verloren++; });
+    W.anfragen.forEach((p) => { const k = Formular.werteVon(p, "bestandsaufnahme").kontakt || "nicht erfasst"; const w = (wege[k] = wege[k] || { n: 0, auftrag: 0, verloren: 0 }); w.n++; if (erreicht(p, 6)) w.auftrag++; if (p.status === "verloren") w.verloren++; });
+    const fehlend = W.fertig.filter((p) => !geld(p).umsatz).length;
 
-    const kachel = (wert, titel, unter) => `<div class="kpi"><span class="kpi-zahl klein">${wert}</span><span class="kpi-titel">${titel}</span><span class="kpi-unter">${unter}</span></div>`;
+    const kachel = (wert, titel, unter, d = "") => `<div class="kpi"><span class="kpi-zahl klein">${wert}</span><span class="kpi-titel">${titel} ${d}</span><span class="kpi-unter">${unter}</span></div>`;
     return `<div class="seite kennzahlen">
-      <header class="kopf"><div><p class="eyebrow">Nur für die Geschäftsführung</p><h1>Kennzahlen</h1></div>
+      <header class="kopf"><div><p class="eyebrow">Nur für die Geschäftsführung</p><h1>Unternehmen</h1></div>
         <div class="kopf-aktionen"><div class="seg" role="radiogroup" aria-label="Zeitraum">${[["12m", "12 Monate"], ["jahr", "Dieses Jahr"], ["alle", "Gesamt"]].map(([id, l]) => `<button class="seg-k${zr === id ? " an" : ""}" data-aktion="kz-zeitraum" data-wert="${id}" role="radio" aria-checked="${zr === id}">${l}</button>`).join("")}</div></div></header>
       ${fehlend ? `<p class="luecken">${fehlend} abgeschlossene${fehlend === 1 ? "s Bad hat" : " Bäder haben"} noch keine Umsatzzahlen – im Projekt unter Akte → Zahlen eintragen.</p>` : ""}
+
+      <section class="panel ziel-panel"><h2 class="panel-titel">Jahresziel ${new Date().getFullYear()}</h2><div class="panel-innen">${zielBalken}</div></section>
+
       <section class="kpis vier">
-        ${kachel(eur(umsatz), "Umsatz", `${fertig.length} abgeschlossene Bäder`)}
-        ${kachel(mitKosten.length ? eur(dbSumme) : "—", "Deckungsbeitrag", mitKosten.length ? `Marge ${prozent(dbSumme / umsatzMitKosten)}` : "Kosten fehlen")}
-        ${kachel(eur(schnitt(gF.map((g) => g.umsatz || null))), "Ø Umsatz pro Bad", `Ø Kosten ${eur(schnitt(mitKosten.map((g) => g.kosten)))}`)}
-        ${kachel(entschieden ? prozent(auftraege.length / entschieden) : "—", "Abschlussquote", `${auftraege.length} Aufträge · ${abgesagt.length} Absagen`)}
-        ${kachel(tageText(dauerGesamt), "Erstkontakt → Abschluss", "Ø Dauer je Bad")}
-        ${kachel(tageText(dauerAuftrag), "Erstkontakt → Auftrag", "Ø bis zur Unterschrift")}
-        ${kachel(eur(offeneAngebote), "Offene Angebote", "Level 04–05")}
-        ${kachel(eur(laufendeAuftraege), "Laufende Aufträge", "Level 06–13, noch nicht abgerechnet")}
+        ${kachel(eur(W.umsatz), "Umsatz", `${W.fertig.length} abgeschlossene Bäder ${vgl ? "· " + vgl : ""}`, delta(W.umsatz, V && V.umsatz))}
+        ${kachel(W.db != null ? eur(W.db) : "—", "Deckungsbeitrag", W.marge != null ? `Marge ${prozent(W.marge)}` : "Kosten fehlen", delta(W.marge, V && V.marge))}
+        ${kachel(eur(W.proBad), "Ø Umsatz pro Bad", `Ø Kosten ${eur(W.kostenProBad)}`, delta(W.proBad, V && V.proBad))}
+        ${kachel(W.quote != null ? prozent(W.quote) : "—", "Abschlussquote", `${W.auftraege.length} Aufträge · ${W.abgesagt.length} Absagen`, delta(W.quote, V && V.quote))}
+        ${kachel(tageText(W.dauer), "Erstkontakt → Abschluss", "Ø Dauer je Bad", delta(W.dauer, V && V.dauer, "weniger"))}
+        ${kachel(tageText(W.dauerAuftrag), "Erstkontakt → Auftrag", "Ø bis zur Unterschrift", delta(W.dauerAuftrag, V && V.dauerAuftrag, "weniger"))}
+        ${kachel(eur(bestand), "Auftragsbestand", reichweite != null ? `reicht für ca. ${reichweite.toFixed(1).replace(".", ",")} Monate` : "Level 06–13, noch nicht abgerechnet")}
+        ${kachel(eur(fSumme), "Offene Forderungen", `${forderungen.length} Rechnungen unbezahlt`)}
       </section>
+
+      <div class="cockpit-raster">
+        <section class="panel"><h2 class="panel-titel">Kapazität · nächste 8 Wochen <small>laufende Baustellen je Monteur (Baustart bis Abnahme)</small></h2>
+          <div class="tab-wrap ohne-rand"><table class="kap"><thead><tr><th></th>${wochen.map((w) => `<th>KW ${kw(w)}<small>${fKurz(w)}</small></th>`).join("")}</tr></thead>
+          <tbody>${kap.map((z) => `<tr><th scope="row">${esc(z.name)}</th>${z.wochen.map((l) => `<td class="${l.length > 1 ? "voll" : l.length ? "belegt" : ""}">${l.map((b) => `<a href="#/projekt/${b.p.id}" title="${esc(anzeigeName(b.p))}">${esc(b.p.kunde.nachname)}</a>`).join("")}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="9" class="leise">Keine geplanten Baustellen.</td></tr>`}</tbody></table></div>
+          <p class="vb-max">Doppelt belegte Wochen sind markiert. Zuweisung im Projekt unter Akte → Team.</p></section>
+        <div class="spalte">
+          <section class="panel"><h2 class="panel-titel">Vertriebstrichter <small>Anfragen im Zeitraum</small></h2>
+            <ul class="hbalken trichter">${trichter.map((t, i) => `<li tabindex="0"><span class="hb-label">${esc(t.l)}</span><span class="hb-spur"><span class="hb-balken" style="width:${Math.max(t.n ? 2 : 0, (t.n / maxT) * 100)}%"></span></span>
+              <span class="hb-wert">${t.n}</span><span class="tip">${i ? `${trichter[i - 1].n ? prozent(t.n / trichter[i - 1].n) : "—"} von „${esc(trichter[i - 1].l)}“` : `${t.n} Anfragen`}</span></li>`).join("")}</ul></section>
+          <section class="panel"><h2 class="panel-titel">Offene Forderungen</h2>
+            <table class="kz-tab"><tbody>${forderungen.slice(0, 6).map((f) => `<tr><td><a href="#/projekt/${f.p.id}">${esc(anzeigeName(f.p))}</a><br><small class="leise">${f.art}${f.seit ? ` · seit ${tageText(tage(f.seit, jetzt))}` : ""}</small></td><td class="r">${eur(f.betrag)}</td></tr>`).join("") || '<tr><td class="leise">Alles bezahlt.</td></tr>'}</tbody></table>
+            ${forderungen.length > 6 ? `<p class="vb-max">+ ${forderungen.length - 6} weitere</p>` : ""}</section>
+        </div>
+      </div>
+
       <div class="cockpit-raster">
         <section class="panel"><h2 class="panel-titel">Wo die Zeit hingeht <small>Ø Tage je Level</small></h2>
           <ul class="hbalken">${proLevel.map((x) => `<li tabindex="0"><span class="hb-label">${zwei(x.ph.nr)} ${esc(x.ph.titel)}</span>
@@ -482,15 +558,16 @@
           <section class="panel"><h2 class="panel-titel">Umsatz je Monat <small>abgeschlossene Bäder, netto</small></h2>
             <div class="vbalken" aria-label="Umsatz je Monat">${monate.map((m) => `<div class="vb" tabindex="0"><span class="vb-spur"><span class="vb-balken" style="height:${m.summe ? Math.max(3, (m.summe / maxM) * 100) : 0}%"></span></span><span class="vb-monat">${MON[m.d.getMonth()]}</span>
               <span class="tip">${MON[m.d.getMonth()]} ${m.d.getFullYear()}: ${eur(m.summe)} · ${m.n} ${m.n === 1 ? "Bad" : "Bäder"}</span></div>`).join("")}</div>
-            <p class="vb-max">Höchster Monat: ${eur(Math.max(...monate.map((m) => m.summe)))}</p></section>
+            <p class="vb-max">Höchster Monat: ${eur(Math.max(...monate.map((m) => m.summe)))} · Ø ${eur(monatsSchnitt)}</p></section>
           <section class="panel"><h2 class="panel-titel">Woher die Anfragen kommen</h2>
             <table class="kz-tab"><thead><tr><th>Kontaktweg</th><th>Anfragen</th><th>Aufträge</th><th>Quote</th></tr></thead><tbody>
             ${Object.entries(wege).sort((a, b) => b[1].n - a[1].n).map(([k, w]) => `<tr><td>${esc(k)}</td><td>${w.n}</td><td>${w.auftrag}</td><td>${w.auftrag + w.verloren ? prozent(w.auftrag / (w.auftrag + w.verloren)) : "—"}</td></tr>`).join("") || '<tr><td colspan="4" class="leise">Noch keine Anfragen im Zeitraum.</td></tr>'}</tbody></table></section>
         </div>
       </div>
+
       <section class="panel"><h2 class="panel-titel">Abgeschlossene Bäder</h2>
         <div class="tab-wrap ohne-rand"><table class="kz-tab breit"><thead><tr><th>Kunde</th><th>Erstkontakt</th><th>Abschluss</th><th>Dauer</th><th class="r">Umsatz</th><th class="r">Kosten</th><th class="r">Deckungsbeitrag</th><th class="r">Marge</th></tr></thead><tbody>
-        ${fertig.sort((a, b) => abschlussZeit(b) - abschlussZeit(a)).map((p) => { const g = geld(p), a = levelZeit(p, ersteNr), e = abschlussZeit(p); return `<tr><td><a href="#/projekt/${p.id}">${esc(anzeigeName(p))}</a></td><td>${a ? fDatum(new Date(a)) : "—"}</td><td>${e ? fDatum(new Date(e)) : "—"}</td><td>${tageText(tage(a, e))}</td>
+        ${W.fertig.sort((a, b) => abschlussZeit(b) - abschlussZeit(a)).map((p) => { const g = geld(p), a = levelZeit(p, ersteNr), e = abschlussZeit(p); return `<tr><td><a href="#/projekt/${p.id}">${esc(anzeigeName(p))}</a></td><td>${a ? fDatum(new Date(a)) : "—"}</td><td>${e ? fDatum(new Date(e)) : "—"}</td><td>${tageText(tage(a, e))}</td>
           <td class="r">${eur(g.umsatz || null)}</td><td class="r">${eur(g.kosten || null)}</td><td class="r">${g.umsatz && g.hatKosten ? eur(g.db) : "—"}</td><td class="r">${prozent(g.marge)}</td></tr>`; }).join("") || '<tr><td colspan="8" class="leise">Im Zeitraum wurde noch kein Bad abgeschlossen.</td></tr>'}</tbody></table></div></section>
     </div>`;
   }
@@ -759,6 +836,9 @@
       const start = levelZeit(p, ersteNr), auftragAm = levelZeit(p, 6), ende = abschlussZeit(p);
       inhalt = `<p class="leise klein-text">Nur für die Geschäftsführung sichtbar. Werte netto in Euro, z. B. aus ${esc(cfg().programme.erp)}.</p>
         <p class="q-gruppe">Umsatz</p><div class="felder">${ZAHLFELDER.filter((f) => !f.kosten).map(feld).join("")}</div>
+        <p class="q-gruppe">Zahlungseingang</p><div class="felder">
+          <div class="feld"><label for="z-ab">Abschlag bezahlt am</label><input class="eingabe" id="z-ab" type="date" data-zahl="abschlagBezahlt" value="${esc(z.abschlagBezahlt || "")}"></div>
+          <div class="feld"><label for="z-sr">Schlussrechnung bezahlt am</label><input class="eingabe" id="z-sr" type="date" data-zahl="rechnungBezahlt" value="${esc(z.rechnungBezahlt || "")}"></div></div>
         <p class="q-gruppe">Kosten</p><div class="felder">${ZAHLFELDER.filter((f) => f.kosten).map(feld).join("")}</div>
         <dl class="infos zahl-summe"><dt>Kosten gesamt</dt><dd>${eur(g.kosten || null)}</dd><dt>Deckungsbeitrag</dt><dd>${g.umsatz && g.kosten ? eur(g.db) : "—"}</dd><dt>Marge</dt><dd>${prozent(g.marge)}</dd></dl>
         <p class="q-gruppe">Dauer</p><dl class="infos"><dt>Erstkontakt</dt><dd>${start ? fDatum(new Date(start)) : "—"}</dd><dt>Auftrag (Level 06)</dt><dd>${auftragAm ? `${fDatum(new Date(auftragAm))} · nach ${tageText(tage(start, auftragAm))}` : "—"}</dd>
@@ -1128,6 +1208,9 @@
         <section class="panel"><h3>Programme</h3><div class="felder drei">
           ${Object.entries(c.programme).map(([k, v]) => f("programme." + k, { erp: "Warenwirtschaft / ERP", cad: "Badplanung (CAD)", app3d: "3D-App für Kunden", badrechner: "Kostenrechner" }[k] || k, v)).join("")}
         </div></section>
+        <section class="panel"><h3>Ziele</h3><p class="leise">Erscheinen nur auf der Seite „Unternehmen“ der Geschäftsführung.</p><div class="felder drei">
+          ${f("ziele.jahresumsatz", `Umsatzziel ${new Date().getFullYear()} (netto, €)`, (c.ziele || {}).jahresumsatz || "", "number")}
+        </div></section>
         <section class="panel"><h3>Fristen (Tage)</h3><div class="felder drei">
           ${f("fristen.erinnerungVorErstgespraech", "Fotos fehlen – Tage vor Erstgespräch", c.fristen.erinnerungVorErstgespraech, "number")}
           ${f("fristen.angebotsverfolgung", "Angebotsverfolgung – Tage nach Besprechung", c.fristen.angebotsverfolgung, "number")}
@@ -1172,7 +1255,7 @@
       const level = {}; let tt = Date.now() - (ph * 6 + 4) * TAG;
       PHASEN.filter((x) => x.nr <= ph).forEach((x) => { level[x.nr] = tt; tt += 6 * TAG; });
       const p = neuesProjekt(kunde, { demo: true, phase: ph, angelegt: level[ersteNr], level, ...extra });
-      if (istGF() && ph >= 4) { const w = 16000 + ph * 900; S.zahlen[p.id] = { angebot: w, ...(ph >= 6 ? { auftrag: w } : {}) }; Daten.zahlenSpeichern(p.id, S.zahlen[p.id]); }
+      if (istGF() && ph >= 4) { const w = 16000 + ph * 900; S.zahlen[p.id] = { angebot: w, ...(ph >= 6 ? { auftrag: w } : {}), ...(ph >= 11 ? { abschlag: Math.round(w * 0.3) } : {}) }; Daten.zahlenSpeichern(p.id, S.zahlen[p.id]); }
       return p;
     };
     /* abgeschlossene und abgesagte Bäder mit Verlauf und Zahlen – damit „Kennzahlen“ etwas zeigt */
@@ -1190,7 +1273,8 @@
       PHASEN.forEach((ph, k) => { level[ph.nr] = t; t += (DAUER[k] + ((i * 3 + k) % 5) - 2) * TAG; });
       const p = neuesProjekt({ anrede, vorname, nachname, ort }, { demo: true, phase: PHASEN[N - 1].nr, status: "abgeschlossen", angelegt: start, level, abgeschlossenAm: t,
         projektnr: `B-2026-00${i + 1}`, zustaendig: pl[i % 2] || "", formulare: { bestandsaufnahme: { werte: { kontakt } } } });
-      if (istGF()) { S.zahlen[p.id] = { angebot: umsatz, auftrag: umsatz, rechnung: umsatz, material: Math.round(kosten * 0.55), sub: Math.round(kosten * 0.2), lohn: Math.round(kosten * 0.22), sonst: Math.round(kosten * 0.03) }; Daten.zahlenSpeichern(p.id, S.zahlen[p.id]); }
+      const bez = isoTag(new Date(t + 12 * TAG));
+      if (istGF()) { S.zahlen[p.id] = { angebot: umsatz, auftrag: umsatz, abschlag: Math.round(umsatz * 0.3), abschlagBezahlt: bez, rechnung: Math.round(umsatz * 0.7), ...(i < 5 ? { rechnungBezahlt: bez } : {}), material: Math.round(kosten * 0.55), sub: Math.round(kosten * 0.2), lohn: Math.round(kosten * 0.22), sonst: Math.round(kosten * 0.03) }; Daten.zahlenSpeichern(p.id, S.zahlen[p.id]); }
     });
     [["Herr", "Peter", "Absage", 200, "Website / Badrechner"], ["Frau", "Maria", "Vergleich", 100, "Social Media"]].forEach(([anrede, vorname, nachname, vor, kontakt]) =>
       neuesProjekt({ anrede, vorname, nachname, ort: "71088 Holzgerlingen" }, { demo: true, phase: 5, status: "verloren", angelegt: Date.now() - vor * TAG, level: { 1: Date.now() - vor * TAG }, formulare: { bestandsaufnahme: { werte: { kontakt } } } }));
@@ -1259,7 +1343,7 @@
     const e = ebene();
     const punkte = e === "partner" ? [["cockpit", "Meine Einsätze", "projekte"]]
       : e === "monteur" ? [["cockpit", "Meine Baustellen", "projekte"]]
-      : [["cockpit", "Cockpit", "cockpit"], ["projekte", "Projekte", "projekte"], ...(istGF() ? [["kennzahlen", "Kennzahlen", "kennzahlen"], ["einrichtung", "Einrichtung", "einrichtung"]] : [])];
+      : [["cockpit", "Cockpit", "cockpit"], ["projekte", "Projekte", "projekte"], ...(istGF() ? [["kennzahlen", "Unternehmen", "kennzahlen"], ["einrichtung", "Einrichtung", "einrichtung"]] : [])];
     $(".nav").innerHTML = punkte.map(([id, l, i]) => `<a href="#/${id}" data-nav="${id}"><span class="nav-i i-${i}" aria-hidden="true"></span>${l}</a>`).join("");
     $(".neu-knopf").hidden = !istBuero();
   }
@@ -1509,7 +1593,7 @@
     }
     if (el.dataset.zahl && p && istGF()) {
       const z = { ...(S.zahlen[p.id] || {}) };
-      if (el.value === "") delete z[el.dataset.zahl]; else z[el.dataset.zahl] = Number(el.value);
+      if (el.value === "") delete z[el.dataset.zahl]; else z[el.dataset.zahl] = el.type === "date" ? el.value : Number(el.value);
       S.zahlen[p.id] = z;
       try { await Daten.zahlenSpeichern(p.id, z); } catch (err) { return toast("Zahlen nicht gespeichert", "fehler"); }
       $("#akte").innerHTML = akte(p); return;

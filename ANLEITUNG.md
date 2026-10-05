@@ -39,6 +39,7 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
 | **Cockpit** | Zahlen je Abschnitt, was **fällig** ist (Nachfassen, Erinnerungen), was **als Nächstes** zu tun ist (je Projekt der nächste offene Schritt), **Neu vom Kunden**, Termine der nächsten 14 Tage, Fliesenspiegel aller Bäder. |
 | **Projekte** | Alle Bäder nach Abschnitt, mit Suche und Filtern. |
 | **Projekt** | Die Spielfläche: oben die Level-Karte, links die Schritte des aktuellen Levels, rechts die Akte (Dateien-Ordner, Kunde, Termine, Verlauf). |
+| **Unternehmen** | (nur Geschäftsführung) Jahresziel, Umsatz, Deckungsbeitrag, Quote, Dauer, Auftragsbestand, offene Forderungen, Kapazität der nächsten 8 Wochen, Vertriebstrichter — jeweils mit Vergleich zum Vorzeitraum. Euro-Beträge pro Projekt unter Akte → Zahlen. |
 | **Einrichtung** | (nur Geschäftsführung) Firma, Farben, Ebenen, Team, externe Partner, Programme, Fristen, Cloud, Sicherung. |
 | **Meine Baustellen / Meine Einsätze** | Startseite für Monteure bzw. externe Partner. |
 

@@ -90,6 +90,11 @@ window.FIRMA = {
     portalUrl: "",
   },
 
+  /* Ziele — nur auf der Seite „Unternehmen" (Geschäftsführung) sichtbar */
+  ziele: {
+    jahresumsatz: 0,                  // Umsatzziel netto in € (0 = kein Ziel)
+  },
+
   /* Fristen in Tagen — steuern das Cockpit */
   fristen: {
     erinnerungVorErstgespraech: 3,    // Fotos & Maße nachfragen
