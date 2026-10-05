@@ -42,6 +42,18 @@
   }
 
   /* Status eines Formulars: wie viele Pflichtfelder sind erfüllt? */
+  /* Feste Zeilen + Kopien („Waschtisch 1/2 …“) + freie eigene Zeilen in Anzeige-Reihenfolge */
+  function tabellenZeilen(f, rows) {
+    const fest = f.zeilen.length, out = [];
+    f.zeilen.forEach((z, i) => {
+      const kopien = rows.map((r, k) => ({ r, k })).filter((x) => x.k >= fest && x.r && x.r._nach === i);
+      out.push({ label: kopien.length ? `${z} 1` : z, r: rows[i] || {}, i, basis: i });
+      kopien.forEach((x, n) => out.push({ label: x.r._label || `${z} ${n + 2}`, kopie: true, r: x.r, i: x.k, basis: i }));
+    });
+    rows.forEach((r, k) => { if (k >= fest && r && r._nach === undefined) out.push({ eigen: true, r, i: k }); });
+    return out;
+  }
+
   function status(id, p, dateien = []) {
     const d = def(id); def.aktuell = d;
     const w = werteVon(p, id);
@@ -96,9 +108,7 @@
       case "tabelle": {
         const rows = Array.isArray(v) ? v : [];
         const fest = f.zeilen ? f.zeilen.length : 0;
-        const zeilen = f.zeilen
-          ? [...f.zeilen.map((z, i) => ({ label: z, r: rows[i] || {}, i })), ...rows.slice(fest).map((r, k) => ({ eigen: true, r: r || {}, i: fest + k }))]
-          : rows.map((r, i) => ({ r, i }));
+        const zeilen = f.zeilen ? tabellenZeilen(f, rows) : rows.map((r, i) => ({ r, i }));
         const zelle = (s, r, i) => {
           const val = r[s.id];
           const a = `data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="${esc(s.id)}"`;
@@ -107,7 +117,7 @@
           return `<td><input class="eingabe" ${a} value="${esc(val)}"${s.typ === "zahl" ? ' inputmode="decimal"' : ""} aria-label="${esc(s.titel)}"></td>`;
         };
         return wrap(`${lab}<div class="tab-wrap"><table class="ff-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}${!f.zeilen || rows.length > fest ? "<th></th>" : ""}</tr></thead>
-          <tbody>${zeilen.map(({ label, eigen, r, i }) => `<tr${eigen ? ' class="eigen"' : ""}>${label ? `<th scope="row">${esc(label)}</th>` : eigen ? `<th scope="row"><input class="eingabe" data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="_label" value="${esc(r._label || "")}" placeholder="Eigene Zeile" aria-label="Bezeichnung"></th>` : ""}${f.spalten.map((s) => zelle(s, r, i)).join("")}${!f.zeilen || eigen ? `<td class="mitte"><button type="button" class="btn klein still" data-tab-weg="${esc(f.id)}" data-zeile="${i}" aria-label="Zeile entfernen">✕</button></td>` : f.zeilen && rows.length > fest ? "<td></td>" : ""}</tr>`).join("")}</tbody></table></div>
+          <tbody>${zeilen.map(({ label, eigen, kopie, basis, r, i }) => `<tr class="${eigen ? "eigen" : ""}${kopie ? " kopie" : ""}">${label && !eigen ? `<th scope="row"><span class="tz-label">${esc(label)}</span>${f.zeilen && !kopie ? `<button type="button" class="tz-plus" data-tab-plus="${esc(f.id)}" data-nach="${basis}" title="Weitere Zeile „${esc(f.zeilen[basis])}“ hinzufügen" aria-label="Weitere Zeile ${esc(f.zeilen[basis])}">+</button>` : ""}</th>` : eigen ? `<th scope="row"><input class="eingabe" data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="_label" value="${esc(r._label || "")}" placeholder="Eigene Zeile" aria-label="Bezeichnung"></th>` : ""}${f.spalten.map((s) => zelle(s, r, i)).join("")}${!f.zeilen || eigen || kopie ? `<td class="mitte"><button type="button" class="btn klein still" data-tab-weg="${esc(f.id)}" data-zeile="${i}" aria-label="Zeile entfernen">✕</button></td>` : f.zeilen && rows.length > fest ? "<td></td>" : ""}</tr>`).join("")}</tbody></table></div>
           <button type="button" class="btn klein" data-tab-neu="${esc(f.id)}">${f.zeilen ? "+ Eigene Zeile" : "+ Zeile"}</button>`, "breit-tab");
       }
       case "checkliste": {
@@ -230,7 +240,7 @@
       if (f.typ === "abschnitt") return `<h3>${esc(f.titel)}</h3>`;
       if (f.typ === "tabelle") {
         const rows = Array.isArray(v) ? v : [];
-        const zeilen = f.zeilen ? [...f.zeilen.map((z, i) => ({ label: z, r: rows[i] || {} })), ...rows.slice(f.zeilen.length).filter((r) => r && Object.values(r).some((x) => x)).map((r) => ({ label: r._label || "Eigene Zeile", r }))] : rows.map((r) => ({ r }));
+        const zeilen = f.zeilen ? tabellenZeilen(f, rows).map((z) => ({ label: z.eigen ? (z.r._label || "Eigene Zeile") : z.label, r: z.r })) : rows.map((r) => ({ r }));
         if (!zeilen.length) return `<div class="d-zeile"><b>${esc(f.label)}</b><span class="d-leer">keine Einträge</span></div>`;
         return `<table class="d-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}</tr></thead><tbody>${zeilen.map(({ label, r }) => `<tr>${label ? `<th>${esc(label)}</th>` : ""}${f.spalten.map((s) => `<td>${s.typ === "haken" ? (r[s.id] ? "✓" : "") : esc(r[s.id] || "")}</td>`).join("")}</tr>`).join("")}</tbody></table>`;
       }

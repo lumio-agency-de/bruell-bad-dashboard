@@ -87,7 +87,9 @@
     _speichernKonten(l) { schreiben("baddashboard:konten", l); },
     ersteinrichtungNoetig() { return !this._konten().some((k) => k.ebene === "geschaeftsfuehrung" && k.aktiv !== false); },
     async start() {
-      const email = lesen("baddashboard:sitzung", null);
+      let email = null;
+      try { email = JSON.parse(sessionStorage.getItem("baddashboard:sitzung")); } catch (e) { /* kein Tab-Speicher */ }
+      email = email || lesen("baddashboard:sitzung", null);
       const k = email && this._konten().find((x) => x.email === email && x.aktiv !== false);
       this.mitglied = normMitglied(k); this.angemeldet = !!k; this.nutzer = k ? k.benutzer : null;
       return this.angemeldet;
@@ -98,9 +100,22 @@
       if (k.aktiv === false) throw new Error("Dieses Konto ist gesperrt. Bitte an die Geschäftsführung wenden.");
       k.letzterLogin = new Date().toISOString(); this._speichernKonten(l);
       schreiben("baddashboard:sitzung", email);
+      try { sessionStorage.setItem("baddashboard:sitzung", JSON.stringify(email)); } catch (e) { /* egal */ }
       this.mitglied = normMitglied(k); this.angemeldet = true; this.nutzer = k.benutzer;
     },
-    async abmelden() { try { localStorage.removeItem("baddashboard:sitzung"); } catch (e) { /* egal */ } this.angemeldet = false; this.mitglied = null; },
+    async abmelden() { try { localStorage.removeItem("baddashboard:sitzung"); sessionStorage.removeItem("baddashboard:sitzung"); } catch (e) { /* egal */ } this.angemeldet = false; this.mitglied = null; },
+    /* Schreibschutz (lokal: zwischen Tabs dieses Browsers) */
+    async sperreHolen(res, name, erzwingen) {
+      const l = lesen("baddashboard:sperren", {}), v = l[res], ich = this.mitglied.id, jetzt = Date.now();
+      if (v && v.bis > jetzt && v.wer !== ich && !(erzwingen && this.mitglied.ebene === "geschaeftsfuehrung")) return { frei: false, wer: v.wer, name: v.name, seit: v.seit };
+      l[res] = { wer: ich, name, seit: v && v.wer === ich && v.bis > jetzt ? v.seit : jetzt, bis: jetzt + 90000 };
+      schreiben("baddashboard:sperren", l);
+      return { frei: true };
+    },
+    async sperreFreigeben(res) {
+      const l = lesen("baddashboard:sperren", {});
+      if (l[res] && this.mitglied && l[res].wer === this.mitglied.id) { delete l[res]; schreiben("baddashboard:sperren", l); }
+    },
     async passwortAendern(neu) {
       if (String(neu).length < 8) throw new Error("Mindestens 8 Zeichen.");
       const l = this._konten(), k = l.find((x) => x.email === this.mitglied.email);
@@ -230,6 +245,12 @@
         await this._mitgliedLaden(this.nutzer);
       },
       async abmelden() { await sb.auth.signOut(); this.angemeldet = false; this.mitglied = null; },
+      async sperreHolen(res, name, erzwingen) {
+        const { data, error } = await sb.rpc("sperre_holen", { p_ressource: res, p_name: name, p_erzwingen: !!erzwingen });
+        if (error) throw error;
+        return data && data.seit ? { ...data, seit: new Date(data.seit).getTime() } : data;
+      },
+      async sperreFreigeben(res) { await sb.rpc("sperre_freigeben", { p_ressource: res }); },
       async passwortAendern(neu) {
         if (String(neu).length < 8) throw new Error("Mindestens 8 Zeichen.");
         const { error } = await sb.auth.updateUser({ password: neu });

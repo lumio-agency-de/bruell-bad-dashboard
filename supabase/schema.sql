@@ -294,6 +294,46 @@ grant execute on function public.partner_auftraege() to authenticated;
 grant execute on function public.partner_melden(text, boolean, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- SCHREIBSCHUTZ — wer gerade ein Projekt bearbeitet (läuft nach 90 s ohne Lebenszeichen ab)
+-- ---------------------------------------------------------------------------
+create table if not exists public.sperren (
+  ressource text primary key,
+  wer       text not null,
+  name      text,
+  seit      timestamptz not null default now(),
+  bis       timestamptz not null
+);
+alter table public.sperren enable row level security;   -- nur über die Funktionen unten
+
+create or replace function public.sperre_holen(p_ressource text, p_name text, p_erzwingen boolean default false)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare
+  v sperren;
+  v_ich text := ich_id();
+begin
+  if v_ich is null or ich_ebene() not in ('geschaeftsfuehrung', 'planung', 'monteur') then return jsonb_build_object('frei', false); end if;
+  select * into v from sperren where ressource = p_ressource;
+  if found and v.bis > now() and v.wer <> v_ich and not (p_erzwingen and ist_gf()) then
+    return jsonb_build_object('frei', false, 'wer', v.wer, 'name', v.name, 'seit', v.seit);
+  end if;
+  insert into sperren (ressource, wer, name, seit, bis) values (p_ressource, v_ich, p_name, now(), now() + interval '90 seconds')
+  on conflict (ressource) do update set
+    seit = case when sperren.wer = v_ich and sperren.bis > now() then sperren.seit else now() end,
+    wer = v_ich, name = p_name, bis = now() + interval '90 seconds';
+  return jsonb_build_object('frei', true);
+end $$;
+
+create or replace function public.sperre_freigeben(p_ressource text) returns boolean
+language sql security definer set search_path = public as $$
+  delete from sperren where ressource = p_ressource and wer = ich_id() returning true
+$$;
+
+revoke all on function public.sperre_holen(text, text, boolean) from public;
+revoke all on function public.sperre_freigeben(text) from public;
+grant execute on function public.sperre_holen(text, text, boolean) to authenticated;
+grant execute on function public.sperre_freigeben(text) to authenticated;
+
+-- ---------------------------------------------------------------------------
 -- KONTEN — die Geschäftsführung verwaltet Zugänge direkt im Dashboard.
 -- Benutzername ohne „@“ wird intern zu <name>@konto.bad-dashboard.de.
 -- ---------------------------------------------------------------------------

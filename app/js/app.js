@@ -214,6 +214,7 @@
     }, 350);
   }
   function aendern(p, fn, log) {
+    if (gesperrt(p)) { toast(`Schreibgeschützt – ${S.sperre.name || "jemand anderes"} bearbeitet gerade`, "fehler"); return false; }
     fn(p);
     if (log) { p.verlauf = p.verlauf || []; p.verlauf.unshift({ ts: Date.now(), text: log, von: S.ich ? S.ich.name : "" }); }
     speichern(p);
@@ -267,6 +268,30 @@
     if (p.status === "abgeschlossen") return "Abgeschlossen";
     const st = phaseStatus(p, p.phase);
     return st.komplett ? "Bereit für das nächste Level" : ersetzen(st.offen[0].s.titel);
+  }
+
+  /* ---------- Schreibschutz: ein Projekt bearbeitet immer nur eine Person ---------- */
+  const gesperrt = (p) => !!(p && S.sperre && S.sperre.pid === p.id && !S.sperre.frei);
+  const sperrtMit = () => istBuero() || ebene() === "monteur";
+  async function sperreAktualisieren(pid, erzwingen) {
+    if (!sperrtMit() || !pid) { S.sperre = null; return; }
+    let r;
+    try { r = await Daten.sperreHolen(pid, S.ich.name, erzwingen); } catch (e) { return; }
+    const vorher = S.sperre && S.sperre.pid === pid ? S.sperre.frei : null;
+    S.sperre = { pid, ...r };
+    if (vorher !== null && vorher !== r.frei) {
+      toast(r.frei ? "Das Projekt ist jetzt frei – du kannst bearbeiten." : `${r.name || "Jemand"} hat die Bearbeitung übernommen – nur noch mitlesen.`, r.frei ? undefined : "fehler");
+      if (!beschaeftigt()) render();
+    }
+  }
+  async function sperreLoslassen(pid) { if (pid && sperrtMit()) { try { await Daten.sperreFreigeben(pid); } catch (e) { /* läuft ab */ } } }
+  const aktuellePid = () => { const r = route(); return r.name === "projekt" && ebene() !== "partner" ? r.arg : null; };
+  setInterval(() => { const pid = aktuellePid(); if (pid && S.ich) sperreAktualisieren(pid); }, 30000);
+  window.addEventListener("pagehide", () => { const pid = aktuellePid(); if (pid) sperreLoslassen(pid); });
+  function sperrBanner(p) {
+    if (!gesperrt(p)) return "";
+    const seit = S.sperre.seit ? new Date(S.sperre.seit) : null;
+    return `<div class="sperr-banner" role="status"><span class="schloss-mini" aria-hidden="true"></span><span><b>Schreibgeschützt</b> – ${esc(S.sperre.name || "Jemand")} bearbeitet dieses Projekt${seit ? ` seit ${fUhr(seit)} Uhr` : ""}. Du kannst mitlesen; sobald es frei ist, kannst du hier weiterarbeiten.</span>${istGF() ? `<button class="btn klein" data-aktion="sperre-uebernehmen">Bearbeitung übernehmen</button>` : ""}</div>`;
   }
 
   /* ---------- Arbeitszeit: Timer je Person und Projekt ---------- */
@@ -756,7 +781,8 @@
     if (!p) return `<div class="seite"><header class="kopf"><div><p class="eyebrow">Projekt</p><h1>Nicht gefunden</h1></div></header><a class="btn" href="#/projekte">← Zu den Projekten</a></div>`;
     const nr = S.ansicht[id] && S.ansicht[id] <= p.phase ? S.ansicht[id] : p.phase;
     S.ansicht[id] = nr;
-    return `<div class="seite projekt" data-projekt="${p.id}">
+    return `<div class="seite projekt${gesperrt(p) ? " schreibschutz" : ""}" data-projekt="${p.id}">
+      ${sperrBanner(p)}
       ${projektKopf(p)}
       <nav class="karte" aria-label="Level">${levelKarte(p, nr)}</nav>
       <div class="arbeit">
@@ -978,10 +1004,11 @@
   function ansichtFormular(pid, fid) {
     const p = finde(pid), d = Formular.def(fid);
     if (!p || !d) return `<div class="seite"><a class="btn" href="#/projekte">← zurück</a></div>`;
-    const lesen = !darfFormular(fid);
+    const lesen = !darfFormular(fid) || gesperrt(p);
     if (!lesen && Formular.vorbelegen(fid, p)) speichern(p);
     const st = Formular.status(fid, p, dateienVon(p.id));
     return `<div class="seite formularseite${lesen ? " nur-lesen" : ""}" data-projekt="${p.id}" data-formular="${fid}">
+      ${sperrBanner(p)}
       <header class="f-kopf panel">
         <a class="btn still" href="#/projekt/${p.id}">← ${esc(anzeigeName(p))}</a>
         <div class="f-titel"><p class="eyebrow">${lesen ? "Formular · nur ansehen" : "Formular · wird automatisch gespeichert"}</p><h1>${esc(d.titel)}</h1></div>
@@ -1563,6 +1590,8 @@
     await laden();
     document.body.classList.remove("vorraum");
     S.kontenGeladen = false;
+    letztePid = aktuellePid();
+    if (letztePid) await sperreAktualisieren(letztePid);
     render();
   }
   const loginKopf = (unter) => `<img src="${esc(cfg().logo)}" alt="" class="login-logo"><h1>${esc(cfg().name)}</h1><p class="leise">${unter}</p>`;
@@ -1667,6 +1696,7 @@
   /* ---------- Hochladen ---------- */
   async function hochladen(p, kat, files) {
     files = [...files]; if (!files.length) return;
+    if (gesperrt(p)) return toast(`Schreibgeschützt – ${S.sperre.name || "jemand anderes"} bearbeitet gerade`, "fehler");
     $$(`[data-ablage="${kat}"] .drop`).forEach((z) => z.classList.add("laedt"));
     let ok = 0;
     for (const f of files) {
@@ -1732,6 +1762,10 @@
       const nr = Number(a.dataset.nr);
       if (nr > p.phase) { const li = a.closest(".lv"); li.classList.remove("wackeln"); void li.offsetWidth; li.classList.add("wackeln"); return toast(`Gesperrt – erst Level ${zwei(p.phase)} abschließen`); }
       S.ansicht[p.id] = nr; return teilRendern(p);
+    }
+    if (akt === "sperre-uebernehmen" && p && istGF()) {
+      if (!confirm(`Bearbeitung von ${S.sperre.name} übernehmen? Nicht gespeicherte Eingaben von ${S.sperre.name} können verloren gehen.`)) return;
+      await sperreAktualisieren(p.id, true); toast("Du bearbeitest jetzt dieses Projekt"); return render();
     }
     if (akt === "zeit-start" && p && zeitDarf()) {
       const lauf = meinLaufender();
@@ -1807,7 +1841,7 @@
       aendern(p, () => { const r = formularWerte(p, "restarbeiten"); r.offen = [...(r.offen || []), ...neu]; }, `${neu.length} Mängel in Restarbeiten übernommen`);
       return toast(`${neu.length} Mängel in Restarbeiten übernommen`);
     }
-    if (akt === "abmelden") { await Daten.abmelden(); location.hash = "#/cockpit"; location.reload(); return; }
+    if (akt === "abmelden") { await sperreLoslassen(aktuellePid()); await Daten.abmelden(); location.hash = "#/cockpit"; location.reload(); return; }
     if (akt === "passwort" && S.ich) return passwortDialog();
     if (akt === "demo-login") { $("#l-b").value = a.dataset.b; $("#l-pw").value = DEMO_PW; $("#l-pw").focus(); return; }
     if (akt === "konto-neu" && istGF()) return kontoNeuDialog(a.dataset.id);
@@ -1889,7 +1923,7 @@
   /* Formular-Bedienung (Knöpfe, Chips, Checklisten) */
   document.addEventListener("click", (e) => {
     const seite = e.target.closest(".formularseite"); if (!seite) return;
-    const b = e.target.closest("[data-ff-wahl],[data-ff-mehr],[data-check],[data-tab-neu],[data-tab-weg],[data-sign-weg],[data-sprung]");
+    const b = e.target.closest("[data-ff-wahl],[data-ff-mehr],[data-check],[data-tab-neu],[data-tab-plus],[data-tab-weg],[data-sign-weg],[data-sprung]");
     if (!b) return;
     if (b.hasAttribute("data-sprung")) { e.preventDefault(); const z = document.getElementById(b.getAttribute("href").slice(1)); if (z) z.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
     const p = finde(seite.dataset.projekt), fid = seite.dataset.formular, w = formularWerte(p, fid);
@@ -1908,6 +1942,12 @@
         const fd = Formular.def(fid).felder.find((x) => x.id === b.dataset.tabNeu);
         if (fd && fd.zeilen) while (rows.length < fd.zeilen.length) rows.push({});
         rows.push({});
+      }
+      else if (b.dataset.tabPlus) {
+        const rows = (w[b.dataset.tabPlus] = w[b.dataset.tabPlus] || []);
+        const fd = Formular.def(fid).felder.find((x) => x.id === b.dataset.tabPlus);
+        while (rows.length < fd.zeilen.length) rows.push({});
+        rows.push({ _nach: Number(b.dataset.nach) });
       }
       else if (b.dataset.tabWeg) { w[b.dataset.tabWeg].splice(Number(b.dataset.zeile), 1); }
       else if (b.dataset.signWeg) { delete w[b.dataset.signWeg]; }
@@ -2016,12 +2056,20 @@
     }
   });
 
+  let letztePid = null;
+  window.addEventListener("hashchange", async () => {
+    const pid = aktuellePid();
+    if (letztePid && letztePid !== pid) sperreLoslassen(letztePid);
+    if (pid && pid !== letztePid) { S.sperre = null; await sperreAktualisieren(pid); }
+    letztePid = pid;
+  });
   window.addEventListener("hashchange", () => { S.zeigeFehler = false; S.zeigeOffen = false; render(); window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); });
 
   /* ---------- Abgleich: Kolleg:innen & Kunden-Uploads ---------- */
   const beschaeftigt = () => $("#dlg").open || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));
   async function abgleich() {
     if (!Daten.angemeldet || !S.ich) return;
+    const sp = aktuellePid(); if (sp) await sperreAktualisieren(sp);
     let neu = false;
     try {
       if (ebene() === "partner") {
