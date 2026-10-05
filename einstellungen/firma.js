@@ -6,6 +6,8 @@
    Werte (gespeichert in der Datendatei bzw. im Browser).
 
    Für eine neue Firma: Werte ersetzen, Datei speichern, Dashboard neu laden.
+   Die Ebenen (Geschäftsführung, Planung, Monteur, Partner) und ihre Rechte
+   stehen am Ende dieser Datei.
    Die Rollen-Kürzel (badberater, badplanung …) werden im Ablauf als
    Platzhalter wie {badberater} verwendet — die Namen hier landen also
    automatisch überall im Handbuch.
@@ -35,14 +37,40 @@ window.FIRMA = {
     akzent: "#E99033",
   },
 
-  /* Team nach Rollen. kuerzel = steht hinter dem Kundenordner (z. B. „Müller KK") */
+  /* Team.
+       rolle    fachliche Rolle — im Ablauf als Platzhalter {badberater}, {badplanung} …
+       kuerzel  steht in der Projektliste und dient als Kennung
+       ebene    was die Person im Dashboard darf (siehe EBENEN unten):
+                geschaeftsfuehrung | planung | monteur
+       email    Login-E-Mail (nur im Cloud-Betrieb nötig) */
   team: [
-    { rolle: "badberater",      bezeichnung: "Badberater",       name: "Daniel Brüll",     kuerzel: "DB" },
-    { rolle: "badplanung",      bezeichnung: "Badplanerin",      name: "Karin Kaufmann",   kuerzel: "KK" },
-    { rolle: "badplanung",      bezeichnung: "Badplanerin",      name: "Judith Rapp",      kuerzel: "JR" },
-    { rolle: "projektleiter",   bezeichnung: "Projektleiter",    name: "Steven Wagner",    kuerzel: "SW" },
-    { rolle: "heizungsexperte", bezeichnung: "Heizungsexperte",  name: "André Winterfeld", kuerzel: "AW" },
+    { rolle: "badberater",      bezeichnung: "Badberater · Geschäftsführer", name: "Daniel Brüll",     kuerzel: "DB", ebene: "geschaeftsfuehrung", email: "" },
+    { rolle: "badplanung",      bezeichnung: "Badplanerin",      name: "Karin Kaufmann",   kuerzel: "KK", ebene: "planung", email: "" },
+    { rolle: "badplanung",      bezeichnung: "Badplanerin",      name: "Judith Rapp",      kuerzel: "JR", ebene: "planung", email: "" },
+    { rolle: "projektleiter",   bezeichnung: "Projektleiter",    name: "Steven Wagner",    kuerzel: "SW", ebene: "planung", email: "" },
+    { rolle: "heizungsexperte", bezeichnung: "Heizungsexperte",  name: "André Winterfeld", kuerzel: "AW", ebene: "planung", email: "" },
+    { rolle: "monteur",         bezeichnung: "Monteur",          name: "Monteur (Beispiel – Namen eintragen)", kuerzel: "MO", ebene: "monteur", email: "" },
   ],
+
+  /* Externe Partner (Subunternehmer). Sie sehen nur Projekte, denen sie im
+     Projekt unter „Team" zugewiesen sind — und davon nur Adresse, Termine,
+     Pläne und die Formulare ihres Gewerks. */
+  partner: [
+    { id: "p-elektro", firma: "Elektro-Partner (Beispiel)", gewerk: "Elektro", name: "", telefon: "", email: "" },
+    { id: "p-fliesen", firma: "Fliesen-Partner (Beispiel)", gewerk: "Fliesen", name: "", telefon: "", email: "" },
+  ],
+
+  /* Welche Formulare ein Partner je Gewerk sieht */
+  gewerke: {
+    "Elektro":            ["elektro", "projektuebersicht"],
+    "Fliesen":            ["fliesen", "projektuebersicht", "auswahl"],
+    "Abriss":             ["abriss", "projektuebersicht"],
+    "Maler / Trockenbau": ["projektuebersicht"],
+    "Spanndecke":         ["projektuebersicht"],
+    "Schreiner":          ["projektuebersicht", "auswahl"],
+    "Fensterbau":         ["projektuebersicht"],
+    "Sonstiges":          ["projektuebersicht"],
+  },
 
   /* Programme, die neben dem Dashboard weiterlaufen — im Ablauf als {programm.erp} … */
   programme: {
@@ -70,3 +98,19 @@ window.FIRMA = {
     kundenerinnerungVorBaustart: 7,
   },
 };
+
+/* ==========================================================================
+   EBENEN — wer darf was
+   Im Cloud-Betrieb werden diese Rechte zusätzlich von der Datenbank erzwungen
+   (supabase/schema.sql), die Texte hier dienen der Anzeige.
+   ========================================================================== */
+window.EBENEN = [
+  { id: "geschaeftsfuehrung", titel: "Geschäftsführung",
+    kann: ["Alle Projekte sehen und bearbeiten", "Interne Freigaben (z. B. Angebot geprüft)", "Einrichtung: Firma, Team, Partner, Rechte", "Projekte löschen", "Team-Auslastung im Cockpit"] },
+  { id: "planung", titel: "Planung / Bearbeitung",
+    kann: ["Alle Projekte sehen und bearbeiten", "Neue Anfragen anlegen, Level freischalten", "Kundenmails & Kundenlinks", "Monteure und Partner zuweisen"] },
+  { id: "monteur", titel: "Monteur",
+    kann: ["Nur zugewiesene Baustellen", "Besichtigung, Restarbeiten, Abnahmeprotokoll mit Unterschrift", "Fotos hochladen, Monteurmappe drucken", "Keine Angebote, Aufträge, Rechnungen"] },
+  { id: "partner", titel: "Externer Partner",
+    kann: ["Nur zugewiesene Einsätze", "Adresse, Termine, Pläne und die Formulare des eigenen Gewerks", "Fotos hochladen, „Gewerk erledigt“ melden", "Keine Preise, Notizen oder sonstigen Kundendaten"] },
+];

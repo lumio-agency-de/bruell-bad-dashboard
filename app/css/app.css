@@ -515,3 +515,79 @@ textarea.mail-text { min-height: 330px; font-size: .88rem; }
   .btn:active, .chip:active, .nav a:active, .thumb:active, .haken-k:active { transform: none; }
   .dlg, .toast { transition-property: opacity; }
 }
+
+/* ==========================================================================
+   Ebenen: Monteur, Partner, Team-Auslastung, Rechte
+   ========================================================================== */
+.btn.hell { background: transparent; color: #fff; border-color: color-mix(in oklab, #fff 32%, transparent); }
+.btn.hell:hover { border-color: #fff; }
+.sp-zeile { margin: 6px 0; }
+.ansicht-als { display: grid; gap: 4px; font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: color-mix(in oklab, #fff 62%, var(--tinte)); margin-bottom: 8px; }
+.ansicht-als .eingabe { font-size: .8rem; text-transform: none; letter-spacing: 0; font-weight: 500; padding: 6px 8px; background: color-mix(in oklab, #fff 10%, var(--tinte)); color: #fff; border-color: color-mix(in oklab, #fff 25%, transparent); }
+.ansicht-als option, .ansicht-als optgroup { color: var(--text); background: #fff; }
+.klein-text { font-size: .8rem; margin: 0 0 8px; }
+.gruen { color: var(--gruen); }
+.q-gruppe { font-size: .66rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--leise); margin: 10px 0 6px; }
+.q-gruppe:first-child { margin-top: 0; }
+.q-fremd { margin: 6px 0 0; font-size: .78rem; color: var(--leise); }
+.q-fremd::before { content: ""; display: inline-block; width: 8px; height: 7px; margin-right: 6px; background: currentColor; border-radius: 1px; vertical-align: 0; opacity: .6; }
+.quest.fremd .q-marker { border-style: dashed; }
+.quest.fremd.offen:not(.optional) .q-marker { border-color: var(--fuge-stark); color: var(--leise); }
+.chip small { font-size: .7rem; opacity: .7; margin-left: 2px; }
+.vom-kunden.partner { background: var(--akzent); color: var(--tinte); }
+.infos { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; margin: 0; font-size: .88rem; }
+.infos dt { color: var(--leise); font-size: .78rem; padding-top: 1px; }
+.infos dd { margin: 0; color: var(--tinte); }
+.infos a { color: var(--tinte); }
+.team-liste { list-style: none; margin: 0; padding: 0; }
+.team-liste li { display: grid; grid-template-columns: 24px 1fr; gap: 12px; align-items: start; padding: 9px 0; border-bottom: 1px dashed var(--fuge); }
+.team-liste b { display: block; font-weight: 600; color: var(--tinte); }
+.team-liste small { display: block; font-size: .76rem; color: var(--leise); }
+.team-liste small.gruen { color: var(--gruen); font-weight: 600; }
+.auslastung { list-style: none; margin: 0; padding: 0 18px 14px; }
+.auslastung li { display: grid; grid-template-columns: auto minmax(0, 1.3fr) minmax(0, 1fr) 22px; gap: 10px; align-items: center; padding: 6px 0; }
+.al-name { font-size: .86rem; font-weight: 600; color: var(--tinte); }
+.al-name small { display: block; font-weight: 400; font-size: .72rem; color: var(--leise); }
+.al-balken { height: 8px; background: var(--papier-2); border-radius: 99px; overflow: hidden; }
+.al-balken span { display: block; height: 100%; background: var(--tinte); border-radius: 99px; }
+.al-zahl { font: 400 1rem var(--serif); text-align: right; color: var(--tinte); }
+.karten { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; }
+.einsatz-karte { padding: 16px 18px; display: grid; gap: 12px; text-decoration: none; border-top: 4px solid var(--akzent); }
+.einsatz-karte.link { transition: border-color 160ms ease, transform 160ms var(--ease-out); }
+.einsatz-karte.link:hover { border-color: var(--tinte); border-top-color: var(--akzent); }
+.einsatz-karte.link:active { transform: scale(.99); }
+.einsatz-karte header { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
+.einsatz-karte h2 { font-size: 1.2rem; }
+.einsatz-karte header p { margin: 2px 0 0; font-size: .84rem; color: var(--leise); }
+.einsatz-karte .aktionen { margin-top: 0; }
+.einfach { margin: 0; padding-left: 18px; font-size: .86rem; }
+.panel-innen { padding: 0 18px 16px; }
+.einsatz-docs { padding: 0 18px 16px; display: grid; gap: 18px; }
+.einsatz-docs .d-seite { border: 1px solid var(--fuge-stark); border-radius: var(--radius); padding: 12px 14px; background: #fff; }
+.einsatz-docs .d-kopf { display: flex; align-items: center; gap: 10px; border-bottom: 2px solid var(--tinte); padding-bottom: 6px; margin-bottom: 8px; }
+.einsatz-docs .d-kopf img { width: 28px; height: 30px; object-fit: contain; }
+.einsatz-docs .d-kopf strong { display: block; font: 400 1.05rem var(--serif); color: var(--tinte); }
+.einsatz-docs .d-kopf span { font-size: .76rem; color: var(--leise); }
+.einsatz-docs h3 { font-size: .95rem; margin: 10px 0 4px; }
+.einsatz-docs .d-zeile { display: grid; grid-template-columns: 40% 1fr; gap: 8px; padding: 3px 0; border-bottom: 1px dotted var(--fuge-stark); font-size: .86rem; }
+.einsatz-docs .d-zeile b { font-weight: 600; color: var(--leise); }
+.einsatz-docs .d-leer { color: var(--fuge-stark); }
+.einsatz-docs .d-tab { width: 100%; border-collapse: collapse; font-size: .8rem; margin: 6px 0; }
+.einsatz-docs .d-tab th, .einsatz-docs .d-tab td { border: 1px solid var(--fuge-stark); padding: 4px 6px; text-align: left; }
+.einsatz-docs .d-tab thead th { background: var(--tinte-weich); }
+.einsatz-docs .d-fuss { display: none; }
+.einsatz-docs .d-sign { height: 40px; width: auto; }
+.einsatz textarea { margin-bottom: 4px; }
+.ebenen { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.ebene { border: 1px solid var(--fuge-stark); border-radius: var(--radius); padding: 12px 14px; background: #fff; border-top: 3px solid var(--tinte); }
+.ebene:nth-child(4) { border-top-color: var(--akzent); }
+.ebene b { font-family: var(--serif); font-weight: 400; font-size: 1rem; color: var(--tinte); }
+.ebene ul { margin: 8px 0 0; padding-left: 16px; font-size: .8rem; color: var(--text); }
+.ebene li + li { margin-top: 3px; }
+fieldset.f-flaeche { margin: 0; min-width: 0; }
+fieldset.f-flaeche[disabled] .drop, fieldset.f-flaeche[disabled] .btn[data-tab-neu], fieldset.f-flaeche[disabled] [data-tab-weg], fieldset.f-flaeche[disabled] [data-sign-weg] { display: none; }
+fieldset.f-flaeche[disabled] .chip:not(.an), fieldset.f-flaeche[disabled] .seg-k:not(.an) { opacity: .45; }
+fieldset.f-flaeche[disabled] .sign canvas { cursor: default; }
+@media (max-width: 1180px) { .ebenen { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 760px) { .ebenen { grid-template-columns: 1fr; } .karten { grid-template-columns: 1fr; } }
+[hidden] { display: none !important; }

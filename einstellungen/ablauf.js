@@ -20,6 +20,9 @@
      feld         ein Projektfeld ausfüllen                 { feld: "projektnr" | "zustaendig" | "downloadCode" }
 
    portal: [...]    → Ordner, in die der Kunde in diesem Level über seinen Link hochladen kann
+   ebene: [...]     → wer den Schritt erledigen darf (Standard: ["planung"]).
+                      Die Geschäftsführung darf immer alles.
+     team         Monteure & Partner dem Projekt zuweisen
    pflicht: false   → optionaler Schritt (blockiert nicht)
    wenn             → Schritt gilt nur, wenn eine Bedingung erfüllt ist:
                       { schritt: "id", wert: "option" }
@@ -94,7 +97,7 @@ window.ABLAUF = [
     nr: 3, titel: "Erstgespräch", abschnitt: "anfrage",
     ziel: "Wünsche aufnehmen und die Planung an eine Badplanerin übergeben.",
     schritte: [
-      { id: "notizen", typ: "formular", formular: "erstgespraech", titel: "Erstgesprächs-Notizen" },
+      { id: "notizen", typ: "formular", formular: "erstgespraech", titel: "Erstgesprächs-Notizen", ebene: ["planung", "geschaeftsfuehrung"] },
       { id: "skizze", typ: "dateien", kategorie: "skizzen", pflicht: false, titel: "Skizze fotografieren & hochladen" },
       { id: "planerin", typ: "feld", feld: "zustaendig", titel: "Zuständige Badplanerin festlegen" },
       { id: "ab-termin", typ: "termin", termin: "angebotsbesprechung", titel: "Termin Angebots- & Planungsbesprechung" },
@@ -110,7 +113,7 @@ window.ABLAUF = [
         hinweis: "Titel „Realisierung Ihres Traumbades“, Abteilung Bad/Sanitär, rote Farbe. Musterangebot Titel für Titel anpassen." },
       { id: "projektnr", typ: "feld", feld: "projektnr", titel: "Projektnummer aus {programm.erp}" },
       { id: "angebot", typ: "dateien", kategorie: "angebot", titel: "Angebot als PDF ablegen" },
-      { id: "freigabe-intern", typ: "erledigt", titel: "{badberater} hat Angebot & Planung geprüft" },
+      { id: "freigabe-intern", typ: "erledigt", titel: "{badberater} hat Angebot & Planung geprüft", ebene: ["geschaeftsfuehrung"] },
     ],
   },
   {
@@ -132,8 +135,8 @@ window.ABLAUF = [
     nr: 6, titel: "Baustellenbesichtigung", abschnitt: "auftrag",
     ziel: "Vor Ort aufmessen und alles für Planung und Monteure festhalten.",
     schritte: [
-      { id: "checkliste", typ: "formular", formular: "baustellenbesichtigung", titel: "Checkliste Baustellenbesichtigung" },
-      { id: "tuer", typ: "formular", formular: "tuer", titel: "Angaben zur Tür", wenn: { formular: "baustellenbesichtigung", feld: "tuertausch", wert: "ja" } },
+      { id: "checkliste", typ: "formular", formular: "baustellenbesichtigung", titel: "Checkliste Baustellenbesichtigung", ebene: ["planung", "monteur"] },
+      { id: "tuer", typ: "formular", formular: "tuer", titel: "Angaben zur Tür", ebene: ["planung", "monteur"], wenn: { formular: "baustellenbesichtigung", feld: "tuertausch", wert: "ja" } },
       { id: "masse", typ: "erledigt", titel: "Raummaße in {programm.cad} übernommen, Planung angepasst" },
       { id: "ma-termin", typ: "termin", termin: "materialauswahl", titel: "Termin Materialauswahl in der Ausstellung" },
     ],
@@ -187,6 +190,8 @@ window.ABLAUF = [
       { id: "baustart", typ: "termin", termin: "baustart", titel: "Umsetzungstermin (Baustart)" },
       { id: "plan", typ: "formular", formular: "baustellenplan", titel: "Subunternehmer & Ablauf einplanen" },
       { id: "abschlag", typ: "dateien", kategorie: "rechnungen", titel: "Abschlagsrechnung ablegen" },
+      { id: "team", typ: "team", titel: "Monteure & Partner zuweisen",
+        hinweis: "Nur zugewiesene Monteure und Partner sehen diese Baustelle – Partner nur Adresse, Termine, Pläne und ihr Gewerk." },
       { id: "mappe", typ: "erledigt", titel: "Monteurmappe geprüft und ausgedruckt",
         hinweis: "Über „Monteurmappe“ oben in der Akte: alle Formulare, Maße und Pläne auf einen Blick." },
     ],
@@ -196,8 +201,8 @@ window.ABLAUF = [
     ziel: "Kunden einstimmen, bauen, Restarbeiten erledigen.",
     schritte: [
       { id: "mail-baustart", typ: "mail", mail: "baustart", titel: "Kundenerinnerung 1 Woche vor Baustart" },
-      { id: "fotos-bau", typ: "dateien", kategorie: "baustelle", pflicht: false, titel: "Bilder & Notizen von der Baustelle" },
-      { id: "rest", typ: "formular", formular: "restarbeiten", titel: "Restarbeiten & Reklamationen erledigt" },
+      { id: "fotos-bau", typ: "dateien", kategorie: "baustelle", pflicht: false, titel: "Bilder & Notizen von der Baustelle", ebene: ["planung", "monteur", "partner"] },
+      { id: "rest", typ: "formular", formular: "restarbeiten", titel: "Restarbeiten & Reklamationen erledigt", ebene: ["planung", "monteur"] },
     ],
   },
   {
@@ -205,7 +210,7 @@ window.ABLAUF = [
     ziel: "Abnahme protokollieren und abrechnen.",
     schritte: [
       { id: "abnahme-termin", typ: "termin", termin: "abnahme", titel: "Abnahmetermin" },
-      { id: "protokoll", typ: "formular", formular: "abnahme", titel: "Abnahmeprotokoll mit Unterschrift" },
+      { id: "protokoll", typ: "formular", formular: "abnahme", titel: "Abnahmeprotokoll mit Unterschrift", ebene: ["planung", "monteur"] },
       { id: "rechnung", typ: "dateien", kategorie: "rechnungen", min: 2, titel: "Schlussrechnung ablegen",
         hinweis: "Zweite Rechnung im Ordner (nach der Abschlagsrechnung)." },
       { id: "mail-rechnung", typ: "mail", mail: "schlussrechnung", titel: "Schlussrechnung mit Bitte um Bewertung senden" },
@@ -221,10 +226,13 @@ window.ABLAUF = [
           { id: "erinnert", label: "Erinnert – keine Bewertung" },
           { id: "warten", label: "Noch warten – in 7 Tagen erinnern", wiedervorlage: 7, weiter: false },
         ] },
-      { id: "fotos-fertig", typ: "dateien", kategorie: "fertig", titel: "Bilder vom neuen Bad" },
+      { id: "fotos-fertig", typ: "dateien", kategorie: "fertig", titel: "Bilder vom neuen Bad", ebene: ["planung", "monteur"] },
       { id: "showroom", typ: "erledigt", titel: "Bilder in den Showroom geladen" },
       { id: "interview", typ: "entscheidung", pflicht: false, titel: "Interview für Social Media?",
         optionen: [{ id: "ja", label: "Ja, gemacht" }, { id: "nein", label: "Nein" }] },
     ],
   },
 ];
+
+/* Formulare, die Monteure ausfüllen dürfen (alle anderen sehen sie nur) */
+window.MONTEUR_FORMULARE = ["baustellenbesichtigung", "tuer", "restarbeiten", "abnahme"];

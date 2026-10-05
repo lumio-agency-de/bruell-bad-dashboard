@@ -15,6 +15,23 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
 - **Cloud**: Team-Login, alle Arbeitsplätze sehen dasselbe, Kunden laden über ihren
   Link von überall hoch. Einrichtung: `supabase/ANLEITUNG-CLOUD.md`.
 
+## Ebenen: wer sieht was
+
+| Ebene | Sieht | Darf |
+| --- | --- | --- |
+| **Geschäftsführung** | alles, plus Team-Auslastung im Cockpit | alles, inkl. Einrichtung (Firma, Team, Partner, Rechte), interne Freigaben, Projekte löschen |
+| **Planung / Bearbeitung** | alle Projekte; im Cockpit wahlweise nur die eigenen | Anfragen anlegen, Schritte erledigen, Level freischalten, Mails & Kundenlinks, Monteure/Partner zuweisen |
+| **Monteur** | „Meine Baustellen“ – nur zugewiesene Projekte, ohne Angebote, Aufträge, Rechnungen | Besichtigung, Restarbeiten, Abnahmeprotokoll (mit Unterschrift), Fotos, Monteurmappe |
+| **Externer Partner** | „Meine Einsätze“ – Adresse, Termine, Pläne und die Formulare seines Gewerks | Fotos hochladen, „Gewerk erledigt“ oder Hinweis ans Büro melden |
+
+- Wer was erledigen darf, steht an jedem Schritt in `einstellungen/ablauf.js` (`ebene: [...]`).
+  Schritte anderer Ebenen sind sichtbar, aber gesperrt („Erledigt: Planung / Bearbeitung“).
+- Monteure und Partner werden im Projekt zugewiesen: Level 10 „Monteure & Partner zuweisen“
+  oder jederzeit im Reiter **Team** der Akte. Dort erscheinen auch die Rückmeldungen der Partner.
+- Welche Formulare ein Partner sieht, hängt an seinem Gewerk (`gewerke` in `firma.js`).
+- **Lokal** lässt sich jede Ebene links unten über **„Ansicht als“** ausprobieren.
+  **In der Cloud** gilt die Ebene des angemeldeten Kontos, und die Datenbank erzwingt die Rechte.
+
 ## Bereiche
 
 | Bereich | Wofür |
@@ -22,7 +39,8 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
 | **Cockpit** | Zahlen je Abschnitt, was **fällig** ist (Nachfassen, Erinnerungen), was **als Nächstes** zu tun ist (je Projekt der nächste offene Schritt), **Neu vom Kunden**, Termine der nächsten 14 Tage, Fliesenspiegel aller Bäder. |
 | **Projekte** | Alle Bäder nach Abschnitt, mit Suche und Filtern. |
 | **Projekt** | Die Spielfläche: oben die Level-Karte, links die Schritte des aktuellen Levels, rechts die Akte (Dateien-Ordner, Kunde, Termine, Verlauf). |
-| **Einrichtung** | Firma, Farben, Team, Programme, Fristen, Cloud, Sicherung. |
+| **Einrichtung** | (nur Geschäftsführung) Firma, Farben, Ebenen, Team, externe Partner, Programme, Fristen, Cloud, Sicherung. |
+| **Meine Baustellen / Meine Einsätze** | Startseite für Monteure bzw. externe Partner. |
 
 **+ Neue Anfrage** (links oben) legt ein Projekt an und öffnet direkt die Bestandsaufnahme.
 
@@ -72,7 +90,7 @@ Cockpit unter **Neu vom Kunden**. Fotos werden dabei automatisch verkleinert.
 ## Auf eine andere Firma übertragen
 
 1. Ordner kopieren, `index.html` öffnen → **Einrichtung**: Firma, Farben, Team
-   (Rollen + Kürzel), Programme, Fristen eintragen → **Übernehmen**.
+   (Rollen, Kürzel, Ebene, Login-E-Mail), externe Partner, Programme, Fristen eintragen → **Übernehmen**.
 2. **firma.js herunterladen** und `einstellungen/firma.js` damit ersetzen.
 3. Logo als `app/img/logo.svg` (oder anderer Pfad in der Einrichtung).
 4. Cloud einrichten: `supabase/ANLEITUNG-CLOUD.md`.

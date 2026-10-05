@@ -116,6 +116,11 @@
       return t;
     },
     async abgleichen() { return false; },
+    /* Ebenen: lokal wählt man im Dashboard „Ansicht als …“ */
+    async ich() { try { return localStorage.getItem("baddashboard:ich") || null; } catch (e) { return null; } },
+    ichSetzen(id) { try { localStorage.setItem("baddashboard:ich", id); } catch (e) { /* egal */ } },
+    async mitgliederSpeichern() { return true; },
+    partnerAuftraege: null,  // lokal berechnet app.js den Auszug selbst
     /* Portal (lokal: gleicher Browser) */
     async portalInfo(t) {
       const pid = lesen(LS.links, {})[t];
@@ -136,6 +141,9 @@
      ===================================================================== */
   function Cloud(konf) {
     const sb = window.supabase.createClient(konf.url, konf.anonKey, { auth: { persistSession: true } });
+    /* Kundenportal immer anonym – auch wenn im selben Browser jemand vom Team angemeldet ist */
+    let anonym = null;
+    const sbKunde = () => (anonym = anonym || window.supabase.createClient(konf.url, konf.anonKey, { auth: { persistSession: false, autoRefreshToken: false, storageKey: "baddashboard-portal" } }));
     let stand = 0;
     return {
       modus: "cloud",
@@ -155,6 +163,29 @@
         this.angemeldet = true; this.nutzer = data.user.email;
       },
       async abmelden() { await sb.auth.signOut(); this.angemeldet = false; },
+      /* eigener Eintrag in „mitglieder“ → Ebene + Kennung */
+      async ich() {
+        const { data } = await sb.from("mitglieder").select("*").eq("email", (this.nutzer || "").toLowerCase()).maybeSingle();
+        this.mitglied = data || null;
+        return data ? data.id : null;
+      },
+      async mitgliederSpeichern(liste) {
+        const rows = liste.filter((m) => m.email).map((m) => ({ email: m.email.toLowerCase(), id: m.id, ebene: m.ebene, name: m.name, formulare: m.formulare || [] }));
+        if (rows.length) { const { error } = await sb.from("mitglieder").upsert(rows, { onConflict: "email" }); if (error) throw error; }
+        const { data } = await sb.from("mitglieder").select("email");
+        const behalten = new Set([...rows.map((r) => r.email), (this.nutzer || "").toLowerCase()]);
+        const weg = (data || []).map((r) => r.email).filter((e) => !behalten.has(e));
+        if (weg.length) await sb.from("mitglieder").delete().in("email", weg);
+      },
+      async partnerAuftraege() {
+        const { data, error } = await sb.rpc("partner_auftraege");
+        if (error) throw error;
+        return data || [];
+      },
+      async partnerMelden(pid, erledigt, notiz) {
+        const { data, error } = await sb.rpc("partner_melden", { p_projekt: pid, p_erledigt: erledigt, p_notiz: notiz });
+        if (error || !data) throw new Error("Meldung fehlgeschlagen");
+      },
       async projekteLaden() {
         const { data, error } = await sb.from("projekte").select("daten,geaendert");
         if (error) throw error;
@@ -162,8 +193,11 @@
         return data.map((r) => ({ ...r.daten, geaendert: r.geaendert }));
       },
       async projektSpeichern(p) {
-        const { error } = await sb.from("projekte").upsert({ id: p.id, daten: p, geaendert: p.geaendert, geloescht: !!p.geloescht });
+        /* erst aktualisieren (dürfen auch Monteure), nur wenn neu: anlegen (nur das Büro) */
+        const zeile = { daten: p, geaendert: p.geaendert, geloescht: !!p.geloescht };
+        const { data, error } = await sb.from("projekte").update(zeile).eq("id", p.id).select("id");
         if (error) throw error;
+        if (!data.length) { const r = await sb.from("projekte").insert({ id: p.id, ...zeile }); if (r.error) throw r.error; }
         stand = Math.max(stand, p.geaendert);
       },
       async einstellungenLaden() {
@@ -226,16 +260,16 @@
       },
       /* Portal */
       async portalInfo(t) {
-        const { data, error } = await sb.rpc("portal_info", { p_token: t });
+        const { data, error } = await sbKunde().rpc("portal_info", { p_token: t });
         if (error) throw error;
         return data;
       },
       async portalHochladen(t, kategorie, file) {
         file = await verkleinern(file);
         const pfad = `kunde/${t}/${kategorie}/${uid()}-${sicher(file.name)}`;
-        const up = await sb.storage.from(BUCKET).upload(pfad, file, { contentType: file.type || "application/octet-stream" });
+        const up = await sbKunde().storage.from(BUCKET).upload(pfad, file, { contentType: file.type || "application/octet-stream" });
         if (up.error) throw new Error("Upload fehlgeschlagen");
-        const { data, error } = await sb.rpc("portal_upload_melden", { p_token: t, p_pfad: pfad, p_kategorie: kategorie, p_name: file.name, p_typ: file.type, p_groesse: file.size });
+        const { data, error } = await sbKunde().rpc("portal_upload_melden", { p_token: t, p_pfad: pfad, p_kategorie: kategorie, p_name: file.name, p_typ: file.type, p_groesse: file.size });
         if (error || !data) throw new Error("Upload konnte nicht zugeordnet werden");
         return { name: file.name, kategorie };
       },

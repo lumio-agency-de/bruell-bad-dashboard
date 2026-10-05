@@ -18,12 +18,23 @@ Dafür nehmen wir **Supabase** (Server in Frankfurt wählbar). Einmalig ca. 20 M
 **SQL Editor** → **New query** → den kompletten Inhalt von `schema.sql` einfügen →
 **Run**. Das legt Tabellen, Dateispeicher und alle Zugriffsregeln an.
 
-## 3. Team-Zugänge anlegen
+## 3. Zugänge anlegen
 
-**Authentication → Users → Add user → Create new user**: E-Mail + Passwort je
-Mitarbeiterin, „Auto Confirm User“ anhaken. Unter **Authentication → Sign In / Providers**
-die öffentliche Registrierung (**Allow new users to sign up**) **ausschalten** — sonst
-könnte sich jeder selbst ein Konto anlegen.
+1. **Authentication → Users → Add user → Create new user**: E-Mail + Passwort für jede
+   Person (Team, Monteure, externe Partner), „Auto Confirm User“ anhaken.
+2. Unter **Authentication → Sign In / Providers** die öffentliche Registrierung
+   (**Allow new users to sign up**) **ausschalten**.
+3. **Ersten Zugang freischalten:** Ein Konto allein darf noch nichts — erst die Ebene
+   entscheidet. Für die Geschäftsführung einmalig im SQL Editor ausführen (E-Mail anpassen):
+
+   ```sql
+   insert into public.mitglieder (email, id, ebene, name)
+   values ('chef@ihre-firma.de', 'DB', 'geschaeftsfuehrung', 'Daniel Brüll');
+   ```
+
+   `id` = Kürzel aus der Einrichtung. Alle weiteren Personen trägt die Geschäftsführung
+   danach im Dashboard ein: **Einrichtung → Team / Externe Partner → Login-E-Mail**
+   und **Übernehmen**. Wer angemeldet ist, aber nirgends eingetragen, sieht „Noch kein Zugang“.
 
 ## 4. Zugangsdaten eintragen
 
@@ -72,5 +83,7 @@ Dashboard unter *Einrichtung → Projekte sichern (JSON)* regelmäßig eine Kopi
 
 ## Getestet
 
-Schema, Login, Team-Upload, Kundenlink-Upload und die Sperren (kein Lesen ohne Login,
-kein Upload mit falschem Link) wurden gegen einen lokalen Supabase-Server geprüft.
+Schema, Login, alle vier Ebenen (Geschäftsführung, Planung, Monteur, Partner),
+Team-, Monteur-, Partner- und Kunden-Uploads sowie die Sperren (kein Lesen ohne Ebene,
+Monteur ohne Angebote/Rechnungen, Partner nur Auszug, kein Upload mit falschem Link)
+wurden gegen einen lokalen Supabase-Server geprüft.
