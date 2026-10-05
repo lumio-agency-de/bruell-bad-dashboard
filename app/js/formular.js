@@ -63,9 +63,9 @@
     if (!sichtbar(f, w, p)) return "";
     const span = BREITE[f.breite] || 6;
     const v = wert(p, f, w);
-    const fehlt = ctx.zeigeFehler && f.pflicht && !gefuellt(f, v, p, ctx.dateien);
+    const fehlt = ctx.zeigeFehler && f.pflicht && f.typ !== "checkliste" && !gefuellt(f, v, p, ctx.dateien);
     const lab = f.label ? `<span class="ff-label">${esc(f.label)}${f.pflicht ? ' <i class="pf" title="Pflichtfeld">•</i>' : ""}</span>` : "";
-    const wrap = (inner, cls = "") => `<div class="ff${fehlt ? " fehlt" : ""} ${cls}" style="--span:${span}" data-feld-box="${esc(f.id)}">${inner}</div>`;
+    const wrap = (inner, cls = "") => `<div class="ff${fehlt ? " fehlt" : ""} ${cls}" style="--span:${span}" data-feld-box="${esc(f.id)}">${inner}${fehlt ? '<span class="ff-fehlt-text">Pflichtfeld – bitte ausfüllen</span>' : ""}</div>`;
     const attr = `data-ff="${esc(f.id)}"`;
 
     switch (f.typ) {
@@ -114,8 +114,9 @@
           const knoepfe = f.modus === "pruefung"
             ? `<div class="seg klein">${[["ok", "In Ordnung"], ["mangel", "Mangel"], ["entfaellt", "Entfällt"]].map(([k, l]) => `<button type="button" class="seg-k${e.s === k ? " an " + k : ""}" data-check="${esc(f.id)}" data-punkt="${esc(pt.id)}" data-wert="${k}">${l}</button>`).join("")}</div>`
             : `<button type="button" class="haken-k${e.s ? " an" : ""}" data-check="${esc(f.id)}" data-punkt="${esc(pt.id)}" data-wert="toggle" aria-pressed="${!!e.s}"><span></span></button>`;
-          return `<li class="${e.s === "mangel" ? "mangel" : ""}">${f.modus === "pruefung" ? "" : knoepfe}<span class="ck-label">${esc(pt.label)}${pt.optional ? ' <small>(bei Bedarf)</small>' : ""}</span>${f.modus === "pruefung" ? knoepfe : ""}
-            <input class="eingabe ck-notiz" placeholder="Notiz" data-check-notiz="${esc(f.id)}" data-punkt="${esc(pt.id)}" value="${esc(e.n || "")}"></li>`;
+          const offen = ctx.zeigeFehler && f.pflicht && !pt.optional && !e.s;
+          return `<li class="${e.s === "mangel" ? "mangel" : ""}${offen ? " fehlt" : ""}">${f.modus === "pruefung" ? "" : knoepfe}<span class="ck-label">${esc(pt.label)}${pt.optional ? ' <small>(bei Bedarf)</small>' : ""}</span>${f.modus === "pruefung" ? knoepfe : ""}
+            <input class="eingabe ck-notiz" placeholder="Notiz (optional)" data-check-notiz="${esc(f.id)}" data-punkt="${esc(pt.id)}" value="${esc(e.n || "")}"></li>`;
         }).join("")}</ul>`, "breit-tab");
       }
     }

@@ -95,6 +95,13 @@ window.FIRMA = {
     jahresumsatz: 0,                  // Umsatzziel netto in € (0 = kein Ziel)
   },
 
+  /* Geschäftszeiten — Termine außerhalb werden abgelehnt (Tage: 1 = Montag … 6 = Samstag, 0 = Sonntag) */
+  geschaeftszeiten: {
+    tage: [1, 2, 3, 4, 5],
+    von: "07:00",
+    bis: "18:00",
+  },
+
   /* Fristen in Tagen — steuern das Cockpit */
   fristen: {
     erinnerungVorErstgespraech: 3,    // Fotos & Maße nachfragen

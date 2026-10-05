@@ -100,7 +100,7 @@
     const e = S.einstellungen;
     if (!e) return basis;
     const out = { ...basis, ...e };
-    for (const k of ["adresse", "farben", "programme", "fristen", "ziele"]) out[k] = { ...(basis[k] || {}), ...(e[k] || {}) };
+    for (const k of ["adresse", "farben", "programme", "fristen", "ziele", "geschaeftszeiten"]) out[k] = { ...(basis[k] || {}), ...(e[k] || {}) };
     out.team = e.team || basis.team;
     out.partner = e.partner || basis.partner || [];
     out.cloud = Daten.konf || basis.cloud;
@@ -267,6 +267,35 @@
     if (p.status === "abgeschlossen") return "Abgeschlossen";
     const st = phaseStatus(p, p.phase);
     return st.komplett ? "Bereit für das nächste Level" : ersetzen(st.offen[0].s.titel);
+  }
+
+  /* ---------- Termine prüfen: Reihenfolge, Wochentag, Geschäftszeiten ---------- */
+  const WOCHENTAG_LANG = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+  function terminFehler(p, key, wert) {
+    if (!wert) return null;
+    const d = datum(wert); if (!d) return "Ungültiges Datum.";
+    const gz = cfg().geschaeftszeiten || { tage: [1, 2, 3, 4, 5], von: "07:00", bis: "18:00" };
+    const def = TERMINE.find((t) => t.key === key);
+    if (!(gz.tage || []).includes(d.getDay())) return `${def.label} am ${WOCHENTAG_LANG[d.getDay()]}? An diesem Tag finden keine Termine statt – bitte einen Werktag wählen.`;
+    if (hatUhrzeit(wert)) {
+      const hm = fUhr(d);
+      if (hm < gz.von || hm > gz.bis) return `${hm} Uhr liegt außerhalb der Geschäftszeiten (${gz.von}–${gz.bis} Uhr).`;
+    }
+    const i = TERMINE.findIndex((t) => t.key === key), t = p.termine || {};
+    const vergleich = (a, b) => (hatUhrzeit(a) && hatUhrzeit(b) ? datum(a) - datum(b) : tageBis(datum(a)) - tageBis(datum(b)));
+    for (const frueher of TERMINE.slice(0, i)) {
+      if (t[frueher.key] && vergleich(wert, t[frueher.key]) < 0) return `${def.label} kann nicht vor dem Termin „${frueher.label}“ (${fTermin(t[frueher.key])}) liegen.`;
+    }
+    for (const spaeter of TERMINE.slice(i + 1)) {
+      if (t[spaeter.key] && vergleich(wert, t[spaeter.key]) > 0) return `${def.label} kann nicht nach dem Termin „${spaeter.label}“ (${fTermin(t[spaeter.key])}) liegen.`;
+    }
+    return null;
+  }
+  function feldFehler(el, text) {
+    const box = el.closest(".q-aktion, .termin-zeile") || el.parentElement;
+    $$(".feld-fehler", box.parentElement).forEach((x) => x.remove());
+    el.classList.toggle("ungueltig", !!text);
+    if (text) { box.insertAdjacentHTML("afterend", `<p class="feld-fehler" role="alert">${esc(text)}</p>`); el.focus(); }
   }
 
   /* ---------- Fälligkeiten (Cockpit) ---------- */
@@ -740,7 +769,7 @@
         : istJetzt
         ? (st.komplett
           ? `<span class="bereit-text">Alles erledigt – Level freischalten.</span><button class="btn jetzt gross" data-aktion="abschliessen">${weiter ? `Weiter zu Level ${zwei(weiter)}: ${esc(phase(weiter).titel)}` : "Projekt abschließen & archivieren"} <span class="pfeil">→</span></button>`
-          : `<span class="offen-text">Noch offen: ${st.offen.map((x) => esc(ersetzen(x.s.titel))).join(" · ")}</span><button class="btn gross" disabled>${weiter ? `Level ${zwei(weiter)} gesperrt` : "Abschluss gesperrt"}</button>`)
+          : `<span class="offen-text">Noch offen: ${st.offen.map((x) => esc(ersetzen(x.s.titel))).join(" · ")}</span><button class="btn gross gesperrt" data-aktion="offen-zeigen">${weiter ? `Weiter zu Level ${zwei(weiter)}` : "Projekt abschließen"} <span class="schloss-mini" aria-hidden="true"></span></button>`)
         : `<span class="offen-text">Dieses Level ist abgeschlossen. Änderungen bleiben möglich.</span><button class="btn voll" data-aktion="level" data-nr="${p.phase}">Zum aktuellen Level ${zwei(p.phase)}</button>`}
       </footer></section>`;
   }
@@ -811,9 +840,10 @@
       else inhalt = "";
       inhalt += `<p class="q-fremd">Erledigt: ${esc(ebenenText(s.ebene))}</p>`;
     }
-    return `<li class="quest ${x.erledigt ? "erledigt" : "offen"}${x.pflicht ? "" : " optional"}${darf ? "" : " fremd"}" data-quest="${key}">
+    const fehltHier = S.zeigeOffen && !x.erledigt && x.pflicht && darf && nr === p.phase;
+    return `<li class="quest ${x.erledigt ? "erledigt" : "offen"}${x.pflicht ? "" : " optional"}${darf ? "" : " fremd"}${fehltHier ? " fehlt" : ""}" data-quest="${key}">
       <span class="q-marker" aria-hidden="true">${x.erledigt ? "✓" : k + 1}</span>
-      <div class="q-inhalt"><div class="q-kopf"><h3>${esc(titel)}</h3>${x.pflicht ? "" : '<span class="q-tag">optional</span>'}${meta ? `<span class="q-meta">${meta}</span>` : ""}</div>
+      <div class="q-inhalt">${fehltHier ? '<p class="q-fehlt">Fehlt noch – bitte erledigen</p>' : ""}<div class="q-kopf"><h3>${esc(titel)}</h3>${x.pflicht ? "" : '<span class="q-tag">optional</span>'}${meta ? `<span class="q-meta">${meta}</span>` : ""}</div>
         ${s.hinweis ? `<p class="q-hinweis">${esc(ersetzen(s.hinweis))}</p>` : ""}${inhalt}</div></li>`;
   }
 
@@ -1202,6 +1232,10 @@
         <section class="panel"><h3>Ziele</h3><p class="leise">Erscheinen nur auf der Seite „Unternehmen“ der Geschäftsführung.</p><div class="felder drei">
           ${f("ziele.jahresumsatz", `Umsatzziel ${new Date().getFullYear()} (netto, €)`, (c.ziele || {}).jahresumsatz || "", "number")}
         </div></section>
+        <section class="panel"><h3>Geschäftszeiten</h3><p class="leise">Termine außerhalb dieser Zeiten und an Wochenenden werden nicht angenommen.</p><div class="felder drei">
+          ${f("geschaeftszeiten.von", "Termine ab", (c.geschaeftszeiten || {}).von || "07:00", "time")}
+          ${f("geschaeftszeiten.bis", "Termine bis", (c.geschaeftszeiten || {}).bis || "18:00", "time")}
+        </div></section>
         <section class="panel"><h3>Fristen (Tage)</h3><div class="felder drei">
           ${f("fristen.erinnerungVorErstgespraech", "Fotos fehlen – Tage vor Erstgespräch", c.fristen.erinnerungVorErstgespraech, "number")}
           ${f("fristen.angebotsverfolgung", "Angebotsverfolgung – Tage nach Besprechung", c.fristen.angebotsverfolgung, "number")}
@@ -1353,7 +1387,7 @@
 
   /* ---------- Beispielprojekte ---------- */
   function demoLaden() {
-    const t = (n, h) => { const d = plusTage(new Date(), n); return h ? `${isoTag(d)}T${h}` : isoTag(d); };
+    const t = (n, h) => { const d = plusTage(new Date(), n); if (d.getDay() === 6) d.setDate(d.getDate() + 2); if (d.getDay() === 0) d.setDate(d.getDate() + 1); return h ? `${isoTag(d)}T${h}` : isoTag(d); };
     const pl = leute("badplanung").map((m) => m.kuerzel);
     const mk = (kunde, ph, extra) => {
       const level = {}; let tt = Date.now() - (ph * 6 + 4) * TAG;
@@ -1585,7 +1619,15 @@
       if (nr > p.phase) { const li = a.closest(".lv"); li.classList.remove("wackeln"); void li.offsetWidth; li.classList.add("wackeln"); return toast(`Gesperrt – erst Level ${zwei(p.phase)} abschließen`); }
       S.ansicht[p.id] = nr; return teilRendern(p);
     }
+    if (akt === "offen-zeigen" && p) {
+      const st = phaseStatus(p, p.phase);
+      S.zeigeOffen = true; teilRendern(p);
+      const q = $(".quest.fehlt");
+      if (q) { q.scrollIntoView({ behavior: "smooth", block: "center" }); const z = $("input, select, textarea, a.btn, button", q); if (z) setTimeout(() => z.focus({ preventScroll: true }), 350); }
+      return toast(`Noch ${st.offen.length} ${st.offen.length === 1 ? "Schritt" : "Schritte"} offen – rot markiert`, "fehler");
+    }
     if (akt === "abschliessen" && p) {
+      S.zeigeOffen = false;
       if (!phaseStatus(p, p.phase).komplett) return;
       const n = naechsteNr(p.phase);
       if (n) aendern(p, (x) => { x.phase = n; x.level = { ...(x.level || {}), [n]: Date.now() }; }, `Level ${zwei(n)} „${phase(n).titel}“ freigeschaltet`);
@@ -1620,7 +1662,8 @@
       const fid = $(".formularseite").dataset.formular, st = Formular.status(fid, p, dateienVon(p.id));
       if (!st.vollstaendig && !S.zeigeFehler) {
         S.zeigeFehler = true; formularNeuZeichnen(p, fid, true);
-        const f = $(".ff.fehlt"); if (f) f.scrollIntoView({ behavior: "smooth", block: "center" });
+        const f = $(".ff.fehlt, .ff-check li.fehlt");
+        if (f) { f.scrollIntoView({ behavior: "smooth", block: "center" }); const z = $("input:not([type=hidden]), select, textarea, button", f); if (z) setTimeout(() => z.focus({ preventScroll: true }), 350); }
         return toast(`Noch ${st.fehlend.length} Pflichtangaben offen – erneut „Fertig“ zum Verlassen`);
       }
       S.zeigeFehler = false; location.hash = `#/projekt/${p.id}`; return;
@@ -1751,6 +1794,9 @@
     }
     if (el.dataset.termin && p) {
       const def = TERMINE.find((t) => t.key === el.dataset.termin);
+      const fehler = terminFehler(p, def.key, el.value);
+      if (fehler) { el.value = (p.termine || {})[def.key] || ""; feldFehler(el, fehler); toast("Termin nicht übernommen", "fehler"); return; }
+      feldFehler(el, null);
       aendern(p, (x) => { x.termine = x.termine || {}; if (el.value) x.termine[def.key] = el.value; else delete x.termine[def.key]; }, el.value ? `${def.label}: ${fTermin(el.value)}` : `${def.label} entfernt`);
       return teilRendern(p);
     }
@@ -1812,7 +1858,7 @@
     }
   });
 
-  window.addEventListener("hashchange", () => { S.zeigeFehler = false; render(); window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); });
+  window.addEventListener("hashchange", () => { S.zeigeFehler = false; S.zeigeOffen = false; render(); window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); });
 
   /* ---------- Abgleich: Kolleg:innen & Kunden-Uploads ---------- */
   const beschaeftigt = () => $("#dlg").open || (document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName));

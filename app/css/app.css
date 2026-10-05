@@ -697,3 +697,25 @@ body.vorraum .shell { grid-template-columns: 1fr; }
 .rechte th:not(:first-child), .rechte td:not(:first-child) { text-align: center; }
 .infos.gross { font-size: 1rem; gap: 10px 18px; }
 code.pw { font-size: 1.05rem; padding: 3px 8px; background: var(--akzent-weich); color: var(--tinte); }
+
+/* ---------- Fehlendes deutlich rot ---------- */
+.ff.fehlt { background: color-mix(in oklab, var(--rot) 7%, var(--blatt)); outline: 2px solid var(--rot); outline-offset: 4px; border-radius: 2px; }
+.ff.fehlt .ff-label { color: var(--rot); font-weight: 800; }
+.ff.fehlt .eingabe, .ff.fehlt .seg, .ff.fehlt .sign, .ff.fehlt .drop, .ff.fehlt .chip { border-color: var(--rot); }
+.ff-fehlt-text { display: block; margin-top: 6px; font-size: .78rem; font-weight: 700; color: var(--rot); }
+.ff-fehlt-text::before { content: "! "; }
+.ff-check li.fehlt { background: color-mix(in oklab, var(--rot) 9%, var(--blatt)); box-shadow: inset 4px 0 0 var(--rot); }
+.ff-check li.fehlt .haken-k, .ff-check li.fehlt .seg { border-color: var(--rot); border-width: 2px; }
+.ff-check li.fehlt .ck-label { color: var(--rot); font-weight: 600; }
+.ff-check .ck-notiz { border-color: var(--fuge-stark) !important; }
+.quest.fehlt { background: color-mix(in oklab, var(--rot) 8%, var(--blatt)); box-shadow: inset 4px 0 0 var(--rot); }
+.quest.fehlt .q-marker { border-color: var(--rot) !important; background: var(--rot); color: #fff !important; }
+.quest.fehlt .q-kopf h3 { color: var(--rot); }
+.q-fehlt { margin: 0 0 4px; font-size: .74rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--rot); }
+.btn.gesperrt { background: var(--papier-2); color: var(--leise); border-color: var(--fuge-stark); }
+.btn.gesperrt:hover { border-color: var(--rot); color: var(--rot); }
+.schloss-mini { display: inline-block; width: 9px; height: 7px; background: currentColor; border-radius: 1px; position: relative; margin-left: 4px; }
+.schloss-mini::before { content: ""; position: absolute; left: 1.5px; top: -5px; width: 6px; height: 6px; border: 1.5px solid currentColor; border-bottom: 0; border-radius: 3px 3px 0 0; }
+.eingabe.ungueltig { border-color: var(--rot); box-shadow: 0 0 0 3px color-mix(in oklab, var(--rot) 20%, transparent); }
+.feld-fehler { margin: 6px 0 0; padding: 7px 10px; font-size: .82rem; font-weight: 600; color: var(--rot); background: color-mix(in oklab, var(--rot) 9%, var(--blatt)); border-left: 3px solid var(--rot); border-radius: 2px; }
+.termin-zeile + .feld-fehler { margin-bottom: 6px; }
