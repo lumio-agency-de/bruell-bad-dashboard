@@ -1688,6 +1688,11 @@
       const ok = await Daten.start();
       if (!ok) { $("#main").innerHTML = ansichtLogin(); return; }
       await laden();
+      /* Vorschau-Link mit ?demo=1: beim ersten Öffnen Beispielprojekte und ein Beispielziel laden */
+      if (new URLSearchParams(location.search).has("demo") && Daten.modus === "lokal" && !S.projekte.length) {
+        demoLaden();
+        if (!(cfg().ziele || {}).jahresumsatz) { S.einstellungen = { ...(S.einstellungen || {}), ziele: { jahresumsatz: 320000 } }; await Daten.einstellungenSpeichern(S.einstellungen); }
+      }
     } catch (e) {
       if (e.keinZugang) { $("#main").innerHTML = keinZugang(); return; }
       $("#main").innerHTML = `<div class="seite"><div class="panel startfeld"><h2>Keine Verbindung</h2><p>${esc(e.message || e)}</p><button class="btn" data-aktion="neu-laden">Erneut versuchen</button></div></div>`;
