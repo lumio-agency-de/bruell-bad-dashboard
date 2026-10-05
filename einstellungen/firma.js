@@ -90,6 +90,16 @@ window.FIRMA = {
     portalUrl: "",
   },
 
+  /* Nachkalkulation — interner Kostensatz je Monteurstunde (Lohn + Nebenkosten), netto in € */
+  kalkulation: {
+    stundensatz: 0,
+  },
+
+  /* Arbeitszeit-Timer: nach so vielen Minuten ohne Aktivität automatisch pausieren */
+  arbeitszeit: {
+    abwesendNachMin: 10,
+  },
+
   /* Ziele — nur auf der Seite „Unternehmen" (Geschäftsführung) sichtbar */
   ziele: {
     jahresumsatz: 0,                  // Umsatzziel netto in € (0 = kein Ziel)

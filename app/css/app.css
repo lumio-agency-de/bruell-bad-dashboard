@@ -812,3 +812,24 @@ tr:hover .tz-plus, .tz-plus:focus-visible { opacity: 1; }
 .schreibschutz .mission input, .schreibschutz .mission select, .schreibschutz .mission textarea, .schreibschutz .mission .chip, .schreibschutz .mission .btn:not(.gesperrt), .schreibschutz .mission-fuss .btn,
 .schreibschutz .akte-inhalt input, .schreibschutz .akte-inhalt select, .schreibschutz .akte-inhalt textarea, .schreibschutz .akte-inhalt .btn, .schreibschutz .drop, .schreibschutz .timer-box, .schreibschutz [data-aktion="kundenlink"] { pointer-events: none; opacity: .55; }
 .schreibschutz .mission a.btn[href*="/formular/"] { pointer-events: auto; opacity: 1; }
+
+/* ---------- Unternehmen: Ordner wie am iPhone ---------- */
+.ordner-raster { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 26px 22px; padding: 6px 0 20px; }
+.app-ordner { display: grid; justify-items: center; gap: 10px; text-decoration: none; }
+.ao-kachel { width: 100%; aspect-ratio: 1; border-radius: 28%; padding: 12%; display: grid; grid-template-columns: 1fr 1fr; gap: 8%;
+  background: color-mix(in oklab, var(--tinte) 10%, var(--blatt)); border: 1px solid var(--fuge-stark); box-shadow: 0 14px 30px -20px rgba(4, 20, 50, .5), inset 0 1px 0 #fff;
+  transition: transform 220ms var(--ease-out), box-shadow 220ms var(--ease-out); }
+.app-ordner:hover .ao-kachel { transform: translateY(-3px) scale(1.02); box-shadow: 0 20px 36px -20px rgba(4, 20, 50, .55), inset 0 1px 0 #fff; }
+.app-ordner:active .ao-kachel { transform: scale(.96); }
+.ao-mini { border-radius: 22%; background: var(--blatt); border: 1px solid var(--fuge); display: grid; place-content: center; text-align: center; padding: 4px; overflow: hidden; }
+.ao-mini:nth-child(1) { background: var(--tinte); border-color: var(--tinte); }
+.ao-mini:nth-child(1) b, .ao-mini:nth-child(1) small { color: #fff; }
+.ao-mini b { font: 400 clamp(.72rem, 1.15vw, .95rem)/1.1 var(--serif); color: var(--tinte); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.ao-mini small { font-size: .62rem; color: var(--leise); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ao-titel { font-weight: 700; color: var(--tinte); font-size: .95rem; }
+.kennzahlen > .panel, .kennzahlen > .kpis { margin-bottom: 16px; }
+small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var(--rot); font-weight: 600; }
+.nachkalkulation .panel-titel small { font-weight: 400; }
+.ics-mini { border: 0; background: none; cursor: pointer; font-size: .85rem; margin-left: 6px; padding: 0 2px; opacity: .7; }
+.ics-mini:hover { opacity: 1; }
+.dlg-hinweis { padding: 0 22px 12px; margin: 0; background: var(--tinte-weich); }

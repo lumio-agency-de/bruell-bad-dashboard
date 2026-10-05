@@ -20,7 +20,8 @@
      {uploadLink}           persönlicher Link, über den der Kunde Dateien
                             direkt in sein Projekt hochlädt
 
-   anhangDateien: Dateien im Ordner vorlagen/, die im Dialog zum Herunterladen angeboten werden.
+   anhangDateien: Dateien im Ordner vorlagen/, die mitgeschickt werden.
+   anhangOrdner:  Projektordner, deren neueste Datei beim „In Outlook öffnen“ angehängt wird.
    Optionale Absätze: [[id]] … [[/id]] — im Dashboard per Häkchen an/aus.
    Felder, die noch leer sind, erscheinen als markierte Lücke ‹…›.
    ========================================================================== */
@@ -91,6 +92,7 @@ Mit freundlichen Grüßen`,
     titel: "Badplanung zur Prüfung und Freigabe",
     datei: "vorlagen/08-freigabe/Mail-Planung-zur-Freigabe.oft",
     anhaenge: ["Exposé (2D-Ansichten) als PDF", "ggf. aktualisiertes Angebot"],
+    anhangOrdner: ["expose", "angebot"],   // jeweils die neueste Datei aus diesen Projektordnern
     anredeStil: "formell",
     betreff: "Ihre Badplanung zur Prüfung und Freigabe",
     optionen: [
@@ -160,6 +162,7 @@ Wir wünschen Ihnen weiterhin eine angenehme Woche!`,
     titel: "Schlussrechnung & Bitte um Bewertung",
     datei: "vorlagen/12-abnahme/Mail-Schlussrechnung.oft",
     anhaenge: ["Schlussrechnung als PDF"],
+    anhangOrdner: ["rechnungen"],
     anredeStil: "hallo",
     betreff: "Ihre Schlussrechnung zur Badsanierung",
     optionen: [],

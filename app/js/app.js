@@ -100,7 +100,7 @@
     const e = S.einstellungen;
     if (!e) return basis;
     const out = { ...basis, ...e };
-    for (const k of ["adresse", "farben", "programme", "fristen", "ziele", "geschaeftszeiten"]) out[k] = { ...(basis[k] || {}), ...(e[k] || {}) };
+    for (const k of ["adresse", "farben", "programme", "fristen", "ziele", "geschaeftszeiten", "kalkulation", "arbeitszeit"]) out[k] = { ...(basis[k] || {}), ...(e[k] || {}) };
     out.team = e.team || basis.team;
     out.partner = e.partner || basis.partner || [];
     out.cloud = Daten.konf || basis.cloud;
@@ -180,11 +180,19 @@
     { k: "material", l: "Material", kosten: true }, { k: "sub", l: "Subunternehmer", kosten: true }, { k: "lohn", l: "Montage / Lohn", kosten: true }, { k: "sonst", l: "Sonstige Kosten", kosten: true },
   ];
   function geld(p) {
-    const z = S.zahlen[p.id] || {}, n = (k) => Number(z[k]) || 0;
-    /* Umsatz = Abschlag + Schlussrechnung (Restbetrag); solange nicht abgerechnet: Auftragswert */
-    const umsatz = n("rechnung") ? n("rechnung") + n("abschlag") : n("auftrag");
-    const kosten = ZAHLFELDER.filter((f) => f.kosten).reduce((a, f) => a + n(f.k), 0);
-    return { angebot: n("angebot"), auftrag: n("auftrag"), umsatz, kosten, hatKosten: kosten > 0, db: umsatz - kosten, marge: umsatz && kosten ? (umsatz - kosten) / umsatz : null };
+    const z = S.zahlen[p.id] || {}, n = (k) => Number(z[k]) || 0, summe = (l, k) => (l || []).reduce((a, x) => a + (Number(x[k]) || 0), 0);
+    /* Umsatz = Abschlag + Schlussrechnung (Restbetrag) + Nachträge; solange nicht abgerechnet: Auftragswert */
+    const umsatz = (n("rechnung") ? n("rechnung") + n("abschlag") : n("auftrag")) + n("nachtraege");
+    const timerMs = (p.zeiten || []).reduce((a, x) => a + dauerMs(x), 0);
+    const stunden = timerMs / 36e5 + summe(z.extraStunden, "h");
+    const satz = Number(z.stundensatz ?? (cfg().kalkulation || {}).stundensatz) || 0;
+    const lohn = n("lohn") || stunden * satz;
+    const partnerH = summe(z.partnerZeiten, "h"), partner = summe(z.partnerZeiten, "kosten") || n("sub");
+    const sonst = summe(z.sonstiges, "betrag") + n("sonst");
+    const kosten = n("material") + lohn + partner + sonst;
+    return { angebot: n("angebot"), auftrag: n("auftrag"), umsatz, kosten, hatKosten: kosten > 0, db: umsatz - kosten, marge: umsatz && kosten ? (umsatz - kosten) / umsatz : null,
+      stunden, timerStunden: timerMs / 36e5, satz, lohn, partner, partnerH, sonst, material: n("material"), materialSoll: n("materialSoll"), stundenSoll: n("stundenSoll"),
+      dbProStunde: stunden ? (umsatz - kosten) / stunden : null, abgeschlossen: z.nkAbgeschlossen || null };
   }
 
   /* ---------- Projekte ---------- */
@@ -313,6 +321,66 @@
   setInterval(() => {
     $$("[data-timer]").forEach((el) => { const p = finde(el.dataset.timer); const z = p && meineZeit(p); if (z) el.textContent = hms(dauerMs(z)); });
   }, 1000);
+  /* Abwesenheit: letzte Aktivität (über alle Tabs) merken, Timer rückwirkend pausieren */
+  const AKTIV_KEY = "baddashboard:aktiv";
+  const abwesendMs = () => (Number((cfg().arbeitszeit || {}).abwesendNachMin) || 10) * 60000;
+  const letzteAktivitaet = () => { try { return Number(localStorage.getItem(AKTIV_KEY)) || Date.now(); } catch (e) { return Date.now(); } };
+  let aktivGemerkt = 0, systemIdle = false;
+  function aktivitaet() {
+    if (systemIdle) return;
+    const jetzt = Date.now();
+    if (jetzt - aktivGemerkt > 15000) { aktivGemerkt = jetzt; try { localStorage.setItem(AKTIV_KEY, String(jetzt)); } catch (e) { /* egal */ } }
+    rueckkehrPruefen();
+  }
+  ["pointerdown", "pointermove", "keydown", "wheel", "touchstart"].forEach((t) => window.addEventListener(t, aktivitaet, { passive: true }));
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) aktivitaet(); });
+  function autoPause(seit) {
+    const l = meinLaufender(); if (!l || pauseLaeuft(l.z)) return;
+    const ab = Math.max(seit, l.z.start);
+    aendern(l.p, () => { l.z.pausen = [...(l.z.pausen || []), { start: ab, ende: null, auto: true }]; }, `Arbeitszeit automatisch pausiert (abwesend seit ${fUhr(new Date(ab))} Uhr)`);
+    if (route().name === "projekt") { kopfNeu(l.p); teilRendern(l.p); } else statusLeiste();
+  }
+  let rueckkehrOffen = false;
+  function rueckkehrPruefen() {
+    const l = meinLaufender(); if (!l || rueckkehrOffen) return;
+    const pa = (l.z.pausen || []).find((x) => !x.ende && x.auto); if (!pa) return;
+    rueckkehrOffen = true;
+    const weg = Math.round((Date.now() - pa.start) / 60000);
+    dialog(`<div class="dlg-kopf"><div><p class="eyebrow">${esc(anzeigeName(l.p))}</p><h2>Willkommen zurück</h2><p>Du warst ca. ${weg} Min. nicht aktiv. Die Arbeitszeit wurde ab ${fUhr(new Date(pa.start))} Uhr automatisch pausiert.</p></div></div>
+      <div class="dlg-fuss"><button class="btn still" data-dlg="stop">Timer beenden</button><button class="btn" data-dlg="behalten">Ich habe weitergearbeitet – Pause verwerfen</button><button class="btn jetzt" data-dlg="weiter">Weiter stempeln</button></div>`, (dlg) => {
+      dlg.addEventListener("click", (e) => {
+        const b = e.target.closest("[data-dlg]"); if (!b) return;
+        const jetzt = Date.now();
+        if (b.dataset.dlg === "weiter") aendern(l.p, () => { pa.ende = jetzt; }, "Arbeitszeit fortgesetzt");
+        if (b.dataset.dlg === "behalten") aendern(l.p, () => { l.z.pausen = l.z.pausen.filter((x) => x !== pa); }, "Automatische Pause verworfen (weitergearbeitet)");
+        rueckkehrOffen = false; dlg.close();
+        if (b.dataset.dlg === "stop") { aendern(l.p, () => { pa.ende = pa.start; }); return zeitStopDialog(l.p); }
+        if (route().name === "projekt") { kopfNeu(l.p); teilRendern(l.p); } else statusLeiste();
+      });
+      dlg.addEventListener("cancel", () => { rueckkehrOffen = false; });
+    });
+  }
+  /* alle 30 s: zu lange keine Aktivität? (auch nach geschlossenem Browser) */
+  function abwesenheitPruefen() {
+    if (!S.ich || systemIdle) return;
+    const seit = letzteAktivitaet();
+    if (Date.now() - seit > abwesendMs()) autoPause(seit);
+  }
+  setInterval(abwesenheitPruefen, 30000);
+  /* Chrome/Edge: Abwesenheit am ganzen Rechner erkennen (Erlaubnis nötig) */
+  async function systemAbwesenheit() {
+    if (!("IdleDetector" in window)) return;
+    try {
+      if ((await IdleDetector.requestPermission()) !== "granted") return;
+      const d = new IdleDetector();
+      d.addEventListener("change", () => {
+        if (d.userState === "idle") { systemIdle = true; autoPause(Date.now() - abwesendMs()); }
+        else { systemIdle = false; aktivitaet(); }
+      });
+      await d.start({ threshold: Math.max(60000, abwesendMs()) });
+    } catch (e) { /* nicht verfügbar – Seiten-Aktivität reicht */ }
+  }
+
   function zeitStopDialog(p) {
     const z = meineZeit(p); if (!z) return;
     dialog(`<form id="zeit-form"><div class="dlg-kopf"><div><p class="eyebrow">${esc(anzeigeName(p))}</p><h2>Arbeitszeit beenden</h2><p>${hms(dauerMs(z))} erfasst${(z.pausen || []).length ? ` (ohne ${z.pausen.length} ${z.pausen.length === 1 ? "Pause" : "Pausen"})` : ""}.</p></div><button class="btn still" type="button" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
@@ -325,6 +393,46 @@
         dlg.close(); toast(`${stunden(dauerMs(z))} gespeichert`); kopfNeu(p); teilRendern(p);
       });
     });
+  }
+
+  /* ---------- Outlook: Termin als Kalendereintrag (.ics), Mail als Entwurf (.eml) ---------- */
+  const IN_AUSSTELLUNG = ["erstgespraech", "angebotsbesprechung", "materialauswahl"];
+  function icsDatei(p, key) {
+    const def = TERMINE.find((t) => t.key === key), w = (p.termine || {})[key]; if (!w) return;
+    const c = cfg(), k = p.kunde, d = datum(w), stamp = (x) => `${x.getFullYear()}${zwei(x.getMonth() + 1)}${zwei(x.getDate())}T${zwei(x.getHours())}${zwei(x.getMinutes())}00`;
+    const ort = IN_AUSSTELLUNG.includes(key) ? `${c.name}, ${c.adresse.strasse}, ${c.adresse.ort}` : [k.strasse, k.ort].filter(Boolean).join(", ");
+    const ganztag = !hatUhrzeit(w);
+    let bis = new Date(d.getTime() + 60 * 60000);
+    if (ganztag) { const ab = datum((p.termine || {}).abnahme); bis = key === "baustart" && ab ? plusTage(new Date(ab.toDateString()), 1) : plusTage(d, 1); }
+    const tag = (x) => `${x.getFullYear()}${zwei(x.getMonth() + 1)}${zwei(x.getDate())}`;
+    const txt = (t) => String(t || "").replace(/[\\;,]/g, (m) => "\\" + m).replace(/\n/g, "\\n");
+    const ics = ["BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//Bad-Dashboard//DE", "METHOD:PUBLISH", "BEGIN:VEVENT",
+      `UID:${p.id}-${key}@bad-dashboard`, `DTSTAMP:${stamp(new Date())}`,
+      ganztag ? `DTSTART;VALUE=DATE:${tag(d)}` : `DTSTART;TZID=Europe/Berlin:${stamp(d)}`,
+      ganztag ? `DTEND;VALUE=DATE:${tag(bis)}` : `DTEND;TZID=Europe/Berlin:${stamp(bis)}`,
+      `SUMMARY:${txt(`${def.label} – ${anzeigeName(p)}`)}`, `LOCATION:${txt(ort)}`,
+      `DESCRIPTION:${txt(`${anzeigeName(p)}${p.projektnr ? " · Projekt " + p.projektnr : ""}\nTel. ${[k.telefon, k.mobil].filter(Boolean).join(" / ") || "—"}\n${location.origin + location.pathname}#/projekt/${p.id}`)}`,
+      "END:VEVENT", "END:VCALENDAR"].join("\r\n");
+    herunterladen(`${def.label} ${anzeigeName(p)}.ics`.replace(/[\\/:*?"<>|]/g, ""), ics, "text/calendar");
+    aendern(p, () => {}, `${def.label} in den Kalender übernommen`);
+  }
+  const b64 = (str) => btoa(unescape(encodeURIComponent(str)));
+  async function emlDatei(p, betreff, text, anhaenge) {
+    const grenze = "----=_Teil_" + uid().replace(/-/g, "");
+    const teile = [`--${grenze}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(text).replace(/.{76}/g, "$&\r\n")];
+    let fehlend = 0;
+    for (const a of anhaenge) {
+      try {
+        const blob = await (await fetch(a.url)).blob();
+        const daten = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+        teile.push(`--${grenze}`, `Content-Type: ${blob.type || "application/octet-stream"}; name="=?UTF-8?B?${b64(a.name)}?="`, "Content-Transfer-Encoding: base64",
+          `Content-Disposition: attachment; filename="=?UTF-8?B?${b64(a.name)}?="`, "", daten.replace(/.{76}/g, "$&\r\n"));
+      } catch (e) { fehlend++; }
+    }
+    teile.push(`--${grenze}--`, "");
+    const kopf = ["X-Unsent: 1", `To: ${p.kunde.email || ""}`, `Subject: =?UTF-8?B?${b64(betreff)}?=`, "MIME-Version: 1.0", `Content-Type: multipart/mixed; boundary="${grenze}"`, "", ""].join("\r\n");
+    herunterladen(`${betreff}.eml`.replace(/[\\/:*?"<>|]/g, ""), kopf + teile.join("\r\n"), "message/rfc822");
+    return fehlend;
   }
 
   /* ---------- Termine prüfen: Reihenfolge, Wochentag, Geschäftszeiten ---------- */
@@ -502,9 +610,77 @@
   }
 
   /* ================================================================
+     Nachkalkulation je Bad (nur Geschäftsführung)
+     ================================================================ */
+  function ansichtNachkalkulation(pid) {
+    const p = finde(pid);
+    if (!p || !istGF()) return `<div class="seite"><a class="btn" href="#/projekte">← zurück</a></div>`;
+    const z = S.zahlen[p.id] || {}, g = geld(p), zu = !!g.abgeschlossen, dis = zu ? " disabled" : "";
+    const zahl = (k, l, ph = "€", typ = "number") => `<div class="feld"><label for="nk-${k}">${l}</label><input class="eingabe" id="nk-${k}" type="${typ}" ${typ === "number" ? 'inputmode="decimal" min="0" step="any"' : ""} data-nk="${k}" value="${esc(z[k] ?? "")}" placeholder="${ph}"${dis}></div>`;
+    const tab = (key, spalten, neu) => {
+      const l = z[key] || [];
+      return `<div class="tab-wrap"><table class="ff-tab"><thead><tr>${spalten.map((s2) => `<th>${s2[1]}</th>`).join("")}<th></th></tr></thead><tbody>
+        ${l.map((row, i) => `<tr>${spalten.map(([sk, , typ, opts]) => `<td>${opts ? `<select class="eingabe" data-nk-tab="${key}" data-zeile="${i}" data-spalte="${sk}"${dis}><option value=""></option>${opts.map((o) => `<option${row[sk] === o ? " selected" : ""}>${esc(o)}</option>`).join("")}</select>` : `<input class="eingabe" data-nk-tab="${key}" data-zeile="${i}" data-spalte="${sk}" value="${esc(row[sk] ?? "")}"${typ === "zahl" ? ' type="number" inputmode="decimal" step="any"' : ""}${dis}>`}</td>`).join("")}
+          <td class="mitte">${zu ? "" : `<button class="btn klein still" data-aktion="nk-weg" data-tab="${key}" data-zeile="${i}" aria-label="Zeile entfernen">✕</button>`}</td></tr>`).join("") || `<tr><td colspan="${spalten.length + 1}" class="leise">Noch keine Einträge.</td></tr>`}</tbody></table></div>
+        ${zu ? "" : `<button class="btn klein" data-aktion="nk-neu" data-tab="${key}">+ ${neu}</button>`}`;
+    };
+    const proPerson = {};
+    (p.zeiten || []).forEach((x) => { proPerson[x.name] = (proPerson[x.name] || 0) + dauerMs(x) / 36e5; });
+    const t = p.termine || {}, start = levelZeit(p, ersteNr), auftrag = levelZeit(p, 6), ende = abschlussZeit(p);
+    const bs = datum(t.baustart), an = datum(t.abnahme);
+    const h = (x) => `${(x || 0).toFixed(1).replace(".", ",")} h`;
+    const abw = (ist, soll, einheit) => (soll ? `<small class="${ist > soll ? "schlecht" : "gut"}">${ist > soll ? "+" : ""}${einheit === "h" ? h(ist - soll) : eur(ist - soll)} ggü. Kalkulation</small>` : "");
+    return `<div class="seite nachkalkulation" data-projekt="${p.id}">
+      <header class="f-kopf panel"><a class="btn still" href="#/projekt/${p.id}">← ${esc(anzeigeName(p))}</a>
+        <div class="f-titel"><p class="eyebrow">Nachkalkulation · nur Geschäftsführung${p.projektnr ? " · Nr. " + esc(p.projektnr) : ""}</p><h1>${esc(anzeigeName(p))}</h1></div>
+        <div class="f-status">${zu ? `<span class="ok">✓ abgeschlossen ${fDatum(new Date(g.abgeschlossen))}</span>` : "in Arbeit"}</div>
+        <div class="kopf-aktionen">${zu ? `<button class="btn" data-aktion="nk-oeffnen">Wieder öffnen</button>` : `<button class="btn jetzt" data-aktion="nk-abschliessen">Nachkalkulation abschließen</button>`}</div></header>
+      <section class="kpis vier">
+        <div class="kpi"><span class="kpi-zahl klein">${eur(g.umsatz || null)}</span><span class="kpi-titel">Umsatz</span><span class="kpi-unter">inkl. Nachträge</span></div>
+        <div class="kpi"><span class="kpi-zahl klein">${eur(g.kosten || null)}</span><span class="kpi-titel">Kosten</span><span class="kpi-unter">Material, Lohn, Partner, Sonstiges</span></div>
+        <div class="kpi"><span class="kpi-zahl klein">${g.umsatz && g.kosten ? eur(g.db) : "—"}</span><span class="kpi-titel">Deckungsbeitrag</span><span class="kpi-unter">Marge ${prozent(g.marge)}</span></div>
+        <div class="kpi"><span class="kpi-zahl klein">${g.dbProStunde != null ? eur(g.dbProStunde) : "—"}</span><span class="kpi-titel">DB pro Stunde</span><span class="kpi-unter">${h(g.stunden)} gesamt</span></div>
+      </section>
+      <div class="cockpit-raster">
+        <div class="spalte">
+          <section class="panel"><h2 class="panel-titel">Erlöse</h2><div class="panel-innen felder">
+            ${zahl("angebot", "Angebotssumme (netto)")}${zahl("auftrag", "Auftragswert (netto)")}${zahl("nachtraege", "Nachträge (netto)")}
+            ${zahl("abschlag", "Abschlagsrechnung (netto)")}${zahl("abschlagBezahlt", "Abschlag bezahlt am", "", "date")}
+            ${zahl("rechnung", "Schlussrechnung (netto, nach Abschlag)")}${zahl("rechnungBezahlt", "Schlussrechnung bezahlt am", "", "date")}</div></section>
+          <section class="panel"><h2 class="panel-titel">Stunden eigener Mitarbeiter <small>aus dem Timer + Zusatzstunden</small></h2><div class="panel-innen">
+            <dl class="infos">${Object.entries(proPerson).map(([n, x]) => `<dt>${esc(n)}</dt><dd>${h(x)} <small class="leise">(Timer)</small></dd>`).join("") || "<dt>Timer</dt><dd>noch keine Zeiten erfasst</dd>"}</dl>
+            <p class="q-gruppe">Zusatzstunden (nicht gestempelt)</p>
+            ${tab("extraStunden", [["wer", "Person", "", cfg().team.filter((m) => m.name).map((m) => m.name)], ["h", "Stunden", "zahl"], ["notiz", "Tätigkeit"]], "Stunden nachtragen")}
+            <div class="felder abstand-o">${zahl("stundensatz", "Kostensatz je Stunde (€)", String((cfg().kalkulation || {}).stundensatz || "aus Einrichtung"))}${zahl("stundenSoll", "Kalkulierte Stunden (Angebot)", "h")}</div>
+            <dl class="infos zahl-summe"><dt>Stunden gesamt</dt><dd>${h(g.stunden)} ${abw(g.stunden, g.stundenSoll, "h")}</dd><dt>Lohnkosten</dt><dd>${g.satz ? eur(g.lohn) : `<span class="leise">Kostensatz fehlt</span>`}</dd></dl></div></section>
+        </div>
+        <div class="spalte">
+          <section class="panel"><h2 class="panel-titel">Externe Partner</h2><div class="panel-innen">
+            ${tab("partnerZeiten", [["partner", "Partner", "", (cfg().partner || []).map((x) => x.firma)], ["gewerk", "Gewerk", "", Object.keys(cfg().gewerke || {})], ["h", "Stunden", "zahl"], ["kosten", "Kosten (€)", "zahl"]], "Partnerzeit")}
+            <dl class="infos zahl-summe"><dt>Partner gesamt</dt><dd>${eur(g.partner || null)} · ${h(g.partnerH)}</dd></dl></div></section>
+          <section class="panel"><h2 class="panel-titel">Material & Sonstiges</h2><div class="panel-innen">
+            <div class="felder">${zahl("materialSoll", "Material kalkuliert (Angebot)")}${zahl("material", "Material tatsächlich")}</div>
+            ${g.materialSoll ? `<p class="klein-text">${abw(g.material, g.materialSoll, "€")}</p>` : ""}
+            <p class="q-gruppe">Sonstige Kosten</p>
+            ${tab("sonstiges", [["text", "Wofür (z. B. Entsorgung, Fahrten)"], ["betrag", "Betrag (€)", "zahl"]], "Kostenposition")}</div></section>
+          <section class="panel"><h2 class="panel-titel">Dauer</h2><dl class="infos panel-innen">
+            <dt>Erstkontakt</dt><dd>${start ? fDatum(new Date(start)) : "—"}</dd>
+            <dt>Auftrag</dt><dd>${auftrag ? `${fDatum(new Date(auftrag))} · nach ${tageText(tage(start, auftrag))}` : "—"}</dd>
+            <dt>Bauzeit</dt><dd>${bs && an ? `${fDatum(bs)} – ${fDatum(an)} · ${tageText(tage(bs, an))}` : "—"}</dd>
+            <dt>Abschluss</dt><dd>${ende ? `${fDatum(new Date(ende))} · gesamt ${tageText(tage(start, ende))}` : "läuft noch"}</dd></dl></section>
+        </div>
+      </div></div>`;
+  }
+  let nkTimer;
+  async function nkSpeichern(p) {
+    clearTimeout(nkTimer);
+    nkTimer = setTimeout(async () => { try { await Daten.zahlenSpeichern(p.id, S.zahlen[p.id]); } catch (e) { toast("Nicht gespeichert", "fehler"); } }, 300);
+  }
+
+  /* ================================================================
      Kennzahlen (nur Geschäftsführung)
      ================================================================ */
-  function ansichtKennzahlen() {
+  function ansichtKennzahlen(ordnerId) {
     const zr = S.kzZeitraum, jetzt = Date.now();
     const jahrStart = new Date(new Date().getFullYear(), 0, 1).getTime();
     /* Zeitraum + Vergleichszeitraum gleicher Länge davor */
@@ -603,59 +779,79 @@
     const fehlend = W.fertig.filter((p) => !geld(p).umsatz).length;
 
     const kachel = (wert, titel, unter, d = "") => `<div class="kpi"><span class="kpi-zahl klein">${wert}</span><span class="kpi-titel">${titel} ${d}</span><span class="kpi-unter">${unter}</span></div>`;
-    return `<div class="seite kennzahlen">
-      <header class="kopf"><div><p class="eyebrow">Nur für die Geschäftsführung</p><h1>Unternehmen</h1></div>
-        <div class="kopf-aktionen"><div class="seg" role="radiogroup" aria-label="Zeitraum">${[["12m", "12 Monate"], ["jahr", "Dieses Jahr"], ["alle", "Gesamt"]].map(([id, l]) => `<button class="seg-k${zr === id ? " an" : ""}" data-aktion="kz-zeitraum" data-wert="${id}" role="radio" aria-checked="${zr === id}">${l}</button>`).join("")}</div></div></header>
-      ${fehlend ? `<p class="luecken">${fehlend} abgeschlossene${fehlend === 1 ? "s Bad hat" : " Bäder haben"} noch keine Umsatzzahlen – im Projekt unter Akte → Zahlen eintragen.</p>` : ""}
-
-      <section class="panel ziel-panel"><h2 class="panel-titel">Jahresziel ${new Date().getFullYear()}</h2><div class="panel-innen">${zielBalken}</div></section>
-
-      <section class="kpis vier">
-        ${kachel(eur(W.umsatz), "Umsatz", `${W.fertig.length} abgeschlossene Bäder ${vgl ? "· " + vgl : ""}`, delta(W.umsatz, V && V.umsatz))}
-        ${kachel(W.db != null ? eur(W.db) : "—", "Deckungsbeitrag", W.marge != null ? `Marge ${prozent(W.marge)}` : "Kosten fehlen", delta(W.marge, V && V.marge))}
-        ${kachel(eur(W.proBad), "Ø Umsatz pro Bad", `Ø Kosten ${eur(W.kostenProBad)}`, delta(W.proBad, V && V.proBad))}
-        ${kachel(W.quote != null ? prozent(W.quote) : "—", "Abschlussquote", `${W.auftraege.length} Aufträge · ${W.abgesagt.length} Absagen`, delta(W.quote, V && V.quote))}
-        ${kachel(tageText(W.dauer), "Erstkontakt → Abschluss", "Ø Dauer je Bad", delta(W.dauer, V && V.dauer, "weniger"))}
-        ${kachel(tageText(W.dauerAuftrag), "Erstkontakt → Auftrag", "Ø bis zur Unterschrift", delta(W.dauerAuftrag, V && V.dauerAuftrag, "weniger"))}
-        ${kachel(eur(bestand), "Auftragsbestand", reichweite != null ? `reicht für ca. ${reichweite.toFixed(1).replace(".", ",")} Monate` : "Level 06–13, noch nicht abgerechnet")}
-        ${kachel(eur(fSumme), "Offene Forderungen", `${forderungen.length} Rechnungen unbezahlt`)}
-      </section>
-
-      <div class="cockpit-raster">
-        <section class="panel"><h2 class="panel-titel">Kapazität · nächste 8 Wochen <small>laufende Baustellen je Monteur (Baustart bis Abnahme)</small></h2>
+    const K = {
+      umsatz: kachel(eur(W.umsatz), "Umsatz", `${W.fertig.length} abgeschlossene Bäder ${vgl ? "· " + vgl : ""}`, delta(W.umsatz, V && V.umsatz)),
+      db: kachel(W.db != null ? eur(W.db) : "—", "Deckungsbeitrag", W.marge != null ? `Marge ${prozent(W.marge)}` : "Kosten fehlen", delta(W.marge, V && V.marge)),
+      proBad: kachel(eur(W.proBad), "Ø Umsatz pro Bad", `Ø Kosten ${eur(W.kostenProBad)}`, delta(W.proBad, V && V.proBad)),
+      quote: kachel(W.quote != null ? prozent(W.quote) : "—", "Abschlussquote", `${W.auftraege.length} Aufträge · ${W.abgesagt.length} Absagen`, delta(W.quote, V && V.quote)),
+      dauer: kachel(tageText(W.dauer), "Erstkontakt → Abschluss", "Ø Dauer je Bad", delta(W.dauer, V && V.dauer, "weniger")),
+      dauerAuftrag: kachel(tageText(W.dauerAuftrag), "Erstkontakt → Auftrag", "Ø bis zur Unterschrift", delta(W.dauerAuftrag, V && V.dauerAuftrag, "weniger")),
+      bestand: kachel(eur(bestand), "Auftragsbestand", reichweite != null ? `reicht für ca. ${reichweite.toFixed(1).replace(".", ",")} Monate` : "Level 06–13, noch nicht abgerechnet"),
+      forderungen: kachel(eur(fSumme), "Offene Forderungen", `${forderungen.length} Rechnungen unbezahlt`),
+      angebote: kachel(eur(offeneAngebote), "Offene Angebote", "Level 04–05, noch nicht entschieden"),
+    };
+    const P = {
+      ziel: `<section class="panel ziel-panel"><h2 class="panel-titel">Jahresziel ${new Date().getFullYear()}</h2><div class="panel-innen">${zielBalken}</div></section>`,
+      kapazitaet: `<section class="panel"><h2 class="panel-titel">Kapazität · nächste 8 Wochen <small>laufende Baustellen je Monteur (Baustart bis Abnahme)</small></h2>
           <div class="tab-wrap ohne-rand"><table class="kap"><thead><tr><th></th>${wochen.map((w) => `<th>KW ${kw(w)}<small>${fKurz(w)}</small></th>`).join("")}</tr></thead>
           <tbody>${kap.map((z) => `<tr><th scope="row">${esc(z.name)}</th>${z.wochen.map((l) => `<td class="${l.length > 1 ? "voll" : l.length ? "belegt" : ""}">${l.map((b) => `<a href="#/projekt/${b.p.id}" title="${esc(anzeigeName(b.p))}">${esc(b.p.kunde.nachname)}</a>`).join("")}</td>`).join("")}</tr>`).join("") || `<tr><td colspan="9" class="leise">Keine geplanten Baustellen.</td></tr>`}</tbody></table></div>
-          <p class="vb-max">Doppelt belegte Wochen sind markiert. Zuweisung im Projekt unter Akte → Team.</p></section>
-        <div class="spalte">
-          <section class="panel"><h2 class="panel-titel">Vertriebstrichter <small>Anfragen im Zeitraum</small></h2>
+          <p class="vb-max">Doppelt belegte Wochen sind markiert. Zuweisung im Projekt unter Akte → Team.</p></section>`,
+      trichter: `<section class="panel"><h2 class="panel-titel">Vertriebstrichter <small>Anfragen im Zeitraum</small></h2>
             <ul class="hbalken trichter">${trichter.map((t, i) => `<li tabindex="0"><span class="hb-label">${esc(t.l)}</span><span class="hb-spur"><span class="hb-balken" style="width:${Math.max(t.n ? 2 : 0, (t.n / maxT) * 100)}%"></span></span>
-              <span class="hb-wert">${t.n}</span><span class="tip">${i ? `${trichter[i - 1].n ? prozent(t.n / trichter[i - 1].n) : "—"} von „${esc(trichter[i - 1].l)}“` : `${t.n} Anfragen`}</span></li>`).join("")}</ul></section>
-          <section class="panel"><h2 class="panel-titel">Offene Forderungen</h2>
-            <table class="kz-tab"><tbody>${forderungen.slice(0, 6).map((f) => `<tr><td><a href="#/projekt/${f.p.id}">${esc(anzeigeName(f.p))}</a><br><small class="leise">${f.art}${f.seit ? ` · seit ${tageText(tage(f.seit, jetzt))}` : ""}</small></td><td class="r">${eur(f.betrag)}</td></tr>`).join("") || '<tr><td class="leise">Alles bezahlt.</td></tr>'}</tbody></table>
-            ${forderungen.length > 6 ? `<p class="vb-max">+ ${forderungen.length - 6} weitere</p>` : ""}</section>
-        </div>
-      </div>
-
-      <div class="cockpit-raster">
-        <section class="panel"><h2 class="panel-titel">Wo die Zeit hingeht <small>Ø Tage je Level</small></h2>
+              <span class="hb-wert">${t.n}</span><span class="tip">${i ? `${trichter[i - 1].n ? prozent(t.n / trichter[i - 1].n) : "—"} von „${esc(trichter[i - 1].l)}“` : `${t.n} Anfragen`}</span></li>`).join("")}</ul></section>`,
+      forderungen: `<section class="panel"><h2 class="panel-titel">Offene Forderungen</h2>
+            <table class="kz-tab"><tbody>${forderungen.slice(0, 8).map((f) => `<tr><td><a href="#/projekt/${f.p.id}">${esc(anzeigeName(f.p))}</a><br><small class="leise">${f.art}${f.seit ? ` · seit ${tageText(tage(f.seit, jetzt))}` : ""}</small></td><td class="r">${eur(f.betrag)}</td></tr>`).join("") || '<tr><td class="leise">Alles bezahlt.</td></tr>'}</tbody></table>
+            ${forderungen.length > 8 ? `<p class="vb-max">+ ${forderungen.length - 8} weitere</p>` : ""}</section>`,
+      zeitLevel: `<section class="panel"><h2 class="panel-titel">Wo die Zeit hingeht <small>Ø Tage je Level</small></h2>
           <ul class="hbalken">${proLevel.map((x) => `<li tabindex="0"><span class="hb-label">${zwei(x.ph.nr)} ${esc(x.ph.titel)}</span>
             <span class="hb-spur">${x.d != null ? `<span class="hb-balken" style="width:${Math.max(2, (x.d / maxL) * 100)}%"></span>` : ""}</span>
-            <span class="hb-wert">${tageText(x.d)}</span><span class="tip">${x.n ? `${x.n} ${x.n === 1 ? "Projekt" : "Projekte"} · Ø ${tageText(x.d)}` : "noch keine Daten"}</span></li>`).join("")}</ul></section>
-        <div class="spalte">
-          <section class="panel"><h2 class="panel-titel">Umsatz je Monat <small>abgeschlossene Bäder, netto</small></h2>
+            <span class="hb-wert">${tageText(x.d)}</span><span class="tip">${x.n ? `${x.n} ${x.n === 1 ? "Projekt" : "Projekte"} · Ø ${tageText(x.d)}` : "noch keine Daten"}</span></li>`).join("")}</ul></section>`,
+      umsatzMonat: `<section class="panel"><h2 class="panel-titel">Umsatz je Monat <small>abgeschlossene Bäder, netto</small></h2>
             <div class="vbalken" aria-label="Umsatz je Monat">${monate.map((m) => `<div class="vb" tabindex="0"><span class="vb-spur"><span class="vb-balken" style="height:${m.summe ? Math.max(3, (m.summe / maxM) * 100) : 0}%"></span></span><span class="vb-monat">${MON[m.d.getMonth()]}</span>
               <span class="tip">${MON[m.d.getMonth()]} ${m.d.getFullYear()}: ${eur(m.summe)} · ${m.n} ${m.n === 1 ? "Bad" : "Bäder"}</span></div>`).join("")}</div>
-            <p class="vb-max">Höchster Monat: ${eur(Math.max(...monate.map((m) => m.summe)))} · Ø ${eur(monatsSchnitt)}</p></section>
-          <section class="panel"><h2 class="panel-titel">Woher die Anfragen kommen</h2>
+            <p class="vb-max">Höchster Monat: ${eur(Math.max(...monate.map((m) => m.summe)))} · Ø ${eur(monatsSchnitt)}</p></section>`,
+      wege: `<section class="panel"><h2 class="panel-titel">Woher die Anfragen kommen</h2>
             <table class="kz-tab"><thead><tr><th>Kontaktweg</th><th>Anfragen</th><th>Aufträge</th><th>Quote</th></tr></thead><tbody>
-            ${Object.entries(wege).sort((a, b) => b[1].n - a[1].n).map(([k, w]) => `<tr><td>${esc(k)}</td><td>${w.n}</td><td>${w.auftrag}</td><td>${w.auftrag + w.verloren ? prozent(w.auftrag / (w.auftrag + w.verloren)) : "—"}</td></tr>`).join("") || '<tr><td colspan="4" class="leise">Noch keine Anfragen im Zeitraum.</td></tr>'}</tbody></table></section>
-        </div>
-      </div>
-
-      <section class="panel"><h2 class="panel-titel">Abgeschlossene Bäder</h2>
+            ${Object.entries(wege).sort((a, b) => b[1].n - a[1].n).map(([k, w]) => `<tr><td>${esc(k)}</td><td>${w.n}</td><td>${w.auftrag}</td><td>${w.auftrag + w.verloren ? prozent(w.auftrag / (w.auftrag + w.verloren)) : "—"}</td></tr>`).join("") || '<tr><td colspan="4" class="leise">Noch keine Anfragen im Zeitraum.</td></tr>'}</tbody></table></section>`,
+      nachkalkulation: (() => {
+        const l = projekte.filter((p) => p.status === "abgeschlossen" || (p.status === "aktiv" && p.phase >= 6)).sort((a, b) => (abschlussZeit(b) || b.geaendert || 0) - (abschlussZeit(a) || a.geaendert || 0));
+        const h = (x) => (x ? `${x.toFixed(1).replace(".", ",")} h` : "—");
+        return `<section class="panel"><h2 class="panel-titel">Nachkalkulationen <small>je Bad · Klick öffnet die Nachkalkulation</small></h2>
+        <div class="tab-wrap ohne-rand"><table class="kz-tab breit"><thead><tr><th>Kunde</th><th>Status</th><th class="r">Stunden</th><th class="r">Lohn</th><th class="r">Partner</th><th class="r">Material</th><th class="r">Umsatz</th><th class="r">DB</th><th class="r">Marge</th><th class="r">DB/h</th></tr></thead><tbody>
+        ${l.map((p) => { const g = geld(p); return `<tr><td><a href="#/projekt/${p.id}/nachkalkulation">${esc(anzeigeName(p))}</a></td><td>${g.abgeschlossen ? '<span class="gruen">✓ abgeschlossen</span>' : p.status === "abgeschlossen" ? '<span class="status-chip pausiert">offen</span>' : `Level ${zwei(p.phase)}`}</td>
+          <td class="r">${h(g.stunden)}</td><td class="r">${g.lohn ? eur(g.lohn) : "—"}</td><td class="r">${g.partner ? eur(g.partner) : "—"}</td><td class="r">${g.material ? eur(g.material) : "—"}</td><td class="r">${eur(g.umsatz || null)}</td><td class="r">${g.umsatz && g.hatKosten ? eur(g.db) : "—"}</td><td class="r">${prozent(g.marge)}</td><td class="r">${g.dbProStunde != null ? eur(g.dbProStunde) : "—"}</td></tr>`; }).join("") || '<tr><td colspan="10" class="leise">Noch keine Aufträge.</td></tr>'}</tbody></table></div></section>`;
+      })(),
+      fertig: `<section class="panel"><h2 class="panel-titel">Abgeschlossene Bäder</h2>
         <div class="tab-wrap ohne-rand"><table class="kz-tab breit"><thead><tr><th>Kunde</th><th>Erstkontakt</th><th>Abschluss</th><th>Dauer</th><th class="r">Umsatz</th><th class="r">Kosten</th><th class="r">Deckungsbeitrag</th><th class="r">Marge</th></tr></thead><tbody>
-        ${W.fertig.sort((a, b) => abschlussZeit(b) - abschlussZeit(a)).map((p) => { const g = geld(p), a = levelZeit(p, ersteNr), e = abschlussZeit(p); return `<tr><td><a href="#/projekt/${p.id}">${esc(anzeigeName(p))}</a></td><td>${a ? fDatum(new Date(a)) : "—"}</td><td>${e ? fDatum(new Date(e)) : "—"}</td><td>${tageText(tage(a, e))}</td>
-          <td class="r">${eur(g.umsatz || null)}</td><td class="r">${eur(g.kosten || null)}</td><td class="r">${g.umsatz && g.hatKosten ? eur(g.db) : "—"}</td><td class="r">${prozent(g.marge)}</td></tr>`; }).join("") || '<tr><td colspan="8" class="leise">Im Zeitraum wurde noch kein Bad abgeschlossen.</td></tr>'}</tbody></table></div></section>
+        ${W.fertig.sort((a, b) => abschlussZeit(b) - abschlussZeit(a)).map((p) => { const g = geld(p), a = levelZeit(p, ersteNr), e = abschlussZeit(p); return `<tr><td><a href="#/projekt/${p.id}/nachkalkulation">${esc(anzeigeName(p))}</a></td><td>${a ? fDatum(new Date(a)) : "—"}</td><td>${e ? fDatum(new Date(e)) : "—"}</td><td>${tageText(tage(a, e))}</td>
+          <td class="r">${eur(g.umsatz || null)}</td><td class="r">${eur(g.kosten || null)}</td><td class="r">${g.umsatz && g.hatKosten ? eur(g.db) : "—"}</td><td class="r">${prozent(g.marge)}</td></tr>`; }).join("") || '<tr><td colspan="8" class="leise">Im Zeitraum wurde noch kein Bad abgeschlossen.</td></tr>'}</tbody></table></div></section>`,
+    };
+    const kurz = (n) => (n == null || isNaN(n) ? "—" : Math.abs(n) >= 1000 ? `${(n / 1000).toFixed(Math.abs(n) >= 100000 ? 0 : 1).replace(".", ",")} T€` : eur(n));
+    const gesamtStunden = projekte.reduce((a, p) => a + geld(p).stunden, 0), mitStunden = projekte.filter((p) => geld(p).stunden > 0).length;
+    const ORDNER = [
+      { id: "finanzen", titel: "Finanzen", vorschau: [["Umsatz", kurz(W.umsatz)], ["Marge", prozent(W.marge)], ["Bestand", kurz(bestand)], ["Offen", kurz(fSumme)]],
+        inhalt: () => `${P.ziel}<section class="kpis vier">${K.umsatz}${K.db}${K.proBad}${K.bestand}</section><div class="cockpit-raster">${P.umsatzMonat}<div class="spalte">${K.forderungen}${P.forderungen}</div></div>` },
+      { id: "vertrieb", titel: "Vertrieb", vorschau: [["Quote", W.quote != null ? prozent(W.quote) : "—"], ["Anfragen", String(W.anfragen.length)], ["Aufträge", String(W.auftraege.length)], ["Angebote", kurz(offeneAngebote)]],
+        inhalt: () => `<section class="kpis vier">${K.quote}${K.angebote}</section><div class="cockpit-raster">${P.trichter}${P.wege}</div>` },
+      { id: "zeit", titel: "Zeit & Ablauf", vorschau: [["bis Abschluss", tageText(W.dauer)], ["bis Auftrag", tageText(W.dauerAuftrag)], ["Langsamstes", (proLevel.slice().sort((a, b) => (b.d || 0) - (a.d || 0))[0] || {}).ph ? zwei(proLevel.slice().sort((a, b) => (b.d || 0) - (a.d || 0))[0].ph.nr) : "—"], ["Projekte", String(W.fertig.length)]],
+        inhalt: () => `<section class="kpis vier">${K.dauer}${K.dauerAuftrag}</section>${P.zeitLevel}` },
+      { id: "kapazitaet", titel: "Kapazität & Team", vorschau: [["Baustellen", String(baustellen.length)], ["Monteure", String(monteure().length)], ["Doppelt", String(kap.reduce((a, z) => a + z.wochen.filter((l) => l.length > 1).length, 0))], ["Laufend", String(laufend.length)]],
+        inhalt: () => `${P.kapazitaet}${teamPanel()}` },
+      { id: "nachkalkulation", titel: "Nachkalkulation", vorschau: [["Stunden", gesamtStunden ? Math.round(gesamtStunden) + " h" : "—"], ["Ø pro Bad", mitStunden ? (gesamtStunden / mitStunden).toFixed(1).replace(".", ",") + " h" : "—"], ["DB", W.db != null ? kurz(W.db) : "—"], ["Offen", String(projekte.filter((p) => p.status === "abgeschlossen" && !geld(p).abgeschlossen).length)]],
+        inhalt: () => `${P.nachkalkulation}${P.fertig}` },
+    ];
+    const zeitraum = `<div class="seg" role="radiogroup" aria-label="Zeitraum">${[["12m", "12 Monate"], ["jahr", "Dieses Jahr"], ["alle", "Gesamt"]].map(([id, l]) => `<button class="seg-k${zr === id ? " an" : ""}" data-aktion="kz-zeitraum" data-wert="${id}" role="radio" aria-checked="${zr === id}">${l}</button>`).join("")}</div>`;
+    const offen = ORDNER.find((o) => o.id === ordnerId);
+    const hinweis = fehlend ? `<p class="luecken">${fehlend} abgeschlossene${fehlend === 1 ? "s Bad hat" : " Bäder haben"} noch keine Umsatzzahlen – in der Nachkalkulation des Bads eintragen.</p>` : "";
+    if (offen) return `<div class="seite kennzahlen">
+      <header class="kopf"><div><p class="eyebrow"><a href="#/kennzahlen">Unternehmen</a> / Ordner</p><h1>${esc(offen.titel)}</h1></div><div class="kopf-aktionen">${zeitraum}</div></header>
+      ${hinweis}${offen.inhalt()}</div>`;
+    return `<div class="seite kennzahlen">
+      <header class="kopf"><div><p class="eyebrow">Nur für die Geschäftsführung</p><h1>Unternehmen</h1></div><div class="kopf-aktionen">${zeitraum}</div></header>
+      ${hinweis}
+      <section class="ordner-raster">${ORDNER.map((o) => `<a class="app-ordner" href="#/kennzahlen/${o.id}">
+        <span class="ao-kachel">${o.vorschau.map(([l, v]) => `<span class="ao-mini"><b>${esc(v)}</b><small>${esc(l)}</small></span>`).join("")}</span>
+        <span class="ao-titel">${esc(o.titel)}</span></a>`).join("")}</section>
     </div>`;
   }
 
@@ -871,7 +1067,7 @@
         const def = TERMINE.find((t) => t.key === s.termin);
         const v = (p.termine || {})[s.termin] || "";
         meta = v ? fTermin(v) : "noch kein Termin";
-        inhalt = `<div class="q-aktion"><input class="eingabe auto" type="${def.typ}" data-termin="${s.termin}" value="${esc(v)}" aria-label="${esc(def.label)}"></div>`;
+        inhalt = `<div class="q-aktion"><input class="eingabe auto" type="${def.typ}" data-termin="${s.termin}" value="${esc(v)}" aria-label="${esc(def.label)}">${v ? `<button class="btn klein" data-aktion="ics" data-termin-key="${s.termin}" title="Termin als Kalendereintrag für Outlook">📅 In Outlook-Kalender</button>` : ""}</div>`;
         break;
       }
       case "mail": {
@@ -924,7 +1120,7 @@
     if (!istBuero() && !["dateien", "kunde", "termine", "zeiten"].includes(S.akteTab)) S.akteTab = "dateien";
     const t = S.akteTab;
     if (S.akteTab === "zahlen" && !istGF()) S.akteTab = "dateien";
-    const tabs = istBuero() ? [["dateien", "Dateien"], ["kunde", "Kunde"], ["team", "Team"], ["termine", "Termine"], ["zeiten", "Zeiten"], ["verlauf", "Verlauf"], ...(istGF() ? [["zahlen", "Zahlen"]] : [])] : [["dateien", "Dateien"], ["kunde", "Kunde"], ["termine", "Termine"], ["zeiten", "Zeiten"]];
+    const tabs = istBuero() ? [["dateien", "Dateien"], ["kunde", "Kunde"], ["team", "Team"], ["termine", "Termine"], ["zeiten", "Zeiten"], ["verlauf", "Verlauf"], ...(istGF() ? [["zahlen", "Nachkalkulation"]] : [])] : [["dateien", "Dateien"], ["kunde", "Kunde"], ["termine", "Termine"], ["zeiten", "Zeiten"]];
     let inhalt = "";
     if (!istBuero() && (t === "kunde" || t === "termine")) {
       const k = p.kunde;
@@ -942,18 +1138,12 @@
         <ul class="verlauf zeiten">${alleZ.map((z) => { const a = new Date(z.start); return `<li><time>${fKurz(a)} ${fUhr(a)}</time><span><b>${z.ende ? stunden(dauerMs(z)) : `läuft · ${hms(dauerMs(z))}`}</b> · ${esc(z.name)}${z.ende ? ` · bis ${fUhr(new Date(z.ende))}` : ""}${(z.pausen || []).length ? ` · ${z.pausen.length} Pause${z.pausen.length > 1 ? "n" : ""}` : ""}${z.notiz ? `<small class="von">${esc(z.notiz)}</small>` : ""}
           ${istGF() && z.ende ? `<button class="btn klein still gefahr" data-aktion="zeit-loeschen" data-zeit="${z.id}">Löschen</button>` : ""}</span></li>`; }).join("") || '<li class="leer-hinweis">Noch keine Arbeitszeit erfasst. Oben im Projekt „Arbeitszeit starten“.</li>'}</ul>`;
     } else if (t === "zahlen") {
-      const z = S.zahlen[p.id] || {}, g = geld(p);
-      const feld = (f) => `<div class="feld"><label for="z-${f.k}">${esc(f.l)}</label><input class="eingabe" id="z-${f.k}" type="number" inputmode="decimal" min="0" step="1" data-zahl="${f.k}" value="${esc(z[f.k] ?? "")}" placeholder="€"></div>`;
-      const start = levelZeit(p, ersteNr), auftragAm = levelZeit(p, 6), ende = abschlussZeit(p);
-      inhalt = `<p class="leise klein-text">Nur für die Geschäftsführung sichtbar. Werte netto in Euro, z. B. aus ${esc(cfg().programme.erp)}.</p>
-        <p class="q-gruppe">Umsatz</p><div class="felder">${ZAHLFELDER.filter((f) => !f.kosten).map(feld).join("")}</div>
-        <p class="q-gruppe">Zahlungseingang</p><div class="felder">
-          <div class="feld"><label for="z-ab">Abschlag bezahlt am</label><input class="eingabe" id="z-ab" type="date" data-zahl="abschlagBezahlt" value="${esc(z.abschlagBezahlt || "")}"></div>
-          <div class="feld"><label for="z-sr">Schlussrechnung bezahlt am</label><input class="eingabe" id="z-sr" type="date" data-zahl="rechnungBezahlt" value="${esc(z.rechnungBezahlt || "")}"></div></div>
-        <p class="q-gruppe">Kosten</p><div class="felder">${ZAHLFELDER.filter((f) => f.kosten).map(feld).join("")}</div>
-        <dl class="infos zahl-summe"><dt>Kosten gesamt</dt><dd>${eur(g.kosten || null)}</dd><dt>Deckungsbeitrag</dt><dd>${g.umsatz && g.kosten ? eur(g.db) : "—"}</dd><dt>Marge</dt><dd>${prozent(g.marge)}</dd></dl>
-        <p class="q-gruppe">Dauer</p><dl class="infos"><dt>Erstkontakt</dt><dd>${start ? fDatum(new Date(start)) : "—"}</dd><dt>Auftrag (Level 06)</dt><dd>${auftragAm ? `${fDatum(new Date(auftragAm))} · nach ${tageText(tage(start, auftragAm))}` : "—"}</dd>
-          <dt>Abschluss</dt><dd>${ende ? `${fDatum(new Date(ende))} · nach ${tageText(tage(start, ende))}` : p.status === "abgeschlossen" ? "—" : `läuft seit ${tageText(tage(start, Date.now()))}`}</dd></dl>`;
+      const g = geld(p), start = levelZeit(p, ersteNr), ende = abschlussZeit(p);
+      inhalt = `<p class="leise klein-text">Nur für die Geschäftsführung. Erlöse, Stunden, Partnerzeiten, Material – alles für dieses Bad.</p>
+        <dl class="infos zahl-summe"><dt>Umsatz</dt><dd>${eur(g.umsatz || null)}</dd><dt>Kosten</dt><dd>${eur(g.kosten || null)}</dd><dt>Deckungsbeitrag</dt><dd>${g.umsatz && g.kosten ? eur(g.db) : "—"} ${g.marge != null ? `· ${prozent(g.marge)}` : ""}</dd>
+          <dt>Stunden</dt><dd>${g.stunden ? g.stunden.toFixed(1).replace(".", ",") + " h" : "—"}</dd><dt>Dauer</dt><dd>${start ? (ende ? tageText(tage(start, ende)) : `läuft seit ${tageText(tage(start, Date.now()))}`) : "—"}</dd>
+          <dt>Status</dt><dd>${g.abgeschlossen ? `abgeschlossen ${fDatum(new Date(g.abgeschlossen))}` : "offen"}</dd></dl>
+        <a class="btn voll" href="#/projekt/${p.id}/nachkalkulation">Nachkalkulation öffnen <span class="pfeil">→</span></a>`;
     } else if (t === "team") {
       const z = p.zugriff || [], st = p.partnerStatus || {};
       const zeile = (id, name, art) => `<li><button type="button" class="haken-k${z.includes(id) ? " an" : ""}" data-aktion="zuweisen" data-id="${esc(id)}" aria-pressed="${z.includes(id)}"><span></span></button><span><b>${esc(name)}</b><small>${esc(art)}</small>${st[id] ? `<small class="${st[id].erledigt ? "gruen" : ""}">${st[id].erledigt ? "✓ erledigt gemeldet" : "Rückmeldung"} ${fKurz(new Date(st[id].am))}${st[id].notiz ? ": " + esc(st[id].notiz) : ""}</small>` : ""}</span></li>`;
@@ -981,7 +1171,7 @@
         <div class="feld breit"><label for="k-notiz">Notizen</label><textarea class="eingabe" id="k-notiz" data-pfeld="notiz" rows="4">${esc(p.notiz)}</textarea></div>
       </div>${istGF() ? `<button class="btn still gefahr klein" data-aktion="loeschen">Projekt löschen</button>` : ""}`;
     } else if (t === "termine") {
-      inhalt = TERMINE.map((d) => `<div class="termin-zeile"><span>${esc(d.label)}</span><input class="eingabe" type="${d.typ}" data-termin="${d.key}" value="${esc((p.termine || {})[d.key] || "")}" aria-label="${esc(d.label)}"></div>`).join("");
+      inhalt = TERMINE.map((d) => `<div class="termin-zeile"><span>${esc(d.label)}${(p.termine || {})[d.key] && istBuero() ? `<button class="ics-mini" data-aktion="ics" data-termin-key="${d.key}" title="In Outlook-Kalender eintragen" aria-label="${esc(d.label)} in Outlook-Kalender">📅</button>` : ""}</span><input class="eingabe" type="${d.typ}" data-termin="${d.key}" value="${esc((p.termine || {})[d.key] || "")}" aria-label="${esc(d.label)}"></div>`).join("") + `<p class="leise klein-text abstand-o">📅 legt den Termin als Kalendereintrag an – öffnen, dann übernimmt Outlook ihn.</p>`;
     } else {
       inhalt = `<ul class="verlauf">${(p.verlauf || []).map((v) => { const d = new Date(v.ts); return `<li><time>${fKurz(d)} ${fUhr(d)}</time><span>${esc(v.text)}${v.von ? `<small class="von">${esc(v.von)}</small>` : ""}</span></li>`; }).join("")}</ul>`;
     }
@@ -1243,8 +1433,9 @@
           <div class="feld"><label for="mail-betreff">Betreff</label><input class="eingabe" id="mail-betreff" value="${esc(m.betreff)}"></div>
           <div class="feld abstand-o"><label for="mail-text">Text</label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
           <p class="anhang-info">Anhänge: ${m.anhangDateien ? m.anhangDateien.map((f, i) => `<a href="${esc(f)}" download>${esc(m.anhaenge[i] || f.split("/").pop())}</a>`).join(", ") : m.anhaenge.map(esc).join(", ") || "keine"} · Absender: ${esc(cfg().kundenPostfach)}</p></div>
-        <div class="dlg-fuss"><a class="btn links" href="${esc(m.datei)}">Outlook-Vorlage</a><button class="btn" data-dlg="kopieren">Text kopieren</button>
-          <a class="btn" data-dlg="mailto" href="#">Im Mailprogramm öffnen</a><button class="btn jetzt" data-dlg="gesendet">Als gesendet markieren</button></div>`;
+        <div class="dlg-fuss"><a class="btn links still" href="${esc(m.datei)}">Original-Vorlage</a><button class="btn" data-dlg="kopieren">Text kopieren</button>
+          <a class="btn still" data-dlg="mailto" href="#">Einfache Mail</a><button class="btn voll" data-dlg="eml">In Outlook öffnen</button><button class="btn jetzt" data-dlg="gesendet">Als gesendet markieren</button></div>
+        <p class="anhang-info dlg-hinweis">„In Outlook öffnen“ erzeugt einen fertigen Entwurf mit Anhängen – Datei öffnen, in Outlook prüfen und absenden.</p>`;
       $('[data-dlg="mailto"]', dlg).href = mailto(dlg);
     };
     dialog("", (dlg) => {
@@ -1253,6 +1444,12 @@
         const a = e.target.closest("[data-dlg]"); if (!a) return;
         if (a.dataset.dlg === "kopieren") { await kopieren($("#mail-text", dlg).value); toast("Text kopiert"); }
         if (a.dataset.dlg === "mailto") a.href = mailto(dlg);
+        if (a.dataset.dlg === "eml") {
+          const anh = [...(m.anhangDateien || []).map((f, i) => ({ url: f, name: (m.anhaenge[i] || f.split("/").pop()) + (/\.pdf$/i.test(m.anhaenge[i] || "") ? "" : ".pdf") }))];
+          for (const kat of m.anhangOrdner || []) for (const d of dateienVon(p.id, kat).slice(-1)) { try { anh.push({ url: await dateiUrl(d), name: d.name }); } catch (e) { /* ohne */ } }
+          const fehlt = await emlDatei(p, $("#mail-betreff", dlg).value, $("#mail-text", dlg).value, anh);
+          toast(fehlt ? `Entwurf erstellt – ${fehlt} Anhang/Anhänge bitte selbst anfügen` : "Entwurf erstellt – Datei öffnen, dann in Outlook absenden");
+        }
         if (a.dataset.dlg === "gesendet") {
           aendern(p, (x) => { x.mails = x.mails || {}; x.mails[m.id] = Date.now(); }, `Mail „${m.titel}“ gesendet`);
           dlg.close(); toast("Als gesendet vermerkt"); teilRendern(p);
@@ -1358,6 +1555,9 @@
         </div></section>
         <section class="panel"><h3>Ziele</h3><p class="leise">Erscheinen nur auf der Seite „Unternehmen“ der Geschäftsführung.</p><div class="felder drei">
           ${f("ziele.jahresumsatz", `Umsatzziel ${new Date().getFullYear()} (netto, €)`, (c.ziele || {}).jahresumsatz || "", "number")}
+        </div></section>
+        <section class="panel"><h3>Nachkalkulation</h3><p class="leise">Interner Kostensatz je Mitarbeiterstunde (Lohn inkl. Nebenkosten). Wird in jeder Nachkalkulation mit den Timer-Stunden verrechnet; pro Projekt änderbar.</p><div class="felder drei">
+          ${f("kalkulation.stundensatz", "Kostensatz je Stunde (€)", (c.kalkulation || {}).stundensatz || "", "number")}
         </div></section>
         <section class="panel"><h3>Geschäftszeiten</h3><p class="leise">Termine außerhalb dieser Zeiten und an Wochenenden werden nicht angenommen.</p><div class="felder drei">
           ${f("geschaeftszeiten.von", "Termine ab", (c.geschaeftszeiten || {}).von || "07:00", "time")}
@@ -1593,6 +1793,7 @@
     letztePid = aktuellePid();
     if (letztePid) await sperreAktualisieren(letztePid);
     render();
+    abwesenheitPruefen();
   }
   const loginKopf = (unter) => `<img src="${esc(cfg().logo)}" alt="" class="login-logo"><h1>${esc(cfg().name)}</h1><p class="leise">${unter}</p>`;
   function ansichtErsteinrichtung(fehler) {
@@ -1647,11 +1848,12 @@
     const html =
       e === "partner" ? (r.name === "projekt" ? ansichtEinsatz(r.arg) : ansichtEinsaetze()) :
       r.name === "projekt" && r.sub === "formular" ? ansichtFormular(r.arg, r.subArg) :
+      r.name === "projekt" && r.sub === "nachkalkulation" ? ansichtNachkalkulation(r.arg) :
       r.name === "projekt" ? ansichtProjekt(r.arg) :
       e === "monteur" ? ansichtBaustellen() :
       r.name === "projekte" ? ansichtProjekte() :
       r.name === "einrichtung" && istGF() ? ansichtEinrichtung() :
-      r.name === "kennzahlen" && istGF() ? ansichtKennzahlen() :
+      r.name === "kennzahlen" && istGF() ? ansichtKennzahlen(r.arg) :
       r.name === "konten" && istGF() ? ansichtKonten() : ansichtCockpit();
     $("#main").innerHTML = html;
     navRendern();
@@ -1763,6 +1965,15 @@
       if (nr > p.phase) { const li = a.closest(".lv"); li.classList.remove("wackeln"); void li.offsetWidth; li.classList.add("wackeln"); return toast(`Gesperrt – erst Level ${zwei(p.phase)} abschließen`); }
       S.ansicht[p.id] = nr; return teilRendern(p);
     }
+    if ((akt === "nk-neu" || akt === "nk-weg" || akt === "nk-abschliessen" || akt === "nk-oeffnen") && p && istGF()) {
+      const z = (S.zahlen[p.id] = { ...(S.zahlen[p.id] || {}) });
+      if (akt === "nk-neu") z[a.dataset.tab] = [...(z[a.dataset.tab] || []), {}];
+      if (akt === "nk-weg") z[a.dataset.tab] = (z[a.dataset.tab] || []).filter((_, i) => i !== Number(a.dataset.zeile));
+      if (akt === "nk-abschliessen") { z.nkAbgeschlossen = Date.now(); aendern(p, () => {}, "Nachkalkulation abgeschlossen"); }
+      if (akt === "nk-oeffnen") { delete z.nkAbgeschlossen; aendern(p, () => {}, "Nachkalkulation wieder geöffnet"); }
+      nkSpeichern(p); const y = window.scrollY; render(); window.scrollTo(0, y); return;
+    }
+    if (akt === "ics" && p) return icsDatei(p, a.dataset.terminKey);
     if (akt === "sperre-uebernehmen" && p && istGF()) {
       if (!confirm(`Bearbeitung von ${S.sperre.name} übernehmen? Nicht gespeicherte Eingaben von ${S.sperre.name} können verloren gehen.`)) return;
       await sperreAktualisieren(p.id, true); toast("Du bearbeitest jetzt dieses Projekt"); return render();
@@ -1775,6 +1986,7 @@
         aendern(lauf.p, () => { (lauf.z.pausen || []).forEach((x) => { if (!x.ende) x.ende = jetzt; }); lauf.z.ende = jetzt; }, `Arbeitszeit ${stunden(dauerMs(lauf.z))}`);
       }
       aendern(p, (x) => { x.zeiten = x.zeiten || []; x.zeiten.push({ id: uid(), wer: S.ich.id, name: S.ich.name, start: Date.now(), ende: null, pausen: [], level: x.phase }); }, "Arbeitszeit gestartet");
+      aktivGemerkt = 0; aktivitaet(); systemAbwesenheit();
       kopfNeu(p); statusLeiste(); return teilRendern(p);
     }
     if (akt === "zeit-pause" && p) { const z = meineZeit(p); if (z) aendern(p, () => { z.pausen = [...(z.pausen || []), { start: Date.now(), ende: null }]; }); kopfNeu(p); statusLeiste(); return teilRendern(p); }
@@ -2002,6 +2214,17 @@
       const k = el.dataset.pfeld;
       aendern(p, (x) => { x[k] = el.value.trim(); }, k === "status" ? `Status: ${STATUS.find((s) => s.id === el.value)?.label}` : k === "projektnr" ? `Projektnummer: ${el.value.trim()}` : k === "downloadCode" ? `Download-Code: ${el.value.trim()}` : null);
       kopfNeu(p); return teilRendern(p);
+    }
+    if ((el.dataset.nk || el.dataset.nkTab) && p && istGF()) {
+      const z = (S.zahlen[p.id] = { ...(S.zahlen[p.id] || {}) });
+      const wert = el.type === "number" ? (el.value === "" ? "" : Number(el.value)) : el.value;
+      if (el.dataset.nk) { if (wert === "") delete z[el.dataset.nk]; else z[el.dataset.nk] = wert; }
+      else {
+        const l = (z[el.dataset.nkTab] = [...(z[el.dataset.nkTab] || [])]), i = Number(el.dataset.zeile);
+        l[i] = { ...(l[i] || {}), [el.dataset.spalte]: wert };
+        if (el.dataset.spalte === "partner") { const pa = (cfg().partner || []).find((x) => x.firma === wert); if (pa && !l[i].gewerk) l[i].gewerk = pa.gewerk; }
+      }
+      nkSpeichern(p); const y = window.scrollY; render(); window.scrollTo(0, y); return;
     }
     if (el.dataset.zahl && p && istGF()) {
       const z = { ...(S.zahlen[p.id] || {}) };
