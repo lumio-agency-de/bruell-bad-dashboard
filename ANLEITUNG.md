@@ -29,8 +29,26 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
 - Monteure und Partner werden im Projekt zugewiesen: Level 10 „Monteure & Partner zuweisen“
   oder jederzeit im Reiter **Team** der Akte. Dort erscheinen auch die Rückmeldungen der Partner.
 - Welche Formulare ein Partner sieht, hängt an seinem Gewerk (`gewerke` in `firma.js`).
-- **Lokal** lässt sich jede Ebene links unten über **„Ansicht als“** ausprobieren.
-  **In der Cloud** gilt die Ebene des angemeldeten Kontos, und die Datenbank erzwingt die Rechte.
+- Was jede Ebene sieht, steht als Tabelle unter **Konten → Wer sieht was**.
+
+## Konten & Anmeldung
+
+Jede Person hat ein eigenes Konto (Benutzername + Passwort) und sieht nach der
+Anmeldung nur, was ihre Ebene erlaubt. Ohne Anmeldung ist nichts zu sehen.
+
+1. **Geschäftsführung** öffnet **Konten**: dort stehen alle Mitarbeiter und Partner mit
+   Ebene und Zugangsstatus. Neue Person anlegen → **Änderungen übernehmen** →
+   **Zugang anlegen**. Das Dashboard schlägt Benutzername und Startpasswort vor und zeigt
+   beides einmal an (Knopf „Zugangsdaten kopieren“).
+2. Die Person meldet sich an und muss beim ersten Mal **ein eigenes Passwort** festlegen.
+3. Passwort vergessen → Geschäftsführung: **Passwort zurücksetzen** (neues Startpasswort).
+   Jemand verlässt die Firma → **Sperren**.
+4. Jeder kann sein Passwort jederzeit links unten unter **Passwort ändern** wechseln.
+
+Im **Demo-Modus** (ohne Cloud) liegen die Konten nur im eigenen Browser – zum Ausprobieren.
+Der Vorschau-Link mit `?demo=1` legt Demo-Zugänge an (Passwort `demo1234`), die das
+Anmeldefenster zum Anklicken anbietet. Ohne `?demo=1` beginnt das Dashboard mit der
+**Ersteinrichtung** des Geschäftsführer-Zugangs.
 
 ## Bereiche
 
@@ -40,7 +58,8 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
 | **Projekte** | Alle Bäder nach Abschnitt, mit Suche und Filtern. |
 | **Projekt** | Die Spielfläche: oben die Level-Karte, links die Schritte des aktuellen Levels, rechts die Akte (Dateien-Ordner, Kunde, Termine, Verlauf). |
 | **Unternehmen** | (nur Geschäftsführung) Jahresziel, Umsatz, Deckungsbeitrag, Quote, Dauer, Auftragsbestand, offene Forderungen, Kapazität der nächsten 8 Wochen, Vertriebstrichter — jeweils mit Vergleich zum Vorzeitraum. Euro-Beträge pro Projekt unter Akte → Zahlen. |
-| **Einrichtung** | (nur Geschäftsführung) Firma, Farben, Ebenen, Team, externe Partner, Programme, Fristen, Cloud, Sicherung. |
+| **Konten** | (nur Geschäftsführung) Mitarbeiter und Partner, Ebenen, Zugänge anlegen/zurücksetzen/sperren, Tabelle „Wer sieht was“. |
+| **Einrichtung** | (nur Geschäftsführung) Firma, Farben, Ziele, Programme, Fristen, Cloud, Sicherung. |
 | **Meine Baustellen / Meine Einsätze** | Startseite für Monteure bzw. externe Partner. |
 
 **+ Neue Anfrage** (links oben) legt ein Projekt an und öffnet direkt die Bestandsaufnahme.
@@ -90,8 +109,9 @@ Cockpit unter **Neu vom Kunden**. Fotos werden dabei automatisch verkleinert.
 
 ## Auf eine andere Firma übertragen
 
-1. Ordner kopieren, `index.html` öffnen → **Einrichtung**: Firma, Farben, Team
-   (Rollen, Kürzel, Ebene, Login-E-Mail), externe Partner, Programme, Fristen eintragen → **Übernehmen**.
+1. Ordner kopieren, `index.html` öffnen → Geschäftsführer-Zugang anlegen →
+   **Einrichtung**: Firma, Farben, Ziele, Programme, Fristen → **Übernehmen**;
+   **Konten**: Team (Rollen, Kürzel, Ebene) und externe Partner eintragen, Zugänge vergeben.
 2. **firma.js herunterladen** und `einstellungen/firma.js` damit ersetzen.
 3. Logo als `app/img/logo.svg` (oder anderer Pfad in der Einrichtung).
 4. Cloud einrichten: `supabase/ANLEITUNG-CLOUD.md`.

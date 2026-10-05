@@ -18,23 +18,24 @@ Dafür nehmen wir **Supabase** (Server in Frankfurt wählbar). Einmalig ca. 20 M
 **SQL Editor** → **New query** → den kompletten Inhalt von `schema.sql` einfügen →
 **Run**. Das legt Tabellen, Dateispeicher und alle Zugriffsregeln an.
 
-## 3. Zugänge anlegen
+## 3. Ersten Zugang anlegen
 
-1. **Authentication → Users → Add user → Create new user**: E-Mail + Passwort für jede
-   Person (Team, Monteure, externe Partner), „Auto Confirm User“ anhaken.
-2. Unter **Authentication → Sign In / Providers** die öffentliche Registrierung
-   (**Allow new users to sign up**) **ausschalten**.
-3. **Ersten Zugang freischalten:** Ein Konto allein darf noch nichts — erst die Ebene
-   entscheidet. Für die Geschäftsführung einmalig im SQL Editor ausführen (E-Mail anpassen):
+Unter **Authentication → Sign In / Providers** die öffentliche Registrierung
+(**Allow new users to sign up**) **ausschalten** — Konten vergibt nur die Geschäftsführung.
 
-   ```sql
-   insert into public.mitglieder (email, id, ebene, name)
-   values ('chef@ihre-firma.de', 'DB', 'geschaeftsfuehrung', 'Daniel Brüll');
-   ```
+Dann einmalig im SQL Editor den Geschäftsführer-Zugang anlegen (Werte anpassen):
 
-   `id` = Kürzel aus der Einrichtung. Alle weiteren Personen trägt die Geschäftsführung
-   danach im Dashboard ein: **Einrichtung → Team / Externe Partner → Login-E-Mail**
-   und **Übernehmen**. Wer angemeldet ist, aber nirgends eingetragen, sieht „Noch kein Zugang“.
+```sql
+select public.erster_zugang('daniel', 'Start-Passwort-123', 'DB', 'Daniel Brüll');
+```
+
+Benutzername, Startpasswort (mind. 8 Zeichen), Kürzel aus dem Team, Name. Das geht nur,
+solange es noch keinen Geschäftsführer-Zugang gibt. Beim ersten Anmelden wird ein eigenes
+Passwort verlangt. **Alle weiteren Zugänge** legt die Geschäftsführung danach direkt im
+Dashboard unter **Konten** an — ohne Supabase-Oberfläche.
+
+Benutzernamen ohne „@“ werden intern zu `name@konto.bad-dashboard.de`; es wird keine
+E-Mail verschickt. Gesperrte Konten können sich nicht mehr anmelden und sehen nichts.
 
 ## 4. Zugangsdaten eintragen
 
@@ -83,7 +84,7 @@ Dashboard unter *Einrichtung → Projekte sichern (JSON)* regelmäßig eine Kopi
 
 ## Getestet
 
-Schema, Login, alle vier Ebenen (Geschäftsführung, Planung, Monteur, Partner),
+Schema, Konten (Ersteinrichtung, Anlegen im Dashboard, Pflicht-Passwortwechsel, Zurücksetzen, Sperren), Login, alle vier Ebenen (Geschäftsführung, Planung, Monteur, Partner),
 Team-, Monteur-, Partner- und Kunden-Uploads sowie die Sperren (kein Lesen ohne Ebene,
 Monteur ohne Angebote/Rechnungen, Partner nur Auszug, kein Upload mit falschem Link)
 wurden gegen einen lokalen Supabase-Server geprüft.

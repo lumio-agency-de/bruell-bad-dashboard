@@ -15,6 +15,14 @@
   const sicher = (n) => n.normalize("NFKD").replace(/[̀-ͯ]/g, "").replace(/[^\w.\-]+/g, "_").slice(-80);
 
   /* Zugang aus firma.js – oder, falls dort leer, im Browser hinterlegt (Einrichtung → Cloud verbinden) */
+  /* Benutzername → interne Login-Adresse (wie konto_email() in schema.sql) */
+  const kontoEmail = (b) => { const x = String(b || "").trim().toLowerCase(); return x.includes("@") ? x : `${x}@konto.bad-dashboard.de`; };
+  async function pruefsumme(salz, pw) {
+    const d = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(salz + "|" + pw));
+    return [...new Uint8Array(d)].map((b) => b.toString(16).padStart(2, "0")).join("");
+  }
+  const normMitglied = (m) => m && { id: m.id, ebene: m.ebene, name: m.name, benutzer: m.benutzer || m.email, email: m.email, mussAendern: !!(m.mussAendern ?? m.muss_aendern), aktiv: m.aktiv !== false, formulare: m.formulare || [] };
+
   function cloudKonfig() {
     const c = (window.FIRMA && window.FIRMA.cloud) || {};
     if (c.url && c.anonKey) return c;
@@ -72,8 +80,57 @@
      ===================================================================== */
   const Lokal = {
     modus: "lokal",
-    async start() { return true; },
-    angemeldet: true,
+    angemeldet: false,
+    mitglied: null,
+    /* Konten im Browser (Demo/Test). Passwörter nur als Prüfsumme. */
+    _konten() { return lesen("baddashboard:konten", []); },
+    _speichernKonten(l) { schreiben("baddashboard:konten", l); },
+    ersteinrichtungNoetig() { return !this._konten().some((k) => k.ebene === "geschaeftsfuehrung" && k.aktiv !== false); },
+    async start() {
+      const email = lesen("baddashboard:sitzung", null);
+      const k = email && this._konten().find((x) => x.email === email && x.aktiv !== false);
+      this.mitglied = normMitglied(k); this.angemeldet = !!k; this.nutzer = k ? k.benutzer : null;
+      return this.angemeldet;
+    },
+    async anmelden(benutzer, passwort) {
+      const email = kontoEmail(benutzer), l = this._konten(), k = l.find((x) => x.email === email);
+      if (!k || k.hash !== (await pruefsumme(k.salz, passwort))) throw new Error("Benutzername oder Passwort falsch.");
+      if (k.aktiv === false) throw new Error("Dieses Konto ist gesperrt. Bitte an die Geschäftsführung wenden.");
+      k.letzterLogin = new Date().toISOString(); this._speichernKonten(l);
+      schreiben("baddashboard:sitzung", email);
+      this.mitglied = normMitglied(k); this.angemeldet = true; this.nutzer = k.benutzer;
+    },
+    async abmelden() { try { localStorage.removeItem("baddashboard:sitzung"); } catch (e) { /* egal */ } this.angemeldet = false; this.mitglied = null; },
+    async passwortAendern(neu) {
+      if (String(neu).length < 8) throw new Error("Mindestens 8 Zeichen.");
+      const l = this._konten(), k = l.find((x) => x.email === this.mitglied.email);
+      k.salz = token(); k.hash = await pruefsumme(k.salz, neu); k.mussAendern = false; this._speichernKonten(l);
+      this.mitglied.mussAendern = false;
+    },
+    async konten() { return this._konten().map((k) => ({ email: k.email, benutzer: k.benutzer, id: k.id, ebene: k.ebene, name: k.name, aktiv: k.aktiv !== false, mussAendern: !!k.mussAendern, letzterLogin: k.letzterLogin || null })); },
+    async kontoAnlegen({ benutzer, passwort, id, ebene, name, formulare }, ohneGf) {
+      if (!ohneGf && (!this.mitglied || this.mitglied.ebene !== "geschaeftsfuehrung")) throw new Error("nicht erlaubt");
+      if (String(passwort).length < 8) throw new Error("Passwort zu kurz (mind. 8 Zeichen)");
+      const email = kontoEmail(benutzer);
+      let l = this._konten();
+      if (l.some((k) => k.email === email && k.id !== id)) throw new Error("Benutzername schon vergeben");
+      l = l.filter((k) => k.id !== id && k.email !== email);
+      const salz = token();
+      l.push({ email, benutzer: String(benutzer).trim().toLowerCase(), id, ebene, name, formulare: formulare || [], salz, hash: await pruefsumme(salz, passwort), aktiv: true, mussAendern: !ohneGf || ohneGf === "muss" });
+      this._speichernKonten(l);
+    },
+    async kontoZuruecksetzen(email, passwort) {
+      if (String(passwort).length < 8) throw new Error("Passwort zu kurz (mind. 8 Zeichen)");
+      const l = this._konten(), k = l.find((x) => x.email === email);
+      k.salz = token(); k.hash = await pruefsumme(k.salz, passwort); k.mussAendern = true; this._speichernKonten(l);
+    },
+    async kontoAktiv(email, aktiv) {
+      if (email === this.mitglied.email) throw new Error("Das eigene Konto kann nicht gesperrt werden.");
+      const l = this._konten(); l.find((x) => x.email === email).aktiv = aktiv; this._speichernKonten(l);
+    },
+    async kontoAendern(id, ebene, name, formulare) {
+      const l = this._konten(); l.filter((k) => k.id === id).forEach((k) => { k.ebene = ebene; k.name = name; k.formulare = formulare || []; }); this._speichernKonten(l);
+    },
     async projekteLaden() { return lesen(LS.projekte, []); },
     async projektSpeichern(p, alle) { schreiben(LS.projekte, alle); },
     async einstellungenLaden() { return lesen(LS.einstellungen, null); },
@@ -116,10 +173,6 @@
       return t;
     },
     async abgleichen() { return false; },
-    /* Ebenen: lokal wählt man im Dashboard „Ansicht als …“ */
-    async ich() { try { return localStorage.getItem("baddashboard:ich") || null; } catch (e) { return null; } },
-    ichSetzen(id) { try { localStorage.setItem("baddashboard:ich", id); } catch (e) { /* egal */ } },
-    async mitgliederSpeichern() { return true; },
     partnerAuftraege: null,  // lokal berechnet app.js den Auszug selbst
     /* Kennzahlen (Umsatz, Kosten) – nur Geschäftsführung */
     async zahlenLaden() { return lesen("baddashboard:zahlen", {}); },
@@ -154,31 +207,56 @@
       sb,
       angemeldet: false,
       nutzer: null,
+      mitglied: null,
+      ersteinrichtungNoetig() { return false; },
+      async _mitgliedLaden(email) {
+        const { data } = await sb.from("mitglieder").select("*").eq("email", String(email || "").toLowerCase()).maybeSingle();
+        this.mitglied = data && data.aktiv !== false ? normMitglied(data) : null;
+      },
       async start() {
         const { data } = await sb.auth.getSession();
         this.angemeldet = !!data.session;
         this.nutzer = data.session ? data.session.user.email : null;
+        if (this.angemeldet) await this._mitgliedLaden(this.nutzer);
         return this.angemeldet;
       },
-      async anmelden(email, passwort) {
-        const { data, error } = await sb.auth.signInWithPassword({ email, password: passwort });
-        if (error) throw new Error(error.message === "Invalid login credentials" ? "E-Mail oder Passwort falsch." : error.message);
+      async anmelden(benutzer, passwort) {
+        const { data, error } = await sb.auth.signInWithPassword({ email: kontoEmail(benutzer), password: passwort });
+        if (error) {
+          if (/banned/i.test(error.message || error.code || "")) throw new Error("Dieses Konto ist gesperrt. Bitte an die Geschäftsführung wenden.");
+          throw new Error(error.message === "Invalid login credentials" ? "Benutzername oder Passwort falsch." : error.message);
+        }
         this.angemeldet = true; this.nutzer = data.user.email;
+        await this._mitgliedLaden(this.nutzer);
       },
-      async abmelden() { await sb.auth.signOut(); this.angemeldet = false; },
-      /* eigener Eintrag in „mitglieder“ → Ebene + Kennung */
-      async ich() {
-        const { data } = await sb.from("mitglieder").select("*").eq("email", (this.nutzer || "").toLowerCase()).maybeSingle();
-        this.mitglied = data || null;
-        return data ? data.id : null;
+      async abmelden() { await sb.auth.signOut(); this.angemeldet = false; this.mitglied = null; },
+      async passwortAendern(neu) {
+        if (String(neu).length < 8) throw new Error("Mindestens 8 Zeichen.");
+        const { error } = await sb.auth.updateUser({ password: neu });
+        if (error) throw new Error(/same|different/i.test(error.message) ? "Bitte ein neues Passwort wählen, nicht das Startpasswort." : error.message);
+        await sb.rpc("passwort_geaendert");
+        if (this.mitglied) this.mitglied.mussAendern = false;
       },
-      async mitgliederSpeichern(liste) {
-        const rows = liste.filter((m) => m.email).map((m) => ({ email: m.email.toLowerCase(), id: m.id, ebene: m.ebene, name: m.name, formulare: m.formulare || [] }));
-        if (rows.length) { const { error } = await sb.from("mitglieder").upsert(rows, { onConflict: "email" }); if (error) throw error; }
-        const { data } = await sb.from("mitglieder").select("email");
-        const behalten = new Set([...rows.map((r) => r.email), (this.nutzer || "").toLowerCase()]);
-        const weg = (data || []).map((r) => r.email).filter((e) => !behalten.has(e));
-        if (weg.length) await sb.from("mitglieder").delete().in("email", weg);
+      async konten() {
+        const { data, error } = await sb.rpc("konten_liste");
+        if (error) throw error;
+        return data || [];
+      },
+      async kontoAnlegen({ benutzer, passwort, id, ebene, name, formulare }) {
+        const { error } = await sb.rpc("konto_anlegen", { p_benutzer: benutzer, p_passwort: passwort, p_id: id, p_ebene: ebene, p_name: name, p_formulare: formulare || [] });
+        if (error) throw new Error(error.message);
+      },
+      async kontoZuruecksetzen(email, passwort) {
+        const { error } = await sb.rpc("konto_passwort_zuruecksetzen", { p_email: email, p_passwort: passwort });
+        if (error) throw new Error(error.message);
+      },
+      async kontoAktiv(email, aktiv) {
+        const { error } = await sb.rpc("konto_aktiv", { p_email: email, p_aktiv: aktiv });
+        if (error) throw new Error(error.message);
+      },
+      async kontoAendern(id, ebene, name, formulare) {
+        const { error } = await sb.rpc("konto_aendern", { p_id: id, p_ebene: ebene, p_name: name, p_formulare: formulare || [] });
+        if (error) throw new Error(error.message);
       },
       async zahlenLaden() {
         const { data, error } = await sb.from("kennzahlen").select("projekt_id,daten");
@@ -290,4 +368,5 @@
 
   const konf = cloudKonfig();
   window.Daten = konf && window.supabase ? Cloud(konf) : Lokal;
+  window.Daten.kontoEmail = kontoEmail;
 })();

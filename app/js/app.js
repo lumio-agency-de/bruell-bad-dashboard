@@ -1195,16 +1195,7 @@
           <div class="feld"><span class="lab">Grundfarbe</span><div class="farbe"><input type="color" data-cfg="farben.tinte" value="${esc(c.farben.tinte)}" aria-label="Grundfarbe"><code>${esc(c.farben.tinte)}</code></div></div>
           <div class="feld"><span class="lab">Akzent („jetzt dran“)</span><div class="farbe"><input type="color" data-cfg="farben.akzent" value="${esc(c.farben.akzent)}" aria-label="Akzentfarbe"><code>${esc(c.farben.akzent)}</code></div></div>
         </div></section>
-        <section class="panel"><h3>Ebenen & Rechte</h3><p class="leise">Jede Person im Team und jeder Partner bekommt eine Ebene. ${cloud ? "In der Cloud erzwingt die Datenbank diese Rechte." : "Lokal lässt sich jede Ebene links unten über „Ansicht als“ ausprobieren."}</p>
-          <div class="ebenen">${(window.EBENEN || []).map((e) => `<div class="ebene"><b>${esc(e.titel)}</b><ul>${e.kann.map((k) => `<li>${esc(k)}</li>`).join("")}</ul></div>`).join("")}</div></section>
-        <section class="panel"><h3>Team</h3><p class="leise">Rolle = wer in den Schritten genannt wird. Ebene = was die Person darf. Login-E-Mail nur für den Cloud-Betrieb.</p>
-          <div class="tab-wrap"><table class="team-tabelle"><thead><tr><th>Rolle</th><th>Bezeichnung</th><th>Name</th><th>Kürzel</th><th>Ebene</th><th>Login-E-Mail</th><th></th></tr></thead>
-          <tbody id="team">${c.team.map((m) => teamZeile(m, rollen)).join("")}</tbody></table></div>
-          <div class="aktionen"><button class="btn klein" data-aktion="team-neu">+ Person</button></div></section>
-        <section class="panel"><h3>Externe Partner</h3><p class="leise">Subunternehmer sehen nur Projekte, denen sie zugewiesen sind – und davon nur Adresse, Termine, Pläne und die Formulare ihres Gewerks.</p>
-          <div class="tab-wrap"><table class="team-tabelle"><thead><tr><th>Firma</th><th>Gewerk</th><th>Ansprechpartner</th><th>Telefon</th><th>Login-E-Mail</th><th></th></tr></thead>
-          <tbody id="partner">${(c.partner || []).map((x) => partnerZeile(x)).join("")}</tbody></table></div>
-          <div class="aktionen"><button class="btn klein" data-aktion="partner-neu">+ Partner</button></div></section>
+
         <section class="panel"><h3>Programme</h3><div class="felder drei">
           ${Object.entries(c.programme).map(([k, v]) => f("programme." + k, { erp: "Warenwirtschaft / ERP", cad: "Badplanung (CAD)", app3d: "3D-App für Kunden", badrechner: "Kostenrechner" }[k] || k, v)).join("")}
         </div></section>
@@ -1223,10 +1214,19 @@
       </div></div>`;
   }
   const EBENE_OPT = () => (window.EBENEN || []).filter((e) => e.id !== "partner").map((e) => ({ id: e.id, label: e.titel }));
-  const teamZeile = (m, rollen) => `<tr><td><select class="eingabe" data-team="rolle">${opt(rollen, m.rolle)}</select></td><td><input class="eingabe" data-team="bezeichnung" value="${esc(m.bezeichnung || "")}"></td><td><input class="eingabe" data-team="name" value="${esc(m.name || "")}"></td><td><input class="eingabe kurz" data-team="kuerzel" value="${esc(m.kuerzel || "")}"></td>
-    <td><select class="eingabe" data-team="ebene">${opt(EBENE_OPT(), m.ebene || "planung")}</select></td><td><input class="eingabe" type="email" data-team="email" value="${esc(m.email || "")}" placeholder="nur Cloud"></td><td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`;
-  const partnerZeile = (x) => `<tr data-id="${esc(x.id || "")}"><td><input class="eingabe" data-partner="firma" value="${esc(x.firma || "")}"></td><td><select class="eingabe" data-partner="gewerk">${opt(Object.keys(cfg().gewerke || {}), x.gewerk)}</select></td>
-    <td><input class="eingabe" data-partner="name" value="${esc(x.name || "")}"></td><td><input class="eingabe" data-partner="telefon" value="${esc(x.telefon || "")}"></td><td><input class="eingabe" type="email" data-partner="email" value="${esc(x.email || "")}" placeholder="nur Cloud"></td><td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`;
+  /* Zugang einer Person (Konto) als Zelle + Aktionen */
+  function zugangZellen(id) {
+    const k = (S.konten || []).find((x) => x.id === id), selbst = S.ich && S.ich.id === id;
+    if (!k) return `<td class="zugang"><span class="leise">kein Zugang</span></td><td class="aktionen-zelle"><button class="btn klein voll" data-aktion="konto-neu" data-id="${esc(id || "")}">Zugang anlegen</button></td>`;
+    const status = !k.aktiv ? '<span class="status-chip">gesperrt</span>' : k.mussAendern ? '<span class="status-chip pausiert">Startpasswort</span>' : `<small>${k.letzterLogin ? "zuletzt " + fKurz(new Date(k.letzterLogin)) : "noch nie angemeldet"}</small>`;
+    return `<td class="zugang"><b>${esc(k.benutzer)}</b>${status}</td><td class="aktionen-zelle">
+      <button class="btn klein" data-aktion="konto-reset" data-email="${esc(k.email)}" data-name="${esc(k.name || "")}">Passwort zurücksetzen</button>
+      ${selbst ? "" : `<button class="btn klein still ${k.aktiv ? "gefahr" : ""}" data-aktion="konto-aktiv" data-email="${esc(k.email)}" data-wert="${k.aktiv ? "0" : "1"}">${k.aktiv ? "Sperren" : "Entsperren"}</button>`}</td>`;
+  }
+  const teamZeile = (m, rollen) => `<tr data-id="${esc(m.kuerzel || "")}"><td><input class="eingabe" data-team="name" value="${esc(m.name || "")}" aria-label="Name"></td><td><input class="eingabe" data-team="bezeichnung" value="${esc(m.bezeichnung || "")}" aria-label="Bezeichnung"></td><td><select class="eingabe" data-team="rolle" aria-label="Rolle">${opt(rollen, m.rolle)}</select></td><td><input class="eingabe kurz" data-team="kuerzel" value="${esc(m.kuerzel || "")}" aria-label="Kürzel"></td>
+    <td><select class="eingabe" data-team="ebene" aria-label="Ebene">${opt(EBENE_OPT(), m.ebene || "planung")}</select></td>${zugangZellen(m.kuerzel)}<td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`;
+  const partnerZeile = (x) => `<tr data-id="${esc(x.id || "")}"><td><input class="eingabe" data-partner="firma" value="${esc(x.firma || "")}" aria-label="Firma"></td><td><select class="eingabe" data-partner="gewerk" aria-label="Gewerk">${opt(Object.keys(cfg().gewerke || {}), x.gewerk)}</select></td>
+    <td><input class="eingabe" data-partner="name" value="${esc(x.name || "")}" aria-label="Ansprechpartner"></td><td><input class="eingabe" data-partner="telefon" value="${esc(x.telefon || "")}" aria-label="Telefon"></td>${x.id ? zugangZellen(x.id) : '<td></td><td></td>'}<td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`;
   const slug = (t) => t.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 24) || "partner";
   function cfgSammeln() {
     const c = JSON.parse(JSON.stringify(cfg()));
@@ -1235,6 +1235,7 @@
       let ziel = c; while (pfad.length > 1) ziel = ziel[pfad.shift()];
       ziel[pfad[0]] = el.type === "number" ? Number(el.value) || 0 : el.value.trim();
     }
+    if (!$("#team")) { delete c.cloud; return c; }
     c.team = $$("#team tr").map((tr) => Object.fromEntries($$("[data-team]", tr).map((el) => [el.dataset.team, el.value.trim()]))).filter((m) => m.name || m.kuerzel);
     const ids = new Set();
     c.partner = $$("#partner tr").map((tr) => {
@@ -1245,6 +1246,109 @@
     }).filter((x) => x.firma);
     delete c.cloud;
     return c;
+  }
+
+  /* ================================================================
+     Konten & Rechte (nur Geschäftsführung)
+     ================================================================ */
+  const RECHTE = [
+    ["Cockpit mit Fälligkeiten und Terminen", "✓", "✓", "–", "–"],
+    ["Projekte sehen", "alle", "alle", "nur zugewiesene", "Auszug zugewiesener"],
+    ["Anfragen anlegen, Level freischalten", "✓", "✓", "–", "–"],
+    ["Kundendaten", "alle", "alle", "Adresse, Telefon", "Adresse, Telefon"],
+    ["Interne Notizen, Verlauf", "✓", "✓", "–", "–"],
+    ["Ordner Angebote, Aufträge, Rechnungen", "✓", "✓", "–", "–"],
+    ["Formulare bearbeiten", "alle", "alle", "Besichtigung, Restarbeiten, Abnahme", "– (eigenes Gewerk lesen)"],
+    ["Fotos hochladen", "✓", "✓", "Baustelle, fertiges Bad", "Baustelle"],
+    ["Kundenmails und Kundenlinks", "✓", "✓", "–", "–"],
+    ["Monteure und Partner zuweisen", "✓", "✓", "–", "–"],
+    ["Unternehmen (Umsatz, Kosten, Marge)", "✓", "–", "–", "–"],
+    ["Konten und Rechte verwalten", "✓", "–", "–", "–"],
+    ["Einrichtung (Firma, Ziele, Fristen)", "✓", "–", "–", "–"],
+  ];
+  function ansichtKonten() {
+    const c = cfg();
+    const rollen = [...new Set([...window.FIRMA.team.map((t) => t.rolle), ...c.team.map((t) => t.rolle)])];
+    const anzahl = (S.konten || []).filter((k) => k.aktiv).length;
+    return `<div class="seite konten">
+      <header class="kopf"><div><p class="eyebrow">Nur für die Geschäftsführung</p><h1>Konten & Rechte</h1>
+        <p class="unter leise">${anzahl} aktive ${anzahl === 1 ? "Zugang" : "Zugänge"}. Jede Person meldet sich mit eigenem Benutzernamen und Passwort an und sieht nur, was ihre Ebene erlaubt.</p></div>
+        <div class="kopf-aktionen"><button class="btn jetzt" data-aktion="konten-speichern">Änderungen übernehmen</button></div></header>
+      ${S.kontenFehler ? `<p class="luecken">${esc(S.kontenFehler)}</p>` : ""}
+      <section class="panel"><h2 class="panel-titel">Mitarbeiter</h2>
+        <div class="tab-wrap ohne-rand"><table class="team-tabelle konten-tab"><thead><tr><th>Name</th><th>Bezeichnung</th><th>Rolle im Ablauf</th><th>Kürzel</th><th>Ebene</th><th>Zugang</th><th></th><th></th></tr></thead>
+        <tbody id="team">${c.team.map((m) => teamZeile(m, rollen)).join("")}</tbody></table></div>
+        <div class="aktionen panel-innen"><button class="btn klein" data-aktion="team-neu">+ Person</button><span class="leise klein-text">Neue Personen erst mit „Änderungen übernehmen“ speichern, dann den Zugang anlegen.</span></div></section>
+      <section class="panel"><h2 class="panel-titel">Externe Partner <small>sehen nur zugewiesene Einsätze und ihr Gewerk</small></h2>
+        <div class="tab-wrap ohne-rand"><table class="team-tabelle konten-tab"><thead><tr><th>Firma</th><th>Gewerk</th><th>Ansprechpartner</th><th>Telefon</th><th>Zugang</th><th></th><th></th></tr></thead>
+        <tbody id="partner">${(c.partner || []).map((x) => partnerZeile(x)).join("")}</tbody></table></div>
+        <div class="aktionen panel-innen"><button class="btn klein" data-aktion="partner-neu">+ Partner</button></div></section>
+      <section class="panel"><h2 class="panel-titel">Wer sieht was</h2>
+        <div class="tab-wrap ohne-rand"><table class="kz-tab rechte"><thead><tr><th>Bereich</th>${(window.EBENEN || []).map((e) => `<th>${esc(e.titel)}</th>`).join("")}</tr></thead>
+        <tbody>${RECHTE.map(([b, ...w]) => `<tr><td>${esc(b)}</td>${w.map((x) => `<td class="${x === "✓" ? "ja" : x === "–" ? "nein" : "teil"}">${esc(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
+        <p class="vb-max">${Daten.modus === "cloud" ? "Diese Regeln setzt die Datenbank durch – was eine Ebene nicht sehen darf, wird gar nicht erst ausgeliefert." : "Im Demo-Modus liegen die Daten nur in diesem Browser; im Cloud-Betrieb setzt die Datenbank diese Regeln durch."}</p></section>
+    </div>`;
+  }
+  async function kontenLaden() {
+    try { S.konten = await Daten.konten(); S.kontenFehler = ""; }
+    catch (e) { S.konten = []; S.kontenFehler = "Konten konnten nicht geladen werden: " + (e.message || e); }
+    S.kontenGeladen = true;
+  }
+  const startpasswort = () => { const w = ["Fliese", "Wanne", "Dusche", "Spiegel", "Armatur", "Becken"]; return `${w[Math.floor(Math.random() * w.length)]}-${Math.floor(1000 + Math.random() * 9000)}-${Math.random().toString(36).slice(2, 5)}`; };
+  const benutzerVorschlag = (name) => String(name || "").trim().split(/\s+/)[0].toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/ß/g, "ss").replace(/[^a-z0-9.-]/g, "") || "mitarbeiter";
+  function zugangErgebnis(dlg, name, benutzer, pw) {
+    const url = location.origin + location.pathname;
+    const text = `Zugang zum Bad-Dashboard\nAdresse: ${url}\nBenutzername: ${benutzer}\nStartpasswort: ${pw}\nBeim ersten Anmelden bitte ein eigenes Passwort festlegen.`;
+    dlg.innerHTML = `<div class="dlg-kopf"><div><p class="eyebrow">${esc(name)}</p><h2>Zugang bereit</h2><p>Bitte persönlich weitergeben. Das Startpasswort wird nur jetzt angezeigt; beim ersten Anmelden vergibt ${esc(name.split(" ")[0])} ein eigenes.</p></div><button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt"><dl class="infos gross"><dt>Adresse</dt><dd>${esc(url)}</dd><dt>Benutzername</dt><dd><b>${esc(benutzer)}</b></dd><dt>Startpasswort</dt><dd><code class="pw">${esc(pw)}</code></dd></dl></div>
+      <div class="dlg-fuss"><button class="btn" data-dlg="kopieren">Zugangsdaten kopieren</button><button class="btn jetzt" data-aktion="dlg-zu">Fertig</button></div>`;
+    $('[data-dlg="kopieren"]', dlg).addEventListener("click", async () => { await kopieren(text); toast("Zugangsdaten kopiert"); });
+  }
+  function kontoNeuDialog(id) {
+    const m = mitgliedZu(id);
+    if (!m) return toast("Erst „Änderungen übernehmen“, dann den Zugang anlegen", "fehler");
+    const vorschlag = m.ebene === "partner" ? slug(m.name).replace(/-/g, "") : benutzerVorschlag(m.name);
+    dialog(`<form id="konto-form"><div class="dlg-kopf"><div><p class="eyebrow">${esc(EBENE_TITEL[m.ebene] || "")}</p><h2>Zugang für ${esc(m.name)}</h2><p>Benutzername und Startpasswort festlegen. Beim ersten Anmelden wird ein eigenes Passwort verlangt.</p></div><button class="btn still" type="button" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt"><div class="felder">
+        <div class="feld"><label for="kn-b">Benutzername</label><input class="eingabe" id="kn-b" value="${esc(vorschlag)}" autocapitalize="none" spellcheck="false" required pattern="[A-Za-z0-9._@-]{2,60}"></div>
+        <div class="feld"><label for="kn-p">Startpasswort (mind. 8 Zeichen)</label><input class="eingabe" id="kn-p" value="${esc(startpasswort())}" minlength="8" required></div>
+      </div><p class="luecken versteckt" id="kn-f"></p></div>
+      <div class="dlg-fuss"><button class="btn" type="button" data-aktion="dlg-zu">Abbrechen</button><button class="btn jetzt" type="submit">Zugang anlegen</button></div></form>`, (dlg) => {
+      $("#konto-form", dlg).addEventListener("submit", async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const b = $("#kn-b", dlg).value.trim(), pw = $("#kn-p", dlg).value;
+        try {
+          await Daten.kontoAnlegen({ benutzer: b, passwort: pw, id: m.id, ebene: m.ebene, name: m.name, formulare: m.ebene === "partner" ? ((cfg().gewerke || {})[m.gewerk] || []) : [] });
+          await kontenLaden(); render(); zugangErgebnis(dlg, m.name, b.toLowerCase(), pw);
+        } catch (err) { const f = $("#kn-f", dlg); f.textContent = err.message || String(err); f.classList.remove("versteckt"); }
+      });
+    });
+  }
+  function kontoResetDialog(email, name) {
+    const pw = startpasswort();
+    dialog(`<div class="dlg-kopf"><div><p class="eyebrow">${esc(name)}</p><h2>Passwort zurücksetzen?</h2><p>${esc(name)} bekommt ein neues Startpasswort und muss beim nächsten Anmelden ein eigenes festlegen.</p></div><button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt"><div class="feld"><label for="kr-p">Neues Startpasswort</label><input class="eingabe" id="kr-p" value="${esc(pw)}" minlength="8"></div><p class="luecken versteckt" id="kr-f"></p></div>
+      <div class="dlg-fuss"><button class="btn" data-aktion="dlg-zu">Abbrechen</button><button class="btn jetzt" data-dlg="reset">Zurücksetzen</button></div>`, (dlg) => {
+      $('[data-dlg="reset"]', dlg).addEventListener("click", async () => {
+        const neu = $("#kr-p", dlg).value;
+        try { await Daten.kontoZuruecksetzen(email, neu); await kontenLaden(); render(); zugangErgebnis(dlg, name, (S.konten.find((k) => k.email === email) || {}).benutzer || email, neu); }
+        catch (err) { const f = $("#kr-f", dlg); f.textContent = err.message || String(err); f.classList.remove("versteckt"); }
+      });
+    });
+  }
+  function passwortDialog() {
+    dialog(`<form id="pw-form"><div class="dlg-kopf"><div><p class="eyebrow">${esc(S.ich.name)}</p><h2>Passwort ändern</h2></div><button class="btn still" type="button" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+      <div class="dlg-inhalt"><div class="felder"><div class="feld"><label for="pw-1">Neues Passwort (mind. 8 Zeichen)</label><input class="eingabe" id="pw-1" type="password" autocomplete="new-password" minlength="8" required></div>
+      <div class="feld"><label for="pw-2">Wiederholen</label><input class="eingabe" id="pw-2" type="password" autocomplete="new-password" minlength="8" required></div></div><p class="luecken versteckt" id="pw-f"></p></div>
+      <div class="dlg-fuss"><button class="btn" type="button" data-aktion="dlg-zu">Abbrechen</button><button class="btn jetzt" type="submit">Speichern</button></div></form>`, (dlg) => {
+      $("#pw-form", dlg).addEventListener("submit", async (e) => {
+        e.preventDefault(); e.stopPropagation();
+        const a = $("#pw-1", dlg).value, b = $("#pw-2", dlg).value, f = $("#pw-f", dlg);
+        if (a !== b) { f.textContent = "Die Passwörter stimmen nicht überein."; return f.classList.remove("versteckt"); }
+        try { await Daten.passwortAendern(a); dlg.close(); toast("Passwort geändert"); }
+        catch (err) { f.textContent = err.message || String(err); f.classList.remove("versteckt"); }
+      });
+    });
   }
 
   /* ---------- Beispielprojekte ---------- */
@@ -1295,18 +1399,60 @@
           fliesen: { werte: { firma: "Fliesen-Partner", flaechen: [{ menge: "24 m²", groesse: "60×120", verlegeart: "Halbverband", bez: "Feinsteinzeug Sand" }, { menge: "6 m²", groesse: "60×60", verlegeart: "Kreuzfuge", bez: "Feinsteinzeug Anthrazit" }] } } } });
   }
 
-  const keinZugang = () => `<div class="login"><div class="panel login-karte"><h1>Noch kein Zugang</h1><p>Du bist als <b>${esc(Daten.nutzer || "")}</b> angemeldet, aber noch keiner Ebene zugeordnet. Die Geschäftsführung trägt dich unter Einrichtung → Team bzw. Externe Partner mit dieser E-Mail ein.</p><button class="btn" data-aktion="abmelden">Abmelden</button></div></div>`;
+  const keinZugang = () => `<div class="login"><div class="panel login-karte"><h1>Kein Zugang</h1><p>Dieses Konto ist keiner Ebene zugeordnet oder gesperrt. Bitte an die Geschäftsführung wenden – sie verwaltet die Zugänge unter „Konten“.</p><button class="btn" data-aktion="abmelden">Abmelden</button></div></div>`;
+  const DEMO_KONTEN = [["chef", "DB"], ["karin", "KK"], ["steven", "SW"], ["monteur", "MO"], ["elektro", "p-elektro"], ["fliesen", "p-fliesen"]];
+  const DEMO_PW = "demo1234";
+  const istDemo = () => { try { return localStorage.getItem("baddashboard:demo") === "1"; } catch (e) { return false; } };
+  async function demoKontenAnlegen() {
+    for (const [b, id] of DEMO_KONTEN) {
+      const m = mitgliedZu(id); if (!m) continue;
+      await Daten.kontoAnlegen({ benutzer: b, passwort: DEMO_PW, id, ebene: m.ebene, name: m.name, formulare: m.ebene === "partner" ? ((cfg().gewerke || {})[m.gewerk] || []) : [] }, true);
+    }
+    try { localStorage.setItem("baddashboard:demo", "1"); } catch (e) { /* egal */ }
+  }
+  function vorraum(html) { document.body.classList.add("vorraum"); $("#main").innerHTML = html; const f = $("#main input"); if (f) setTimeout(() => f.focus(), 30); }
+  async function weiter() {
+    if (!Daten.angemeldet) return vorraum(Daten.ersteinrichtungNoetig() ? ansichtErsteinrichtung() : ansichtLogin());
+    if (!Daten.mitglied) return vorraum(keinZugang());
+    if (Daten.mitglied.mussAendern) return vorraum(ansichtPasswortPflicht());
+    await laden();
+    document.body.classList.remove("vorraum");
+    S.kontenGeladen = false;
+    render();
+  }
+  const loginKopf = (unter) => `<img src="${esc(cfg().logo)}" alt="" class="login-logo"><h1>${esc(cfg().name)}</h1><p class="leise">${unter}</p>`;
+  function ansichtErsteinrichtung(fehler) {
+    const gf = cfg().team.find((t) => t.ebene === "geschaeftsfuehrung") || cfg().team[0];
+    return `<div class="login"><form class="panel login-karte" id="erst-form">${loginKopf("Ersteinrichtung · Zugang für die Geschäftsführung")}
+      <p>Es gibt noch keine Konten. Lege zuerst den Zugang für <b>${esc(gf.name)}</b> an – danach vergibt die Geschäftsführung unter „Konten“ alle weiteren Zugänge.</p>
+      ${fehler ? `<p class="luecken">${esc(fehler)}</p>` : ""}
+      <div class="feld"><label for="e-b">Benutzername</label><input class="eingabe" id="e-b" value="${esc(benutzerVorschlag(gf.name))}" autocapitalize="none" spellcheck="false" required></div>
+      <div class="feld"><label for="e-p1">Passwort (mind. 8 Zeichen)</label><input class="eingabe" id="e-p1" type="password" autocomplete="new-password" minlength="8" required></div>
+      <div class="feld"><label for="e-p2">Wiederholen</label><input class="eingabe" id="e-p2" type="password" autocomplete="new-password" minlength="8" required></div>
+      <button class="btn jetzt gross" type="submit">Zugang anlegen & anmelden</button></form></div>`;
+  }
+  function ansichtPasswortPflicht(fehler) {
+    return `<div class="login"><form class="panel login-karte" id="pflicht-form">${loginKopf("Willkommen, " + esc((Daten.mitglied.name || "").split(" ")[0]))}
+      <p>Du meldest dich zum ersten Mal an (oder dein Passwort wurde zurückgesetzt). Bitte lege jetzt dein eigenes Passwort fest.</p>
+      ${fehler ? `<p class="luecken">${esc(fehler)}</p>` : ""}
+      <div class="feld"><label for="pf-1">Neues Passwort (mind. 8 Zeichen)</label><input class="eingabe" id="pf-1" type="password" autocomplete="new-password" minlength="8" required></div>
+      <div class="feld"><label for="pf-2">Wiederholen</label><input class="eingabe" id="pf-2" type="password" autocomplete="new-password" minlength="8" required></div>
+      <button class="btn jetzt gross" type="submit">Passwort speichern</button><button class="btn still" type="button" data-aktion="abmelden">Abmelden</button></form></div>`;
+  }
 
   /* ================================================================
      Login (Cloud)
      ================================================================ */
   function ansichtLogin(fehler) {
-    return `<div class="login"><form class="panel login-karte" id="login-form">
-      <img src="${esc(cfg().logo)}" alt="" class="login-logo"><h1>${esc(cfg().name)}</h1><p class="leise">Bad-Dashboard · Anmeldung</p>
+    const demo = istDemo() && Daten.modus === "lokal";
+    return `<div class="login"><div class="login-spalte"><form class="panel login-karte" id="login-form">${loginKopf("Bad-Dashboard · Anmeldung")}
       ${fehler ? `<p class="luecken">${esc(fehler)}</p>` : ""}
-      <div class="feld"><label for="l-mail">E-Mail</label><input class="eingabe" id="l-mail" type="email" autocomplete="username" required></div>
+      <div class="feld"><label for="l-b">Benutzername</label><input class="eingabe" id="l-b" autocomplete="username" autocapitalize="none" spellcheck="false" required></div>
       <div class="feld"><label for="l-pw">Passwort</label><input class="eingabe" id="l-pw" type="password" autocomplete="current-password" required></div>
-      <button class="btn jetzt gross" type="submit">Anmelden</button></form></div>`;
+      <button class="btn jetzt gross" type="submit">Anmelden</button>
+      <p class="leise klein-text">Passwort vergessen? Die Geschäftsführung setzt es unter „Konten“ zurück.</p></form>
+      ${demo ? `<section class="panel demo-konten"><h2>Demo-Zugänge</h2><p class="leise klein-text">Zum Ausprobieren – Passwort für alle: <code>${DEMO_PW}</code>. Klick füllt die Anmeldung aus.</p>
+        <ul>${DEMO_KONTEN.map(([b, id]) => { const m = mitgliedZu(id); return m ? `<li><button type="button" class="demo-k" data-aktion="demo-login" data-b="${b}"><b>${b}</b><span>${esc(m.name)} · ${esc(EBENE_TITEL[m.ebene] || "")}</span></button></li>` : ""; }).join("")}</ul></section>` : ""}</div></div>`;
   }
 
   /* ================================================================
@@ -1318,7 +1464,9 @@
     return { name: teile[0], arg: teile[1], sub: teile[2], subArg: teile[3], query: new URLSearchParams(query || "") };
   }
   function render() {
+    if (!S.ich) return;
     anwenden();
+    if (route().name === "konten" && istGF() && !S.kontenGeladen) { S.kontenGeladen = true; kontenLaden().then(() => { if (route().name === "konten") render(); }); }
     const r = route();
     if (r.name === "projekte" && r.query.get("abschnitt")) { S.filter.abschnitt = r.query.get("abschnitt"); S.filter.status = "offen"; }
     const e = ebene();
@@ -1329,10 +1477,11 @@
       e === "monteur" ? ansichtBaustellen() :
       r.name === "projekte" ? ansichtProjekte() :
       r.name === "einrichtung" && istGF() ? ansichtEinrichtung() :
-      r.name === "kennzahlen" && istGF() ? ansichtKennzahlen() : ansichtCockpit();
+      r.name === "kennzahlen" && istGF() ? ansichtKennzahlen() :
+      r.name === "konten" && istGF() ? ansichtKonten() : ansichtCockpit();
     $("#main").innerHTML = html;
     navRendern();
-    const nav = r.name === "projekt" ? (istBuero() ? "projekte" : "cockpit") : ["einrichtung", "projekte", "kennzahlen"].includes(r.name) ? r.name : "cockpit";
+    const nav = r.name === "projekt" ? (istBuero() ? "projekte" : "cockpit") : ["einrichtung", "projekte", "kennzahlen", "konten"].includes(r.name) ? r.name : "cockpit";
     $$(".nav a").forEach((a) => (a.dataset.nav === nav ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
     statusLeiste();
     vorschauenLaden();
@@ -1343,7 +1492,7 @@
     const e = ebene();
     const punkte = e === "partner" ? [["cockpit", "Meine Einsätze", "projekte"]]
       : e === "monteur" ? [["cockpit", "Meine Baustellen", "projekte"]]
-      : [["cockpit", "Cockpit", "cockpit"], ["projekte", "Projekte", "projekte"], ...(istGF() ? [["kennzahlen", "Unternehmen", "kennzahlen"], ["einrichtung", "Einrichtung", "einrichtung"]] : [])];
+      : [["cockpit", "Cockpit", "cockpit"], ["projekte", "Projekte", "projekte"], ...(istGF() ? [["kennzahlen", "Unternehmen", "kennzahlen"], ["konten", "Konten", "konten"], ["einrichtung", "Einrichtung", "einrichtung"]] : [])];
     $(".nav").innerHTML = punkte.map(([id, l, i]) => `<a href="#/${id}" data-nav="${id}"><span class="nav-i i-${i}" aria-hidden="true"></span>${l}</a>`).join("");
     $(".neu-knopf").hidden = !istBuero();
   }
@@ -1355,17 +1504,13 @@
   }
   function statusLeiste() {
     const el = $("#speicher"); if (!el) return;
-    const wer = S.ich ? `<b>${esc(S.ich.name)}</b><br><small>${esc(EBENE_TITEL[S.ich.ebene] || "")}</small>` : "";
-    if (Daten.modus === "cloud") {
-      el.innerHTML = `${wer}<p class="sp-zeile"><span class="punkt an"></span>Cloud verbunden</p><button class="btn klein hell" data-aktion="abmelden">Abmelden</button>`;
-      return;
-    }
-    const c = cfg();
-    el.innerHTML = `<label class="ansicht-als">Ansicht als (zum Testen)<select class="eingabe" data-aktion="ansicht-als" aria-label="Ansicht als">
-        <optgroup label="Team">${c.team.filter((m) => m.name).map((m) => `<option value="${esc(m.kuerzel)}"${S.ich && S.ich.id === m.kuerzel ? " selected" : ""}>${esc(m.name)} · ${esc(EBENE_TITEL[m.ebene] || "")}</option>`).join("")}</optgroup>
-        <optgroup label="Externe Partner">${(c.partner || []).map((x) => `<option value="${esc(x.id)}"${S.ich && S.ich.id === x.id ? " selected" : ""}>${esc(x.firma)}</option>`).join("")}</optgroup></select></label>
-      <p class="sp-zeile"><span class="punkt"></span>Lokal – nur dieser Browser</p>${istGF() ? `<a href="#/einrichtung">Cloud einrichten →</a>` : ""}`;
+    if (!S.ich) { el.innerHTML = ""; return; }
+    const cloud = Daten.modus === "cloud";
+    el.innerHTML = `<div class="ich"><span class="ich-k">${esc((S.ich.name || "?").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase())}</span><span><b>${esc(S.ich.name)}</b><small>${esc(EBENE_TITEL[S.ich.ebene] || "")}</small></span></div>
+      <div class="ich-aktionen"><button class="btn klein hell" data-aktion="passwort">Passwort ändern</button><button class="btn klein hell" data-aktion="abmelden">Abmelden</button></div>
+      <p class="sp-zeile"><span class="punkt${cloud ? " an" : ""}"></span>${cloud ? "Cloud verbunden" : "Demo – Daten nur in diesem Browser"}</p>`;
   }
+
   /* „neu vom Kunden“ wird beim Öffnen als gesehen gespeichert, bleibt aber bis zum nächsten Laden hervorgehoben */
   async function gesehenMarkieren(pid) {
     if (!S.dateien.some((d) => d.projekt_id === pid && d.neu)) return;
@@ -1451,7 +1596,7 @@
     }
     if (akt === "bestaetigen" && p) {
       const key = a.dataset.key; const an = !((p.schritte || {})[key] || {}).erledigt;
-      aendern(p, (x) => { x.schritte = x.schritte || {}; x.schritte[key] = an ? { erledigt: true, am: Date.now(), von: Daten.nutzer || "" } : {}; }, an ? `Erledigt: ${ersetzen(schrittTitel(key))}` : null);
+      aendern(p, (x) => { x.schritte = x.schritte || {}; x.schritte[key] = an ? { erledigt: true, am: Date.now(), von: S.ich.name || "" } : {}; }, an ? `Erledigt: ${ersetzen(schrittTitel(key))}` : null);
       return teilRendern(p);
     }
     if (akt === "wahl" && p) {
@@ -1487,7 +1632,36 @@
       aendern(p, () => { const r = formularWerte(p, "restarbeiten"); r.offen = [...(r.offen || []), ...neu]; }, `${neu.length} Mängel in Restarbeiten übernommen`);
       return toast(`${neu.length} Mängel in Restarbeiten übernommen`);
     }
-    if (akt === "abmelden") { await Daten.abmelden(); location.reload(); return; }
+    if (akt === "abmelden") { await Daten.abmelden(); location.hash = "#/cockpit"; location.reload(); return; }
+    if (akt === "passwort" && S.ich) return passwortDialog();
+    if (akt === "demo-login") { $("#l-b").value = a.dataset.b; $("#l-pw").value = DEMO_PW; $("#l-pw").focus(); return; }
+    if (akt === "konto-neu" && istGF()) return kontoNeuDialog(a.dataset.id);
+    if (akt === "konto-reset" && istGF()) return kontoResetDialog(a.dataset.email, a.dataset.name);
+    if (akt === "konto-aktiv" && istGF()) {
+      const an = a.dataset.wert === "1";
+      if (!an && !confirm("Zugang sperren? Die Person kann sich dann nicht mehr anmelden.")) return;
+      try { await Daten.kontoAktiv(a.dataset.email, an); await kontenLaden(); toast(an ? "Zugang entsperrt" : "Zugang gesperrt"); render(); }
+      catch (err) { toast(err.message || "Nicht möglich", "fehler"); }
+      return;
+    }
+    if (akt === "konten-speichern" && istGF()) {
+      const neu = cfgSammeln();
+      const selbst = neu.team.find((t) => t.kuerzel === S.ich.id);
+      if (!selbst || selbst.ebene !== "geschaeftsfuehrung") return toast("Die eigene Ebene (Geschäftsführung) kann nicht geändert oder entfernt werden.", "fehler");
+      const doppelt = neu.team.map((t) => t.kuerzel).filter((k, i, l) => k && l.indexOf(k) !== i);
+      if (doppelt.length) return toast(`Kürzel doppelt: ${doppelt.join(", ")}`, "fehler");
+      try {
+        S.einstellungen = neu; await Daten.einstellungenSpeichern(S.einstellungen);
+        for (const k of S.konten || []) {
+          const m = mitgliedZu(k.id);
+          if (!m) { if (k.aktiv && k.id !== S.ich.id) await Daten.kontoAktiv(k.email, false); continue; }
+          const forms = m.ebene === "partner" ? ((cfg().gewerke || {})[m.gewerk] || []) : [];
+          if (m.ebene !== k.ebene || m.name !== k.name || m.ebene === "partner") await Daten.kontoAendern(k.id, m.ebene, m.name, forms);
+        }
+        await kontenLaden(); toast("Übernommen"); render();
+      } catch (err) { toast("Nicht gespeichert: " + (err.message || err), "fehler"); }
+      return;
+    }
     if (akt === "cloud-verbinden") {
       const k = { url: $("#cl-url").value.trim().replace(/\/$/, ""), anonKey: $("#cl-key").value.trim(), portalUrl: $("#cl-portal").value.trim() };
       if (!/^https?:\/\//.test(k.url) || !k.anonKey) return toast("URL und Key eintragen", "fehler");
@@ -1501,11 +1675,6 @@
       S.einstellungen = cfgSammeln();
       try {
         await Daten.einstellungenSpeichern(S.einstellungen);
-        const gw = cfg().gewerke || {};
-        await Daten.mitgliederSpeichern([
-          ...S.einstellungen.team.filter((m) => m.email).map((m) => ({ email: m.email, id: m.kuerzel, ebene: m.ebene || "planung", name: m.name })),
-          ...S.einstellungen.partner.filter((x) => x.email).map((x) => ({ email: x.email, id: x.id, ebene: "partner", name: x.firma, formulare: gw[x.gewerk] || [] })),
-        ]);
         toast("Einstellungen übernommen");
       } catch (err) { toast("Nicht gespeichert: " + (err.message || err), "fehler"); }
       return render();
@@ -1514,7 +1683,7 @@
     if (akt === "cfg-datei") { const c = { ...cfgSammeln(), cloud: window.FIRMA.cloud }; return herunterladen("firma.js", `/* Firma — erzeugt mit dem Bad-Dashboard am ${fDatum(new Date())}. Ersetzt einstellungen/firma.js. */\n\nwindow.FIRMA = ${JSON.stringify(c, null, 2)};\n`, "text/javascript"); }
     if (akt === "team-neu") {
       const rollen = [...new Set(cfg().team.map((t) => t.rolle))];
-      $("#team").insertAdjacentHTML("beforeend", `<tr><td><select class="eingabe" data-team="rolle">${opt(rollen, "badplanung")}</select></td><td><input class="eingabe" data-team="bezeichnung" placeholder="z. B. Badplanerin"></td><td><input class="eingabe" data-team="name" placeholder="Vor- und Nachname"></td><td><input class="eingabe kurz" data-team="kuerzel"></td><td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`);
+      $("#team").insertAdjacentHTML("beforeend", teamZeile({ rolle: "badplanung", ebene: "planung" }, rollen).replace(/<td class="zugang">[\s\S]*?<\/td><td class="aktionen-zelle">[\s\S]*?<\/td>/, '<td class="zugang"><span class="leise">erst übernehmen</span></td><td></td>'));
       return;
     }
     if (akt === "team-weg") return a.closest("tr").remove();
@@ -1573,7 +1742,6 @@
     const el = e.target;
     if (el.closest("dialog")) return;
     const p = aktuellesProjekt();
-    if (el.dataset.aktion === "ansicht-als") { Daten.ichSetzen(el.value); await laden(); location.hash = "#/cockpit"; render(); toast(`Ansicht: ${S.ich.name}`); return; }
     if (el.dataset.upload && p) { await hochladen(p, el.dataset.upload, el.files); el.value = ""; return; }
     const seite = el.closest(".formularseite");
     if (seite) {
@@ -1620,10 +1788,28 @@
   });
 
   document.addEventListener("submit", async (e) => {
-    if (e.target.id !== "login-form") return;
+    const id = e.target.id;
+    if (!["login-form", "erst-form", "pflicht-form"].includes(id)) return;
     e.preventDefault();
-    try { await Daten.anmelden($("#l-mail").value, $("#l-pw").value); await laden(); render(); }
-    catch (err) { $("#main").innerHTML = err.keinZugang ? keinZugang() : ansichtLogin(err.message); }
+    const knopf = $("button[type=submit]", e.target); if (knopf) knopf.disabled = true;
+    try {
+      if (id === "login-form") await Daten.anmelden($("#l-b").value, $("#l-pw").value);
+      if (id === "erst-form") {
+        if ($("#e-p1").value !== $("#e-p2").value) throw new Error("Die Passwörter stimmen nicht überein.");
+        const gf = cfg().team.find((t) => t.ebene === "geschaeftsfuehrung") || cfg().team[0];
+        await Daten.kontoAnlegen({ benutzer: $("#e-b").value, passwort: $("#e-p1").value, id: gf.kuerzel, ebene: "geschaeftsfuehrung", name: gf.name }, true);
+        await Daten.anmelden($("#e-b").value, $("#e-p1").value);
+      }
+      if (id === "pflicht-form") {
+        if ($("#pf-1").value !== $("#pf-2").value) throw new Error("Die Passwörter stimmen nicht überein.");
+        await Daten.passwortAendern($("#pf-1").value);
+        toast("Passwort gespeichert – willkommen!");
+      }
+      await weiter();
+    } catch (err) {
+      const m = err.message || String(err);
+      vorraum(id === "login-form" ? ansichtLogin(m) : id === "erst-form" ? ansichtErsteinrichtung(m) : ansichtPasswortPflicht(m));
+    }
   });
 
   window.addEventListener("hashchange", () => { S.zeigeFehler = false; render(); window.scrollTo(0, 0); $("#main").focus({ preventScroll: true }); });
@@ -1661,15 +1847,10 @@
   async function laden() {
     S.einstellungen = await Daten.einstellungenLaden();
     if (S.einstellungen && S.einstellungen.name === "Daniel Brüll GmbH") S.einstellungen.name = window.FIRMA.name; // Umbenennung Okt. 2026
-    const id = await Daten.ich();
-    if (Daten.modus === "cloud") {
-      const m = Daten.mitglied;
-      if (!m) throw Object.assign(new Error("kein-zugang"), { keinZugang: true });
-      S.ich = { ...(mitgliedZu(m.id) || {}), id: m.id, name: m.name || (mitgliedZu(m.id) || {}).name || m.email, ebene: m.ebene };
-    } else {
-      const erster = cfg().team.find((t) => t.ebene === "geschaeftsfuehrung") || cfg().team[0];
-      S.ich = mitgliedZu(id) || mitgliedZu(erster.kuerzel);
-    }
+    const m = Daten.mitglied;
+    if (!m) throw Object.assign(new Error("kein-zugang"), { keinZugang: true });
+    const basis = mitgliedZu(m.id) || {};
+    S.ich = { ...basis, id: m.id, name: m.name || basis.name || m.benutzer, ebene: m.ebene };
     if (S.ich.ebene === "partner") {
       if (Daten.modus === "cloud") S.projekte = await Daten.partnerAuftraege();
       else {
@@ -1685,19 +1866,21 @@
   (async () => {
     anwenden();
     try {
-      const ok = await Daten.start();
-      if (!ok) { $("#main").innerHTML = ansichtLogin(); return; }
-      await laden();
-      /* Vorschau-Link mit ?demo=1: beim ersten Öffnen Beispielprojekte und ein Beispielziel laden */
-      if (new URLSearchParams(location.search).has("demo") && Daten.modus === "lokal" && !S.projekte.length) {
-        demoLaden();
-        if (!(cfg().ziele || {}).jahresumsatz) { S.einstellungen = { ...(S.einstellungen || {}), ziele: { jahresumsatz: 320000 } }; await Daten.einstellungenSpeichern(S.einstellungen); }
+      S.einstellungen = await Daten.einstellungenLaden();
+      /* Vorschau-Link mit ?demo=1: Demo-Zugänge, Beispielprojekte und ein Beispielziel */
+      if (new URLSearchParams(location.search).has("demo") && Daten.modus === "lokal") {
+        if (Daten.ersteinrichtungNoetig()) await demoKontenAnlegen();
+        if (!(await Daten.projekteLaden()).length) {
+          S.projekte = []; demoLaden();
+          clearTimeout(speicherTimer); offen.clear(); await Daten.projektSpeichern(null, S.projekte);
+          if (!(cfg().ziele || {}).jahresumsatz) { S.einstellungen = { ...(S.einstellungen || {}), ziele: { jahresumsatz: 320000 } }; await Daten.einstellungenSpeichern(S.einstellungen); }
+        }
       }
+      await Daten.start();
+      await weiter();
     } catch (e) {
-      if (e.keinZugang) { $("#main").innerHTML = keinZugang(); return; }
-      $("#main").innerHTML = `<div class="seite"><div class="panel startfeld"><h2>Keine Verbindung</h2><p>${esc(e.message || e)}</p><button class="btn" data-aktion="neu-laden">Erneut versuchen</button></div></div>`;
-      return;
+      if (e.keinZugang) return vorraum(keinZugang());
+      vorraum(`<div class="login"><div class="panel login-karte"><h1>Keine Verbindung</h1><p>${esc(e.message || e)}</p><button class="btn" data-aktion="neu-laden">Erneut versuchen</button></div></div>`);
     }
-    render();
   })();
 })();

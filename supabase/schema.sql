@@ -61,6 +61,12 @@ create table if not exists public.mitglieder (
   name      text,
   formulare text[] not null default '{}'   -- Partner: welche Formulare sie sehen
 );
+-- Konten: Benutzername, gesperrt?, muss beim nächsten Login das Passwort ändern?
+alter table public.mitglieder add column if not exists benutzer text;
+alter table public.mitglieder add column if not exists aktiv boolean not null default true;
+alter table public.mitglieder add column if not exists muss_aendern boolean not null default false;
+alter table public.mitglieder add column if not exists user_id uuid;
+alter table public.mitglieder drop constraint if exists mitglieder_id_key;
 
 -- ---------------------------------------------------------------------------
 -- Hilfsfunktionen: Wer bin ich, was darf ich?
@@ -69,10 +75,10 @@ create or replace function public.ich_email() returns text language sql stable a
   select lower(coalesce(auth.jwt() ->> 'email', ''))
 $$;
 create or replace function public.ich_ebene() returns text language sql stable security definer set search_path = public as $$
-  select ebene from mitglieder where email = ich_email()
+  select ebene from mitglieder where email = ich_email() and aktiv
 $$;
 create or replace function public.ich_id() returns text language sql stable security definer set search_path = public as $$
-  select id from mitglieder where email = ich_email()
+  select id from mitglieder where email = ich_email() and aktiv
 $$;
 create or replace function public.ist_buero() returns boolean language sql stable as $$
   select coalesce(ich_ebene() in ('geschaeftsfuehrung', 'planung'), false)
@@ -288,9 +294,135 @@ grant execute on function public.partner_auftraege() to authenticated;
 grant execute on function public.partner_melden(text, boolean, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- KONTEN — die Geschäftsführung verwaltet Zugänge direkt im Dashboard.
+-- Benutzername ohne „@“ wird intern zu <name>@konto.bad-dashboard.de.
+-- ---------------------------------------------------------------------------
+create extension if not exists pgcrypto with schema extensions;
+
+create or replace function public.konto_email(p_benutzer text) returns text language sql immutable as $$
+  select lower(case when position('@' in p_benutzer) > 0 then trim(p_benutzer) else trim(p_benutzer) || '@konto.bad-dashboard.de' end)
+$$;
+
+-- Übersicht aller Konten (nur Geschäftsführung)
+create or replace function public.konten_liste() returns jsonb
+language plpgsql stable security definer set search_path = public, auth as $$
+begin
+  if not ist_gf() then raise exception 'nicht erlaubt'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object(
+      'email', m.email, 'benutzer', coalesce(m.benutzer, m.email), 'id', m.id, 'ebene', m.ebene, 'name', m.name,
+      'aktiv', m.aktiv, 'mussAendern', m.muss_aendern, 'letzterLogin', u.last_sign_in_at))
+    from mitglieder m left join auth.users u on u.email = m.email), '[]'::jsonb);
+end $$;
+
+-- Zugang anlegen (oder für eine Person neu vergeben)
+create or replace function public.konto_anlegen(p_benutzer text, p_passwort text, p_id text, p_ebene text, p_name text, p_formulare text[] default '{}')
+returns boolean language plpgsql security definer set search_path = public, auth, extensions as $$
+declare
+  v_email text := konto_email(p_benutzer);
+  v_uid uuid;
+begin
+  if not ist_gf() then raise exception 'nicht erlaubt'; end if;
+  if length(coalesce(p_passwort, '')) < 8 then raise exception 'Passwort zu kurz (mind. 8 Zeichen)'; end if;
+  if p_ebene not in ('geschaeftsfuehrung', 'planung', 'monteur', 'partner') then raise exception 'unbekannte Ebene'; end if;
+  if exists (select 1 from mitglieder where email = v_email and id <> p_id) then raise exception 'Benutzername schon vergeben'; end if;
+  select id into v_uid from auth.users where email = v_email;
+  if v_uid is null then
+    v_uid := gen_random_uuid();
+    insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
+      raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+      confirmation_token, email_change, email_change_token_new, recovery_token)
+    values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated', v_email,
+      crypt(p_passwort, gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}', jsonb_build_object('name', p_name),
+      now(), now(), '', '', '', '');
+    insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+    values (gen_random_uuid(), v_uid, v_uid::text, jsonb_build_object('sub', v_uid::text, 'email', v_email, 'email_verified', true), 'email', now(), now(), now());
+  else
+    update auth.users set encrypted_password = crypt(p_passwort, gen_salt('bf')), banned_until = null, updated_at = now() where id = v_uid;
+  end if;
+  delete from mitglieder where id = p_id and email <> v_email;  -- alter Benutzername dieser Person
+  insert into mitglieder (email, id, ebene, name, formulare, benutzer, aktiv, muss_aendern, user_id)
+  values (v_email, p_id, p_ebene, p_name, coalesce(p_formulare, '{}'), lower(trim(p_benutzer)), true, true, v_uid)
+  on conflict (email) do update set id = excluded.id, ebene = excluded.ebene, name = excluded.name, formulare = excluded.formulare,
+    benutzer = excluded.benutzer, aktiv = true, muss_aendern = true, user_id = excluded.user_id;
+  return true;
+end $$;
+
+-- Startpasswort neu setzen (Mitarbeiter muss es beim nächsten Login ändern)
+create or replace function public.konto_passwort_zuruecksetzen(p_email text, p_passwort text)
+returns boolean language plpgsql security definer set search_path = public, auth, extensions as $$
+begin
+  if not ist_gf() then raise exception 'nicht erlaubt'; end if;
+  if length(coalesce(p_passwort, '')) < 8 then raise exception 'Passwort zu kurz (mind. 8 Zeichen)'; end if;
+  update auth.users set encrypted_password = crypt(p_passwort, gen_salt('bf')), updated_at = now() where email = p_email;
+  update mitglieder set muss_aendern = true where email = p_email;
+  return found;
+end $$;
+
+-- Sperren / entsperren (sich selbst kann man nicht sperren)
+create or replace function public.konto_aktiv(p_email text, p_aktiv boolean)
+returns boolean language plpgsql security definer set search_path = public, auth as $$
+begin
+  if not ist_gf() then raise exception 'nicht erlaubt'; end if;
+  if p_email = ich_email() then raise exception 'eigenes Konto kann nicht gesperrt werden'; end if;
+  update mitglieder set aktiv = p_aktiv where email = p_email;
+  update auth.users set banned_until = case when p_aktiv then null else '2999-12-31'::timestamptz end where email = p_email;
+  return found;
+end $$;
+
+-- Ebene/Name/Formulare einer Person nachziehen (wenn in den Konten geändert)
+create or replace function public.konto_aendern(p_id text, p_ebene text, p_name text, p_formulare text[] default '{}')
+returns boolean language plpgsql security definer set search_path = public as $$
+begin
+  if not ist_gf() then raise exception 'nicht erlaubt'; end if;
+  if p_id = ich_id() and p_ebene <> 'geschaeftsfuehrung' then raise exception 'eigene Ebene kann nicht geändert werden'; end if;
+  update mitglieder set ebene = p_ebene, name = p_name, formulare = coalesce(p_formulare, '{}') where id = p_id;
+  return true;
+end $$;
+
+-- Nach dem eigenen Passwortwechsel: Pflicht erledigt
+create or replace function public.passwort_geaendert() returns boolean
+language sql security definer set search_path = public as $$
+  update mitglieder set muss_aendern = false where email = ich_email() returning true
+$$;
+
+revoke all on function public.konten_liste() from public;
+revoke all on function public.konto_anlegen(text, text, text, text, text, text[]) from public;
+revoke all on function public.konto_passwort_zuruecksetzen(text, text) from public;
+revoke all on function public.konto_aktiv(text, boolean) from public;
+revoke all on function public.konto_aendern(text, text, text, text[]) from public;
+revoke all on function public.passwort_geaendert() from public;
+grant execute on function public.konten_liste() to authenticated;
+grant execute on function public.konto_anlegen(text, text, text, text, text, text[]) to authenticated;
+grant execute on function public.konto_passwort_zuruecksetzen(text, text) to authenticated;
+grant execute on function public.konto_aktiv(text, boolean) to authenticated;
+grant execute on function public.konto_aendern(text, text, text, text[]) to authenticated;
+grant execute on function public.passwort_geaendert() to authenticated;
+grant execute on function public.konto_email(text) to anon, authenticated;
+
+-- ---------------------------------------------------------------------------
 -- ERSTER ZUGANG: die Geschäftsführung eintragen (E-Mail anpassen!).
 -- Danach pflegt sie alle weiteren Mitglieder in der Einrichtung des Dashboards.
 -- ---------------------------------------------------------------------------
--- insert into public.mitglieder (email, id, ebene, name)
--- values ('chef@ihre-firma.de', 'DB', 'geschaeftsfuehrung', 'Daniel Brüll')
--- on conflict (email) do update set ebene = excluded.ebene;
+-- Ersten Geschäftsführer-Zugang anlegen — funktioniert nur, solange es noch keinen gibt.
+-- Benutzername, Startpasswort (mind. 8 Zeichen), Kürzel und Name anpassen, dann ausführen:
+--
+--   select public.erster_zugang('daniel', 'Start-Passwort-123', 'DB', 'Daniel Brüll');
+--
+-- Beim ersten Anmelden wird ein eigenes Passwort verlangt.
+create or replace function public.erster_zugang(p_benutzer text, p_passwort text, p_id text, p_name text)
+returns boolean language plpgsql security definer set search_path = public, auth, extensions as $$
+declare
+  v_email text := konto_email(p_benutzer);
+  v_uid uuid := gen_random_uuid();
+begin
+  if exists (select 1 from mitglieder where ebene = 'geschaeftsfuehrung' and aktiv) then raise exception 'Es gibt schon einen Geschäftsführer-Zugang'; end if;
+  insert into auth.users (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, email_change, email_change_token_new, recovery_token)
+  values ('00000000-0000-0000-0000-000000000000', v_uid, 'authenticated', 'authenticated', v_email, crypt(p_passwort, gen_salt('bf')), now(),
+    '{"provider":"email","providers":["email"]}', jsonb_build_object('name', p_name), now(), now(), '', '', '', '');
+  insert into auth.identities (id, user_id, provider_id, identity_data, provider, last_sign_in_at, created_at, updated_at)
+  values (gen_random_uuid(), v_uid, v_uid::text, jsonb_build_object('sub', v_uid::text, 'email', v_email, 'email_verified', true), 'email', now(), now(), now());
+  insert into mitglieder (email, id, ebene, name, benutzer, aktiv, muss_aendern, user_id)
+  values (v_email, p_id, 'geschaeftsfuehrung', p_name, lower(trim(p_benutzer)), true, true, v_uid);
+  return true;
+end $$;
+revoke all on function public.erster_zugang(text, text, text, text) from public, anon, authenticated;
