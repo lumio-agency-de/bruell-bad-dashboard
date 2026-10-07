@@ -227,15 +227,19 @@
   function freigabeStandard(art) {
     const e = (cfg().freigabeStandard || {})[art];
     if (Array.isArray(e)) return e;
-    return art === "monteur" ? KAT.map((k) => k.id).filter((k) => !GESPERRT_MONTEUR.includes(k)) : [...PARTNER_ORDNER];
+    return ordnerStandard(art);
   }
+  /* Werkseinstellung, solange unter Konten → „Ordner & Bilder“ nichts gespeichert ist */
+  const ordnerStandard = (art) => art === "planung" ? KAT.map((k) => k.id)
+    : art === "monteur" ? KAT.map((k) => k.id).filter((k) => !GESPERRT_MONTEUR.includes(k)) : [...PARTNER_ORDNER];
   function ordnerFuer(p, personId, art) {
     if (p && p.ordner && ebene() === "partner") return p.ordner;            // Partner-Auszug
     const f = p && p.freigaben && p.freigaben[personId];
     return Array.isArray(f) ? f : freigabeStandard(art);
   }
   const darfKatP = (pid, kat) => {
-    if (istBuero()) return true;
+    if (istGF()) return true;
+    if (ebene() === "planung") return freigabeStandard("planung").includes(kat);
     const p = S.projekte.find((x) => x.id === pid);
     return ordnerFuer(p, S.ich && S.ich.id, ebene()).includes(kat);
   };
@@ -1706,6 +1710,7 @@
       if (m.funktion) { const [rolle, bezeichnung] = m.funktion.split("|"); Object.assign(m, { rolle, bezeichnung }); delete m.funktion; }
       return m;
     }).filter((m) => m.name || m.kuerzel);
+    if ($("#ordnerrechte")) c.freigabeStandard = Object.fromEntries(RECHTE_EBENEN.map((e) => [e, $$("#ordnerrechte [data-r-ordner]").filter((z) => $(`[data-r-e="${e}"]`, z).checked).map((z) => z.dataset.rOrdner)]));
     if ($("#rechte")) c.rechte = Object.fromEntries($$("#rechte [data-r-schritt]").map((z) => [z.dataset.rSchritt, $$("[data-r-e]", z).filter((x) => x.checked).map((x) => x.dataset.rE)]));
     if ($("#partner")) {
       const ids = new Set(), alt = cfg().partner || [];
@@ -1740,8 +1745,19 @@
       <div class="r-matrix"><div class="r-zeile r-th"><span>Level / Schritt</span><span>${esc(EBENE_TITEL.geschaeftsfuehrung || "Geschäftsführung")}</span>${RECHTE_EBENEN.map((e) => `<span>${esc(EBENE_TITEL[e] || e)}</span>`).join("")}</div>${levels}</div>
       <p class="vb-max">Ordner je Projekt gibt das Büro im Reiter „Team“ frei. ${Daten.modus === "cloud" ? "Die Datenbank setzt Ordner- und Partner-Freigaben durch." : "Im Demo-Modus liegen die Daten nur in diesem Browser."}</p></section>`;
   }
+  function ordnerMatrix() {
+    const zelle = (attr, an) => `<span class="r-zelle"><input type="checkbox" ${attr}${an ? " checked" : ""}></span>`;
+    const ord = KAT.filter((k) => !k.nurMitDateien);
+    const zeilen = ord.map((k) => `<div class="r-zeile r-schritt" data-r-ordner="${esc(k.id)}"><span class="r-titel">${esc(k.titel)}${k.kunde ? "<small>auch per Kundenlink befüllt</small>" : ""}</span>
+      <span class="r-zelle r-gf" aria-label="Geschäftsführung: ja">✓</span>${RECHTE_EBENEN.map((e) => zelle(`data-r-e="${e}" aria-label="${esc((EBENE_TITEL[e] || e) + ": " + k.titel)}"`, freigabeStandard(e).includes(k.id))).join("")}</div>`).join("");
+    return `<section class="panel" id="ordnerrechte"><div class="r-titelzeile"><h2 class="panel-titel">Ordner & Bilder</h2><span class="kopf-aktionen"><button type="button" class="btn klein still" data-aktion="r-ordner-standard">Standard wiederherstellen</button></span></div>
+      <p class="leise klein-text panel-innen">Auf welche Projektordner – und damit welche Bilder und Dokumente – jede Rolle zugreifen kann. Gilt für alle Projekte. Monteuren und Partnern kann das Büro im Projekt (Reiter „Team“) für einzelne Personen zusätzlich Ordner freigeben oder entziehen. Mit „Änderungen übernehmen“ speichern.</p>
+      <div class="r-matrix"><div class="r-zeile r-th"><span>Ordner</span><span>${esc(EBENE_TITEL.geschaeftsfuehrung || "Geschäftsführung")}</span>${RECHTE_EBENEN.map((e) => `<span>${esc(EBENE_TITEL[e] || e)}</span>`).join("")}</div>
+      <div class="r-level offen" data-r-nr="ordner"><div class="r-zeile r-kopf"><span class="r-auf r-statisch"><b>${ord.length}</b> Ordner<small>alle an- oder abwählen</small></span><span class="r-zelle r-gf">alle</span>${RECHTE_EBENEN.map((e) => zelle(`data-r-level="${e}" aria-label="${esc((EBENE_TITEL[e] || e) + ": alle Ordner")}"`, false)).join("")}</div>
+      <div class="r-schritte">${zeilen}</div></div></div></section>`;
+  }
   function rechteTeilzustand() {
-    $$("#rechte .r-level").forEach((lv) => RECHTE_EBENEN.forEach((e) => {
+    $$(".r-matrix .r-level").forEach((lv) => RECHTE_EBENEN.forEach((e) => {
       const alleK = $$(`.r-schritt [data-r-e="${e}"]`, lv), n = alleK.filter((x) => x.checked).length, k = $(`[data-r-level="${e}"]`, lv);
       k.checked = n === alleK.length; k.indeterminate = n > 0 && n < alleK.length;
     }));
@@ -1764,6 +1780,7 @@
         <tbody>${(c.partner || []).map((x) => partnerKonto(x)).join("") || '<tr><td colspan="3" class="leise">Noch keine Partner – im Adressbuch anlegen.</td></tr>'}</tbody></table></div>
         <div class="aktionen panel-innen"><a class="btn klein" href="#/adressbuch">Partner im Adressbuch pflegen</a></div></section>
       ${rechteMatrix()}
+      ${ordnerMatrix()}
     </div>`;
   }
   async function kontenLaden() {
@@ -1973,7 +1990,7 @@
       r.name === "konten" && istGF() ? ansichtKonten() :
       r.name === "adressbuch" ? ansichtAdressbuch() : ansichtCockpit();
     $("#main").innerHTML = html;
-    if ($("#rechte")) rechteTeilzustand();
+    if ($(".r-matrix")) rechteTeilzustand();
     navRendern();
     const nav = r.name === "projekt" ? (istBuero() ? "projekte" : "cockpit") : ["einrichtung", "projekte", "kennzahlen", "konten", "adressbuch"].includes(r.name) ? r.name : "cockpit";
     $$(".nav a").forEach((a) => (a.dataset.nav === nav ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
@@ -2087,6 +2104,11 @@
     }
     if (akt === "r-auf") { const lv = a.closest(".r-level"), box = $(".r-schritte", lv), auf = box.hidden; box.hidden = !auf; a.setAttribute("aria-expanded", String(auf)); lv.classList.toggle("offen", auf); return; }
     if (akt === "r-alle") { $$("#rechte .r-level").forEach((lv) => { const auf = a.dataset.wert === "1"; $(".r-schritte", lv).hidden = !auf; $(".r-auf", lv).setAttribute("aria-expanded", String(auf)); lv.classList.toggle("offen", auf); }); return; }
+    if (akt === "r-ordner-standard") {
+      if (!confirm("Ordner-Zugriff auf den Standard zurücksetzen? Gespeichert wird erst mit „Änderungen übernehmen“.")) return;
+      $$("#ordnerrechte [data-r-ordner]").forEach((z) => $$("[data-r-e]", z).forEach((x) => { x.checked = ordnerStandard(x.dataset.rE).includes(z.dataset.rOrdner); }));
+      rechteTeilzustand(); toast("Standard gesetzt – mit „Änderungen übernehmen“ speichern"); return;
+    }
     if (akt === "r-standard") {
       if (!confirm("Alle Haken auf den Standard zurücksetzen? Gespeichert wird erst mit „Änderungen übernehmen“.")) return;
       $$("#rechte [data-r-schritt]").forEach((z) => { const st = rechteStandard(ALLE_SCHRITTE.find((s) => s.id === z.dataset.rSchritt)); $$("[data-r-e]", z).forEach((x) => { x.checked = st.includes(x.dataset.rE); }); });
@@ -2359,8 +2381,8 @@
       if ((el.dataset.ff && el.tagName === "SELECT") || (el.dataset.tab && el.type === "checkbox")) formularNeuZeichnen(finde(seite.dataset.projekt), seite.dataset.formular, true);
       return;
     }
-    if (el.matches("#rechte [data-r-level]")) { $$(`.r-schritt [data-r-e="${el.dataset.rLevel}"]`, el.closest(".r-level")).forEach((x) => { x.checked = el.checked; }); return rechteTeilzustand(); }
-    if (el.matches("#rechte [data-r-e]")) return rechteTeilzustand();
+    if (el.matches(".r-matrix [data-r-level]")) { $$(`.r-schritt [data-r-e="${el.dataset.rLevel}"]`, el.closest(".r-level")).forEach((x) => { x.checked = el.checked; }); return rechteTeilzustand(); }
+    if (el.matches(".r-matrix [data-r-e]")) return rechteTeilzustand();
     if (el.matches("[data-zuweisen]") && p && istBuero() && el.value) {
       const id = el.value, m = mitgliedZu(id);
       aendern(p, (x) => { x.zugriff = [...new Set([...(x.zugriff || []), id])]; }, `Zugewiesen: ${m ? m.name : id}`);

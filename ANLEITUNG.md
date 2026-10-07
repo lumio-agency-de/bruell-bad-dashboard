@@ -45,6 +45,11 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
   Erledigen darf, wer den Schritt sieht und im Ablauf dafür zuständig ist. Die Geschäftsführung
   sieht immer alles. Bei Partnern gilt: freigegebene Formulare des eigenen Gewerks (plus
   gewerkübergreifende wie die Projekt-Übersicht). „Standard wiederherstellen“ setzt alles zurück.
+- **Konten → Ordner & Bilder:** pro Projektordner (Bilder alt, Baustellenfotos, Bilder fertiges
+  Bad, Angebote, Rechnungen …) per Haken festlegen, auf welche Ordner Planung, Monteur und Partner
+  zugreifen. Gilt für alle Projekte. Im Projekt (Reiter „Team“) kann das Büro einzelnen Monteuren
+  und Partnern davon abweichend Ordner freigeben oder entziehen. Im Cloud-Betrieb setzt die
+  Datenbank das durch.
 
 ## Konten & Anmeldung
 

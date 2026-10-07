@@ -89,22 +89,33 @@ $$;
 create or replace function public.zugewiesen(d jsonb) returns boolean language sql stable as $$
   select coalesce(d -> 'zugriff' ? ich_id(), false)
 $$;
+-- Standard-Ordner einer Rolle (Konten → „Ordner & Bilder“, gespeichert in einstellungen.daten.freigabeStandard)
+create or replace function public.ordner_standard(e text) returns jsonb language sql stable security definer set search_path = public as $$
+  select coalesce(
+    (select daten -> 'freigabeStandard' -> e from einstellungen where id = 1 and jsonb_typeof(daten -> 'freigabeStandard' -> e) = 'array'),
+    case e
+      when 'planung' then '["bilder-alt","grundriss","heizung","skizzen","planung","angebot","auftrag","baustelle","auswahl","expose","freigabe","rechnungen","fertig","sonstiges"]'::jsonb
+      when 'monteur' then '["bilder-alt","grundriss","heizung","skizzen","planung","baustelle","auswahl","expose","freigabe","fertig","sonstiges"]'::jsonb
+      else '["planung","skizzen","baustelle","auswahl"]'::jsonb end)
+$$;
 -- Darf ich Dateien dieses Projekts in diesem Ordner sehen?
 create or replace function public.darf_datei(pid text, kat text) returns boolean language sql stable security definer set search_path = public as $$
-  select ist_buero() or exists (
-    select 1 from projekte p
-    where p.id = pid and not p.geloescht and zugewiesen(p.daten) and (
-      -- Ordner-Freigabe je Person im Projekt (p.daten.freigaben.<id> = ["planung", …]) …
-      case when coalesce(p.daten -> 'freigaben' ? ich_id(), false) then (p.daten -> 'freigaben' -> ich_id()) ? kat
-      -- … sonst Standard je Ebene
-      else (ich_ebene() = 'monteur' and kat not in ('angebot', 'auftrag', 'rechnungen'))
-        or (ich_ebene() = 'partner' and kat in ('planung', 'skizzen', 'baustelle', 'auswahl')) end
+  select ist_gf()
+    or (ich_ebene() = 'planung' and ordner_standard('planung') ? kat)
+    or exists (
+      select 1 from projekte p
+      where p.id = pid and not p.geloescht and ich_ebene() in ('monteur', 'partner') and zugewiesen(p.daten) and (
+        -- Ordner-Freigabe je Person im Projekt (Reiter „Team“) …
+        case when coalesce(p.daten -> 'freigaben' ? ich_id(), false) then (p.daten -> 'freigaben' -> ich_id()) ? kat
+        -- … sonst der Standard der Rolle
+        else ordner_standard(ich_ebene()) ? kat end
+      )
     )
-  )
 $$;
 -- Darf ich in diesen Ordner hochladen?
 create or replace function public.darf_hochladen(pid text, kat text) returns boolean language sql stable as $$
-  select ist_buero()
+  select ist_gf()
+    or (ich_ebene() = 'planung' and darf_datei(pid, kat))
     or (ich_ebene() = 'monteur' and kat in ('baustelle', 'fertig') and darf_datei(pid, kat))
     or (ich_ebene() = 'partner' and kat = 'baustelle' and darf_datei(pid, kat))
 $$;
@@ -137,6 +148,8 @@ create policy p_aendern on public.projekte for update to authenticated
 -- Schutz: nur das Büro weist zu und gibt Ordner frei, nur die Geschäftsführung löscht
 create or replace function public.projekte_schutz() returns trigger language plpgsql security definer set search_path = public as $$
 begin
+  -- gilt für angemeldete Nutzer; Wartung (SQL-Editor) und Service-Key (Ordner-Sync) sind ausgenommen
+  if coalesce(auth.jwt() ->> 'role', '') not in ('authenticated', 'anon') then return new; end if;
   if not ist_buero() and (new.daten -> 'zugriff' is distinct from old.daten -> 'zugriff' or new.daten -> 'freigaben' is distinct from old.daten -> 'freigaben') then
     raise exception 'Zuweisungen und Freigaben ändert nur das Büro';
   end if;
@@ -228,7 +241,7 @@ returns jsonb language sql stable security definer set search_path = public as $
     'termine', jsonb_build_object('baustart', p.daten #>> '{termine,baustart}', 'abnahme', p.daten #>> '{termine,abnahme}'),
     'formulare', coalesce((select jsonb_object_agg(f, p.daten -> 'formulare' -> f) from unnest(m.formulare) f where p.daten -> 'formulare' ? f), '{}'::jsonb),
     'meldung', p.daten -> 'partnerStatus' -> m.id,
-    'ordner', coalesce(p.daten -> 'freigaben' -> m.id, '["planung", "skizzen", "baustelle", "auswahl"]'::jsonb),
+    'ordner', coalesce(p.daten -> 'freigaben' -> m.id, ordner_standard('partner')),
     'geaendert', p.geaendert
   ) order by p.daten #>> '{termine,baustart}'), '[]'::jsonb)
   from projekte p join mitglieder m on m.email = ich_email() and m.ebene = 'partner'
