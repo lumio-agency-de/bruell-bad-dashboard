@@ -39,8 +39,7 @@ window.KATEGORIEN = [
     hinweis: "Gern aus mehreren Blickwinkeln – mit Fenster, Tür, Dusche/Wanne, WC und Waschtisch." },
   { id: "grundriss",   titel: "Grundriss & Maße",         kunde: true, kundeTitel: "Grundriss & Maße",
     hinweis: "Ein Grundriss oder eine Handskizze mit Maßen genügt. Gern auch Angaben zur Wohnfläche." },
-  { id: "heizung",     titel: "Heizraum & Haus",          kunde: true, kundeTitel: "Heizraum & Haus",
-    hinweis: "Fotos vom Heizraum, der Heizung mit Typenschild und vom Haus von außen. Gern auch die letzte Heizkostenabrechnung." },
+  { id: "heizung",     titel: "Heizraum & Haus",          nurMitDateien: true },   // nur noch für Altbestand – Dashboard ist reines Bad
   { id: "skizzen",     titel: "Skizzen" },
   { id: "planung",     titel: "Planung & Renderings" },
   { id: "angebot",     titel: "Angebote" },
@@ -82,7 +81,7 @@ window.ABLAUF = [
   {
     nr: 2, titel: "Terminbestätigung", abschnitt: "anfrage",
     ziel: "Termin bestätigen und Fotos & Maße vom Kunden einsammeln.",
-    portal: ["bilder-alt", "grundriss", "heizung"],
+    portal: ["bilder-alt", "grundriss"],
     schritte: [
       { id: "kwp-kunde", typ: "erledigt", titel: "Kunde in {programm.erp} angelegt und mit dem Termin verknüpft" },
       { id: "mail-termin", typ: "mail", mail: "terminbestaetigung", titel: "Terminbestätigung mit Upload-Link senden" },
@@ -101,6 +100,7 @@ window.ABLAUF = [
       { id: "skizze", typ: "dateien", kategorie: "skizzen", pflicht: false, titel: "Skizze fotografieren & hochladen" },
       { id: "planerin", typ: "feld", feld: "zustaendig", titel: "Zuständige Badplanerin festlegen" },
       { id: "ab-termin", typ: "termin", termin: "angebotsbesprechung", titel: "Termin Angebots- & Planungsbesprechung" },
+      { id: "ab-kwp", typ: "erledigt", titel: "Termin Angebotsbesprechung in {programm.erp} eingetragen" },
     ],
   },
   {
@@ -185,15 +185,15 @@ window.ABLAUF = [
   },
   {
     nr: 10, titel: "Baustelle planen", abschnitt: "auftrag",
-    ziel: "Termin, Subunternehmer, Abschlag — und die Monteurmappe steht.",
+    ziel: "Termin festlegen und bestätigen, Subunternehmer, Abschlag – und wer welche Ordner sieht.",
     schritte: [
       { id: "baustart", typ: "termin", termin: "baustart", titel: "Umsetzungstermin (Baustart)" },
-      { id: "plan", typ: "formular", formular: "baustellenplan", titel: "Subunternehmer & Ablauf einplanen" },
-      { id: "abschlag", typ: "dateien", kategorie: "rechnungen", titel: "Abschlagsrechnung ablegen" },
-      { id: "team", typ: "team", titel: "Monteure & Partner zuweisen",
-        hinweis: "Nur zugewiesene Monteure und Partner sehen diese Baustelle – Partner nur Adresse, Termine, Pläne und ihr Gewerk." },
-      { id: "mappe", typ: "erledigt", titel: "Monteurmappe geprüft und ausgedruckt",
-        hinweis: "Über „Monteurmappe“ oben in der Akte: alle Formulare, Maße und Pläne auf einen Blick." },
+      { id: "mail-umsetzung", typ: "mail", mail: "umsetzung", titel: "Umsetzungstermin per Mail bestätigen" },
+      { id: "plan", typ: "formular", formular: "baustellenplan", titel: "Subunternehmer & Ablauf",
+        hinweis: "Die Subunternehmer aus der Projekt-Übersicht (Abriss, Elektro, Fliesen, Fenster, Tür) sind schon eingetragen." },
+      { id: "abschlag", typ: "formular", formular: "abschlag", titel: "Abschlagsrechnung" },
+      { id: "team", typ: "team", titel: "Monteure & Partner zuweisen – Ordner freigeben",
+        hinweis: "Wer zugewiesen ist, sieht diese Baustelle – und nur die Ordner, die hier freigegeben sind." },
     ],
   },
   {

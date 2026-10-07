@@ -16,7 +16,7 @@
 window.FIRMA = {
   name: "Brüll GmbH",
   kurzname: "Brüll",
-  bereich: "Bad & Heizung",
+  bereich: "Badplanung & Badbau",
   logo: "app/img/logo.svg",
 
   adresse: {
@@ -44,7 +44,7 @@ window.FIRMA = {
                 geschaeftsfuehrung | planung | monteur
        email    Login-E-Mail (nur im Cloud-Betrieb nötig) */
   team: [
-    { rolle: "badberater",      bezeichnung: "Badberater · Geschäftsführer", name: "Daniel Brüll",     kuerzel: "DB", ebene: "geschaeftsfuehrung", email: "" },
+    { rolle: "badberater",      bezeichnung: "Geschäftsführer · Badberater", name: "Daniel Brüll",     kuerzel: "DB", ebene: "geschaeftsfuehrung", email: "" },
     { rolle: "badplanung",      bezeichnung: "Badplanerin",      name: "Karin Kaufmann",   kuerzel: "KK", ebene: "planung", email: "" },
     { rolle: "badplanung",      bezeichnung: "Badplanerin",      name: "Judith Rapp",      kuerzel: "JR", ebene: "planung", email: "" },
     { rolle: "projektleiter",   bezeichnung: "Projektleiter",    name: "Steven Wagner",    kuerzel: "SW", ebene: "planung", email: "" },
@@ -77,6 +77,10 @@ window.FIRMA = {
     erp: "KWP",                       // Kunden, Angebote, Bestellwesen, Rechnungen
     cad: "Palette CAD",               // 3D-Badplanung
     app3d: "PaletteMove",             // Kunden-App für die 3D-Ansicht
+    /* App-Adresse, die PaletteMove mit dem Code öffnet (bei Palette erfragen), {code} = Download-Code.
+       Leer = Code wird kopiert und die App über den App Store geöffnet. */
+    app3dLink: "",
+    app3dStore: "https://apps.apple.com/de/app/palette-move/id416813843",
     badrechner: "Badrechner auf der Website",
   },
 

@@ -9,6 +9,10 @@
      auswahl     eine Option          { optionen: [...] }
      mehrfach    mehrere Optionen     { optionen: [...] }
      kunde       Feld der Kundendaten (wird mit dem Projekt geteilt)   { feld: "vorname" }
+     wer         Auswahlliste „Wer macht das?“: eigene Monteure + externe Partner
+                 { gewerk: "Elektro" } filtert die Partner nach Gewerk;
+                 { quelle: "projektuebersicht.elektrikerWer" } übernimmt den Wert
+                 von dort (zentral eingetragen, hier nur angezeigt)
      dateien     Upload direkt im Formular → landet im Projektordner   { kategorie }
      unterschrift  Unterschriftenfeld (Maus, Finger, Stift)
      tabelle     { spalten: [{ id, titel, typ }], zeilen: ["Armatur", …] }
@@ -20,6 +24,8 @@
      pflicht: true       muss ausgefüllt sein, damit das Formular als erledigt gilt
      breite: "halb" | "drittel"   (Standard: volle Breite)
      wenn: { feld, wert }        nur sichtbar, wenn ein anderes Feld diesen Wert hat
+     wenn: { formular, feld, wert }  … oder ein Feld eines anderen Formulars
+                                    (ist das andere Formular leer, wird angezeigt)
      vorbelegen: "termin:erstgespraech" | "heute"
    ========================================================================== */
 
@@ -48,13 +54,15 @@
         { id: "datum", typ: "datum", label: "Anfrage vom", pflicht: true, breite: "drittel", vorbelegen: "heute" },
         { id: "kundenart", typ: "auswahl", label: "Kunde", optionen: ["Neukunde", "Stammkunde"], pflicht: true, breite: "drittel" },
         { id: "eigentum", typ: "auswahl", label: "Wohnsituation", optionen: ["Eigentümer", "Mieter"], pflicht: true, breite: "drittel" },
-        { id: "kontakt", typ: "auswahl", label: "Wie kam der Kontakt zustande?", optionen: ["Telefon", "Website / Badrechner", "Empfehlung", "Ausstellung", "Social Media", "Stammkunde", "Sonstiges"], pflicht: true },
+        { id: "kontakt", typ: "auswahl", label: "Wie kam der Kontakt zustande?", optionen: ["Website / Badrechner", "Empfehlung", "Social Media", "Stammkunde", "Sonstiges"], pflicht: true },
+        { id: "kontaktText", typ: "text", label: "Details zum Kontakt (z. B. empfohlen von …, Messe, Zeitung)" },
 
         { typ: "abschnitt", titel: "Kunde" },
         { id: "anrede", typ: "kunde", feld: "anrede", label: "Anrede", breite: "drittel", pflicht: true },
         { id: "vorname", typ: "kunde", feld: "vorname", label: "Vorname", breite: "drittel" },
         { id: "nachname", typ: "kunde", feld: "nachname", label: "Nachname", breite: "drittel", pflicht: true },
-        { id: "strasse", typ: "kunde", feld: "strasse", label: "Straße", breite: "halb", pflicht: true },
+        { id: "strasse", typ: "kunde", feld: "strasse", label: "Straße", breite: "drittel", pflicht: true },
+        { id: "hausnr", typ: "kunde", feld: "hausnr", label: "Hausnummer", breite: "drittel", pflicht: true },
         { id: "ort", typ: "kunde", feld: "ort", label: "PLZ & Ort", breite: "halb", pflicht: true },
         { id: "email", typ: "kunde", feld: "email", label: "E-Mail", breite: "halb", pflicht: true },
         { id: "telefon", typ: "kunde", feld: "telefon", label: "Telefon privat", breite: "halb" },
@@ -77,14 +85,14 @@
         { id: "sonstiges", typ: "text", label: "Sonstiges" },
 
         { typ: "abschnitt", titel: "2. Wie groß ist das Bad?" },
-        { id: "laenge", typ: "text", label: "Länge", breite: "drittel" },
-        { id: "breite", typ: "text", label: "Breite", breite: "drittel" },
-        { id: "hoehe", typ: "text", label: "Höhe", breite: "drittel" },
+        { id: "laenge", typ: "zahl", label: "Länge", einheit: "cm", breite: "drittel" },
+        { id: "breite", typ: "zahl", label: "Breite", einheit: "cm", breite: "drittel" },
+        { id: "hoehe", typ: "zahl", label: "Höhe", einheit: "cm", breite: "drittel" },
 
         { typ: "abschnitt", titel: "3. Realisierung & 4. Budget" },
         { id: "von", typ: "text", label: "Realisierungszeitraum von", breite: "halb" },
         { id: "bis", typ: "text", label: "bis", breite: "halb" },
-        { id: "budget", typ: "auswahl", label: "Budgetvorstellung", optionen: ["ca. 10.000 €", "ca. 15.000 €", "ca. 30.000 €", "anderes", "keine Angabe"], pflicht: true },
+        { id: "budget", typ: "auswahl", label: "Budgetvorstellung", optionen: ["ca. 10.000 €", "ca. 15.000 €", "ca. 30.000 €", "anderes"], pflicht: true },
         { id: "budgetFrei", typ: "text", label: "Budget (eigene Angabe)", wenn: { feld: "budget", wert: "anderes" } },
 
         { typ: "abschnitt", titel: "5. Bemerkungen" },
@@ -107,8 +115,17 @@
         { id: "wanne", typ: JN, label: "Badewanne", pflicht: true, breite: "drittel" }, { id: "wanneNotiz", typ: "text", label: "Badewanne – Wünsche", wenn: { feld: "wanne", wert: "ja" } },
         { id: "dusche", typ: JN, label: "Dusche", pflicht: true, breite: "drittel" }, { id: "duscheNotiz", typ: "text", label: "Dusche – Wünsche", wenn: { feld: "dusche", wert: "ja" } },
         { id: "heizkoerper", typ: JN, label: "Heizkörper", pflicht: true, breite: "drittel" }, { id: "heizNotiz", typ: "text", label: "Heizkörper – Wünsche", wenn: { feld: "heizkoerper", wert: "ja" } },
+        { typ: "abschnitt", titel: "Vorhandene Fliesen" },
+        { id: "fliesenAlt", typ: "auswahl", label: "Fliesen", optionen: ["raus", "bleiben"], pflicht: true, breite: "halb" },
+        { id: "fliesenAltWo", typ: "mehrfach", label: "Wo?", optionen: ["Wand", "Boden"], breite: "halb" },
         { typ: "abschnitt", titel: "Wand / Boden / Decke" },
         { id: "fugenlos", typ: JN, label: "Fugenlos", pflicht: true, breite: "drittel" },
+        { id: "wandFliesen", typ: JN, label: "Wand: Fliesen", breite: "drittel" },
+        { id: "wandRenoDeko", typ: JN, label: "Wand: Reno Deko", breite: "drittel" },
+        { id: "wandPutz", typ: JN, label: "Wand: Putz", breite: "drittel" },
+        { id: "wandTapete", typ: JN, label: "Wand: Tapete", breite: "drittel" },
+        { id: "bodenFliesen", typ: JN, label: "Boden: Fliesen", breite: "drittel" },
+        { id: "bodenVinyl", typ: JN, label: "Boden: Vinyl", breite: "drittel" },
         { id: "wbdNotiz", typ: "textarea", label: "Wand / Boden / Decke – Notizen" },
         { typ: "abschnitt", titel: "Elektrik, Fenster, Tür" },
         { id: "fi", typ: JN, label: "FI-Schutzschalter vorhanden", pflicht: true, breite: "drittel" },
@@ -126,6 +143,7 @@
       vorlage: "vorlagen/06-baustellenbesichtigung/Checkliste-Baustellenbesichtigung.docx",
       felder: [
         { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:baustellenbesichtigung" },
+        { id: "tuertausch", typ: JN, label: "Türentausch geplant? (bei Ja folgt „Angaben zur Tür“)", pflicht: true, breite: "halb" },
         { typ: "abschnitt", titel: "Vor Ort erledigt" },
         { id: "check", typ: "checkliste", modus: "janein", label: "Checkliste", pflicht: true, punkte: [
           { id: "fotoBad", label: "Fotos vom Bad" },
@@ -148,15 +166,14 @@
           { id: "hausverwaltung", label: "Infos Hausverwaltung", optional: true },
         ] },
         { id: "system", typ: "auswahl", label: "Heizkörper-System", optionen: ["Einrohrsystem", "Zweirohrsystem"], pflicht: true, breite: "halb" },
-        { id: "tuertausch", typ: JN, label: "Türentausch geplant?", pflicht: true, breite: "halb" },
         { id: "fotos", typ: "dateien", kategorie: "baustelle", label: "Fotos von der Besichtigung", pflicht: true },
         { typ: "abschnitt", titel: "Raummaße" },
-        { id: "raumhoehe", typ: "text", label: "Raumhöhe", breite: "drittel", pflicht: true },
-        { id: "raumlaenge", typ: "text", label: "Länge", breite: "drittel" },
-        { id: "raumbreite", typ: "text", label: "Breite", breite: "drittel" },
+        { id: "raumhoehe", typ: "zahl", label: "Raumhöhe", einheit: "cm", breite: "drittel", pflicht: true },
+        { id: "raumlaenge", typ: "zahl", label: "Länge", einheit: "cm", breite: "drittel" },
+        { id: "raumbreite", typ: "zahl", label: "Breite", einheit: "cm", breite: "drittel" },
         { id: "skizze", typ: "dateien", kategorie: "skizzen", label: "Raumskizze mit Bemaßung" },
         { typ: "abschnitt", titel: "Stundeneinschätzung" },
-        { id: "stunden", typ: "tabelle", label: "Ungefähre Stunden je Arbeit", spalten: [{ id: "h", titel: "Stunden", typ: "zahl" }],
+        { id: "stunden", typ: "tabelle", label: "Ungefähre Stunden je Arbeit (jede Zeile ausfüllen, 0 wenn entfällt)", pflicht: true, alleZeilen: "h", spalten: [{ id: "h", titel: "Stunden", typ: "zahl" }],
           zeilen: ["Staubschutz", "Abrissarbeiten", "Installationsarbeiten", "Malerarbeiten", "Fliesenarbeiten", "Fertigmontage"] },
         { id: "notizen", typ: "textarea", label: "Notizen" },
       ],
@@ -190,14 +207,17 @@
       felder: [
         { typ: "abschnitt", titel: "Was wird benötigt?" },
         { id: "abriss", typ: JN, label: "Abriss", pflicht: true, breite: "drittel" },
-        { id: "abrissWer", typ: "text", label: "Abriss – wer?", breite: "drittel", wenn: { feld: "abriss", wert: "ja" } },
+        { id: "abrissWer", typ: "wer", gewerk: "Abriss", label: "Abriss – wer?", pflicht: true, breite: "drittel", wenn: { feld: "abriss", wert: "ja" } },
         { id: "estrich", typ: "text", label: "Info Estrich", breite: "drittel" },
         { id: "elektriker", typ: JN, label: "Elektriker", pflicht: true, breite: "drittel" },
-        { id: "elektrikerWer", typ: "text", label: "Elektriker – wer?", breite: "drittel", wenn: { feld: "elektriker", wert: "ja" } },
-        { id: "licht", typ: "textarea", label: "Licht" },
+        { id: "elektrikerWer", typ: "wer", gewerk: "Elektro", label: "Elektriker – wer?", pflicht: true, breite: "drittel", wenn: { feld: "elektriker", wert: "ja" } },
+        { id: "licht", typ: "mehrfach", label: "Licht", optionen: ["Decke", "Nische", "Spiegelschrank"] },
+        { id: "lichtNotiz", typ: "text", label: "Licht – Notizen" },
         { id: "fliesen", typ: JN, label: "Fliesen", pflicht: true, breite: "drittel" },
-        { id: "fliesenWo", typ: "mehrfach", label: "Fliesen wo?", optionen: ["Wand", "Boden"], wenn: { feld: "fliesen", wert: "ja" } },
-        { id: "resopal", typ: "mehrfach", label: "Resopal", optionen: ["Wand", "Boden", "Duschboard"] },
+        { id: "fliesenWo", typ: "mehrfach", label: "Fliesen wo?", optionen: ["Wand", "Boden"], breite: "drittel", wenn: { feld: "fliesen", wert: "ja" } },
+        { id: "fliesenWer", typ: "wer", gewerk: "Fliesen", label: "Fliesen – wer?", breite: "drittel", wenn: { feld: "fliesen", wert: "ja" } },
+        { id: "resopal", typ: JN, label: "Resopal", pflicht: true, breite: "drittel" },
+        { id: "resopalWo", typ: "mehrfach", label: "Resopal wo?", optionen: ["Wand", "Boden", "Duschboard"], wenn: { feld: "resopal", wert: "ja" } },
         { typ: "abschnitt", titel: "Wände & Decke" },
         { id: "wandflaechen", typ: "mehrfach", label: "Wandflächen", optionen: ["Verputzen", "Tapezieren", "Spachteltechnik"] },
         { id: "putzbuendig", typ: JN, label: "Wände putzbündig", breite: "halb" },
@@ -206,12 +226,12 @@
         { id: "decke", typ: "mehrfach", label: "Decke", pflicht: true, optionen: ["Verputzen", "Tapezieren", "Streichen", "Spanndecke", "Gipskarton", "Bleibt", "Bauseits"] },
         { typ: "abschnitt", titel: "Fenster & Tür" },
         { id: "fenster", typ: JN, label: "Fenster", pflicht: true, breite: "halb" },
-        { id: "fensterbauer", typ: "text", label: "Welcher Fensterbauer?", breite: "halb", wenn: { feld: "fenster", wert: "ja" } },
+        { id: "fensterbauer", typ: "wer", gewerk: "Fensterbau", label: "Fenster – wer?", pflicht: true, breite: "halb", wenn: { feld: "fenster", wert: "ja" } },
         { id: "fensterbank", typ: JN, label: "Fensterbank", breite: "drittel" },
         { id: "fbMaterial", typ: "text", label: "Material", breite: "drittel", wenn: { feld: "fensterbank", wert: "ja" } },
         { id: "fbFarbe", typ: "text", label: "Farbe", breite: "drittel", wenn: { feld: "fensterbank", wert: "ja" } },
         { id: "tuer", typ: JN, label: "Tür", pflicht: true, breite: "drittel" },
-        { id: "tuerWer", typ: "text", label: "Wer baut die Tür?", breite: "drittel", wenn: { feld: "tuer", wert: "ja" } },
+        { id: "tuerWer", typ: "wer", gewerk: "Schreiner", label: "Tür – wer?", pflicht: true, breite: "drittel", wenn: { feld: "tuer", wert: "ja" } },
         { id: "tuerArt", typ: "mehrfach", label: "Art", optionen: ["Schiebetür", "Zarge"], wenn: { feld: "tuer", wert: "ja" } },
         { id: "verbreitert", typ: JN, label: "Wird die Tür verbreitert?", breite: "halb", wenn: { feld: "tuer", wert: "ja" } },
         { id: "verbreitertMass", typ: "text", label: "Auf welches Maß?", breite: "halb", wenn: { feld: "verbreitert", wert: "ja" } },
@@ -285,7 +305,7 @@
       titel: "Elektroarbeiten",
       vorlage: "vorlagen/07-materialauswahl/Elektroarbeiten.pdf",
       felder: [
-        { id: "firma", typ: "text", label: "Geplante Ausführung Firma", pflicht: true, breite: "halb" },
+        { id: "firma", typ: "wer", quelle: "projektuebersicht.elektrikerWer", label: "Geplante Ausführung Firma", breite: "halb" },
         { id: "installation", typ: "datum", label: "Installations-Termin", breite: "drittel" },
         { id: "fertig", typ: "datum", label: "Fertigmontage-Termin", breite: "drittel" },
         { id: "posten", typ: "tabelle", label: "Elektro-Posten", pflicht: true,
@@ -299,7 +319,8 @@
       titel: "Abrissarbeiten",
       vorlage: "vorlagen/07-materialauswahl/Abrissarbeiten.pdf",
       felder: [
-        { id: "staubschutz", typ: "text", label: "Ausführung Staubschutz durch wen?", pflicht: true, breite: "halb" },
+        { id: "abrissDurch", typ: "wer", quelle: "projektuebersicht.abrissWer", label: "Abriss durch", breite: "halb" },
+        { id: "staubschutz", typ: "wer", gewerk: "Abriss", label: "Ausführung Staubschutz durch wen?", pflicht: true, breite: "halb" },
         { id: "posten", typ: "tabelle", label: "Abriss", pflicht: true,
           spalten: [{ id: "jn", titel: "Abriss", typ: "janein" }, { id: "info", titel: "Erläuterungen" }],
           zeilen: ["Wandbeläge", "Bodenbelag", "Sanitärgegenstände", "Vorwände", "Decke", "Türe", "Estrich", "Sonstiges"] },
@@ -313,10 +334,17 @@
       felder: [
         { id: "subs", typ: "tabelle", label: "Subunternehmer & Gewerke", pflicht: true,
           spalten: [{ id: "gewerk", titel: "Gewerk" }, { id: "firma", titel: "Firma" }, { id: "termin", titel: "Termin" }, { id: "bestaetigt", titel: "bestätigt", typ: "haken" }] },
-        { id: "abschlag", typ: "text", label: "Abschlagsrechnung – Betrag", breite: "halb", pflicht: true },
-        { id: "abschlagAm", typ: "datum", label: "gestellt am", breite: "halb", pflicht: true },
         { id: "anschluss", typ: "textarea", label: "Anschlussmaße & Hinweise für die Monteure" },
         { id: "schluessel", typ: "text", label: "Schlüsselübergabe / Zugang" },
+      ],
+    },
+
+    abschlag: {
+      titel: "Abschlagsrechnung",
+      felder: [
+        { id: "betrag", typ: "zahl", label: "Betrag (netto)", einheit: "€", pflicht: true, breite: "halb" },
+        { id: "am", typ: "datum", label: "gestellt am", pflicht: true, breite: "halb", vorbelegen: "heute" },
+        { id: "datei", typ: "dateien", kategorie: "rechnungen", label: "Abschlagsrechnung als PDF", pflicht: true },
       ],
     },
 
@@ -327,7 +355,7 @@
       felder: [
         { id: "datum", typ: "datum", label: "Datum", breite: "halb", vorbelegen: "heute" },
         { id: "offen", typ: "tabelle", label: "Folgende Arbeiten sind noch offen",
-          spalten: [{ id: "arbeit", titel: "Arbeit / Reklamation" }, { id: "wer", titel: "wer" }, { id: "erledigt", titel: "erledigt", typ: "haken" }] },
+          spalten: [{ id: "arbeit", titel: "Arbeit / Reklamation" }, { id: "wer", titel: "wer", typ: "person" }, { id: "erledigt", titel: "erledigt", typ: "haken" }] },
         { id: "zufrieden", typ: JN, label: "Alle Arbeiten zur Zufriedenheit des Kunden erledigt", pflicht: true },
         { id: "bemerkungen", typ: "textarea", label: "Wenn nein – Bemerkungen", wenn: { feld: "zufrieden", wert: "nein" } },
         { id: "unterschrift", typ: "unterschrift", label: "Unterschrift Kunde" },
@@ -339,27 +367,27 @@
       vorlage: "vorlagen/10-baustellenablauf/Abnahmeprotokoll-Fertigmontage.pdf",
       felder: [
         { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:abnahme" },
-        { typ: "abschnitt", titel: "Waschtisch-Anlage + Möbel" },
-        { id: "wt", typ: "checkliste", modus: "pruefung", pflicht: true, punkte: [
+        { typ: "abschnitt", titel: "Waschtisch-Anlage + Möbel", wenn: { formular: "auswahl", feld: "waschtisch-noetig", wert: "ja" } },
+        { id: "wt", typ: "checkliste", modus: "pruefung", pflicht: true, wenn: { formular: "auswahl", feld: "waschtisch-noetig", wert: "ja" }, punkte: [
           { id: "fronten", label: "Schubladen- / Türfronten sind ausgerichtet" },
           { id: "druck", label: "Wasserdruck an den Armaturen stimmt" },
           { id: "ablauf", label: "Wasser läuft gut, gleichmäßig und vollständig ab" },
           { id: "oberflaeche", label: "Oberfläche im Sichtbereich des WTs ist anstandslos" } ] },
-        { typ: "abschnitt", titel: "WC-Anlage" },
-        { id: "wc", typ: "checkliste", modus: "pruefung", pflicht: true, punkte: [
+        { typ: "abschnitt", titel: "WC-Anlage", wenn: { formular: "auswahl", feld: "wc-noetig", wert: "ja" } },
+        { id: "wc", typ: "checkliste", modus: "pruefung", pflicht: true, wenn: { formular: "auswahl", feld: "wc-noetig", wert: "ja" }, punkte: [
           { id: "spuelung", label: "2-Mengenspülung funktioniert" },
           { id: "absenk", label: "Absenkautomatik funktioniert" },
           { id: "duschwc", label: "Dusch-WC: Funktion geprüft und Kunde eingewiesen" } ] },
-        { typ: "abschnitt", titel: "Dusch-Anlage" },
-        { id: "dusche", typ: "checkliste", modus: "pruefung", pflicht: true, punkte: [
+        { typ: "abschnitt", titel: "Dusch-Anlage", wenn: { formular: "auswahl", feld: "dusche-noetig", wert: "ja" } },
+        { id: "dusche", typ: "checkliste", modus: "pruefung", pflicht: true, wenn: { formular: "auswahl", feld: "dusche-noetig", wert: "ja" }, punkte: [
           { id: "kopf", label: "Umstellung auf Kopfbrause funktioniert" },
           { id: "druck", label: "Wasserdruck der Armatur stimmt" },
           { id: "dichtung", label: "Dichtungen der Duschtüren lückenlos und fest" },
           { id: "hebesenk", label: "Hebe-Senk-Mechanismus der Duschtüren funktioniert" },
           { id: "ablauf", label: "Wasser läuft gut, gleichmäßig und vollständig ab" },
           { id: "pumpe", label: "Bodenpumpe: Funktion geprüft und Kunde eingewiesen" } ] },
-        { typ: "abschnitt", titel: "Wannen-Anlage" },
-        { id: "wanne", typ: "checkliste", modus: "pruefung", pflicht: true, punkte: [
+        { typ: "abschnitt", titel: "Wannen-Anlage", wenn: { formular: "auswahl", feld: "wanne-noetig", wert: "ja" } },
+        { id: "wanne", typ: "checkliste", modus: "pruefung", pflicht: true, wenn: { formular: "auswahl", feld: "wanne-noetig", wert: "ja" }, punkte: [
           { id: "umstellung", label: "Umstellung Wanneneinlauf auf Handbrause funktioniert" },
           { id: "druck", label: "Wasserdruck der Armatur stimmt" },
           { id: "oberflaeche", label: "Oberfläche im Sichtbereich der Wanne ist anstandslos" } ] },
@@ -370,8 +398,8 @@
           { id: "fugen", label: "Sämtliche Fugen ordentlich und gleichmäßig gezogen" },
           { id: "licht", label: "Funktion sämtlicher Beleuchtungselemente getestet" },
           { id: "accessoires", label: "Accessoires angebracht / Funktion geprüft" } ] },
-        { typ: "abschnitt", titel: "Raum-Tür" },
-        { id: "tuer", typ: "checkliste", modus: "pruefung", pflicht: true, punkte: [
+        { typ: "abschnitt", titel: "Raum-Tür", wenn: { formular: "projektuebersicht", feld: "tuer", wert: "ja" } },
+        { id: "tuer", typ: "checkliste", modus: "pruefung", pflicht: true, wenn: { formular: "projektuebersicht", feld: "tuer", wert: "ja" }, punkte: [
           { id: "schliesst", label: "Tür schließt und öffnet einwandfrei" },
           { id: "oberflaeche", label: "Oberfläche der Tür ist anstandslos" },
           { id: "schloss", label: "Funktion Türschloss geprüft" } ] },

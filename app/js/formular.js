@@ -18,18 +18,38 @@
 
   function sichtbar(f, w, p) {
     if (!f.wenn) return true;
+    if (f.wenn.formular) {
+      const fremd = werteVon(p, f.wenn.formular);
+      if (!Object.keys(fremd).length || fremd[f.wenn.feld] === undefined || fremd[f.wenn.feld] === "") return true; // noch nicht ausgefüllt → anzeigen
+      const v = fremd[f.wenn.feld];
+      return Array.isArray(v) ? v.includes(f.wenn.wert) : v === f.wenn.wert;
+    }
     const ref = def.aktuell && def.aktuell.felder.find((x) => x.id === f.wenn.feld);
     const v = ref ? wert(p, ref, w) : w[f.wenn.feld];
     return Array.isArray(v) ? v.includes(f.wenn.wert) : v === f.wenn.wert;
   }
 
+  /* „Wer“-Auswahl: eigene Monteure oder externe Partner */
+  const EIGEN = "eigen";
+  let firmaCache = null;
+  const werName = (id, firma) => {
+    const fa = firma || firmaCache || window.FIRMA;
+    if (!id) return "";
+    if (id === EIGEN) return `${fa.kurzname || fa.name} (eigene Monteure)`;
+    const pa = (fa.partner || []).find((x) => x.id === id);
+    return pa ? pa.firma : id;
+  };
+  const quellWert = (f, p) => { const [fid, feld] = f.quelle.split("."); return werteVon(p, fid)[feld]; };
+
   function gefuellt(f, v, p, dateien) {
     switch (f.typ) {
       case "abschnitt": return true;
+      case "wer": return f.quelle ? true : !!v;
       case "mehrfach": return Array.isArray(v) && v.length > 0;
       case "dateien": return dateien.filter((d) => d.kategorie === f.kategorie).length > 0;
       case "tabelle": {
         if (!Array.isArray(v)) return false;
+        if (f.zeilen && f.alleZeilen) return f.zeilen.every((_, i) => v[i] && v[i][f.alleZeilen] !== undefined && String(v[i][f.alleZeilen]).trim() !== "");
         if (f.zeilen) return v.some((r) => r && Object.values(r).some((x) => x !== "" && x != null && x !== false));
         return v.length > 0;
       }
@@ -90,6 +110,19 @@
       case "kunde":
         if (f.feld === "anrede") return wrap(`<label>${lab}<select class="eingabe" ${attr} data-kunde="anrede">${ANREDEN.map((a) => `<option${a === v ? " selected" : ""}>${a}</option>`).join("")}</select></label>`);
         return wrap(`<label>${lab}<input class="eingabe" ${attr} data-kunde="${esc(f.feld)}" type="${f.feld === "email" ? "email" : /telefon|mobil/i.test(f.feld) ? "tel" : "text"}" value="${esc(v)}"></label>`);
+      case "wer": {
+        const fa = ctx.firma || window.FIRMA; firmaCache = fa;
+        if (f.quelle) {
+          const qv = quellWert(f, p);
+          return wrap(`${lab}<div class="ff-zentral">${qv ? `<b>${esc(werName(qv, fa))}</b>` : '<span class="leise">noch nicht festgelegt</span>'}<small>zentral aus der Projekt-Übersicht</small></div>`);
+        }
+        const partner = fa.partner || [];
+        const passend = partner.filter((x) => !f.gewerk || x.gewerk === f.gewerk), andere = partner.filter((x) => f.gewerk && x.gewerk !== f.gewerk);
+        const o = (id, l) => `<option value="${esc(id)}"${v === id ? " selected" : ""}>${esc(l)}</option>`;
+        return wrap(`<label>${lab}<select class="eingabe" ${attr}><option value="">– bitte wählen –</option>${o(EIGEN, werName(EIGEN, fa))}
+          ${passend.length ? `<optgroup label="${esc(f.gewerk ? "Partner " + f.gewerk : "Externe Partner")}">${passend.map((x) => o(x.id, x.firma)).join("")}</optgroup>` : ""}
+          ${andere.length ? `<optgroup label="Andere Partner">${andere.map((x) => o(x.id, `${x.firma} · ${x.gewerk}`)).join("")}</optgroup>` : ""}</select></label>`);
+      }
       case "janein":
         return wrap(`${lab}<div class="seg" role="radiogroup">${["ja", "nein"].map((o) => `<button type="button" class="seg-k${v === o ? " an" : ""}" data-ff-wahl="${esc(f.id)}" data-wert="${o}" role="radio" aria-checked="${v === o}">${o === "ja" ? "Ja" : "Nein"}</button>`).join("")}</div>`);
       case "auswahl":
@@ -113,6 +146,11 @@
           const val = r[s.id];
           const a = `data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="${esc(s.id)}"`;
           if (s.typ === "haken") return `<td class="mitte"><input type="checkbox" class="haken" ${a}${val ? " checked" : ""} aria-label="${esc(s.titel)}"></td>`;
+          if (s.typ === "person") {
+            const fa = ctx.firma || window.FIRMA;
+            const namen = [...(fa.team || []).filter((m) => m.name).map((m) => m.name), ...(fa.partner || []).map((x) => x.firma)];
+            return `<td><select class="eingabe" ${a}><option value=""></option>${namen.map((n) => `<option${val === n ? " selected" : ""}>${esc(n)}</option>`).join("")}${val && !namen.includes(val) ? `<option selected>${esc(val)}</option>` : ""}</select></td>`;
+          }
           if (s.typ === "janein") return `<td><select class="eingabe" ${a}><option value=""></option><option value="ja"${val === "ja" ? " selected" : ""}>ja</option><option value="nein"${val === "nein" ? " selected" : ""}>nein</option></select></td>`;
           return `<td><input class="eingabe" ${a} value="${esc(val)}"${s.typ === "zahl" ? ' inputmode="decimal"' : ""} aria-label="${esc(s.titel)}"></td>`;
         };
@@ -223,6 +261,7 @@
   function druckWert(f, v, ctx) {
     const leer = '<span class="d-leer">—</span>';
     switch (f.typ) {
+      case "wer": { const x = f.quelle ? quellWert(f, ctx.p) : v; return x ? esc(werName(x, ctx.firma)) : leer; }
       case "janein": return v ? (v === "ja" ? "Ja" : "Nein") : leer;
       case "mehrfach": return Array.isArray(v) && v.length ? esc(v.join(", ")) : leer;
       case "datum": return v ? esc(new Date(v + "T00:00").toLocaleDateString("de-DE")) : leer;
@@ -249,12 +288,12 @@
         const txt = { true: "✓", ja: "Ja", nein: "Nein", ok: "in Ordnung", mangel: "MANGEL", entfaellt: "entfällt" };
         return `<table class="d-tab d-check"><tbody>${f.punkte.map((pt) => { const e = o[pt.id] || {}; return `<tr><td>${esc(pt.label)}</td><td class="${e.s === "mangel" ? "d-mangel" : ""}">${e.s ? txt[e.s] : "☐"}</td><td>${esc(e.n || "")}</td></tr>`; }).join("")}</tbody></table>`;
       }
-      return `<div class="d-zeile${f.typ === "unterschrift" ? " d-unterschrift" : ""}"><b>${esc(f.label)}</b><span>${druckWert(f, v, ctx)}</span></div>`;
+      return `<div class="d-zeile${f.typ === "unterschrift" ? " d-unterschrift" : ""}"><b>${esc(f.label)}</b><span>${druckWert(f, v, { ...ctx, p })}</span></div>`;
     }).join("");
     return `<section class="d-seite"><header class="d-kopf"><img src="${esc(ctx.firma.logo)}" alt=""><div><strong>${esc(d.titel)}</strong><span>${esc(ctx.kopfzeile)}</span></div></header>
       <div class="d-inhalt">${teile}</div>
       <footer class="d-fuss">${esc(ctx.firma.name)} · ${esc(ctx.firma.adresse.strasse)} · ${esc(ctx.firma.adresse.ort)} · Tel. ${esc(ctx.firma.telefon)} · ${esc(ctx.firma.email)}</footer></section>`;
   }
 
-  window.Formular = { def, werteVon, sichtbar: (f, w, p) => sichtbar(f, w, p), status, editor, vorbelegen, druck, gefuellt };
+  window.Formular = { werName, EIGEN, def, werteVon, sichtbar: (f, w, p) => sichtbar(f, w, p), status, editor, vorbelegen, druck, gefuellt };
 })();

@@ -94,8 +94,11 @@ create or replace function public.darf_datei(pid text, kat text) returns boolean
   select ist_buero() or exists (
     select 1 from projekte p
     where p.id = pid and not p.geloescht and zugewiesen(p.daten) and (
-      (ich_ebene() = 'monteur' and kat not in ('angebot', 'auftrag', 'rechnungen'))
-      or (ich_ebene() = 'partner' and kat in ('planung', 'skizzen', 'baustelle', 'auswahl'))
+      -- Ordner-Freigabe je Person im Projekt (p.daten.freigaben.<id> = ["planung", …]) …
+      case when coalesce(p.daten -> 'freigaben' ? ich_id(), false) then (p.daten -> 'freigaben' -> ich_id()) ? kat
+      -- … sonst Standard je Ebene
+      else (ich_ebene() = 'monteur' and kat not in ('angebot', 'auftrag', 'rechnungen'))
+        or (ich_ebene() = 'partner' and kat in ('planung', 'skizzen', 'baustelle', 'auswahl')) end
     )
   )
 $$;
@@ -131,6 +134,19 @@ drop policy if exists p_aendern on public.projekte;
 create policy p_aendern on public.projekte for update to authenticated
   using (ist_buero() or (ich_ebene() = 'monteur' and zugewiesen(daten)))
   with check (ist_buero() or (ich_ebene() = 'monteur' and zugewiesen(daten)));
+-- Schutz: nur das Büro weist zu und gibt Ordner frei, nur die Geschäftsführung löscht
+create or replace function public.projekte_schutz() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if not ist_buero() and (new.daten -> 'zugriff' is distinct from old.daten -> 'zugriff' or new.daten -> 'freigaben' is distinct from old.daten -> 'freigaben') then
+    raise exception 'Zuweisungen und Freigaben ändert nur das Büro';
+  end if;
+  if not ist_gf() and (new.geloescht is distinct from old.geloescht or new.daten -> 'geloescht' is distinct from old.daten -> 'geloescht') then
+    raise exception 'Projekte löscht nur die Geschäftsführung';
+  end if;
+  return new;
+end $$;
+drop trigger if exists projekte_schutz on public.projekte;
+create trigger projekte_schutz before update on public.projekte for each row execute function public.projekte_schutz();
 drop policy if exists p_loeschen on public.projekte;
 create policy p_loeschen on public.projekte for delete to authenticated using (ist_gf());
 
@@ -207,11 +223,12 @@ returns jsonb language sql stable security definer set search_path = public as $
     'status', p.daten ->> 'status',
     'kunde', jsonb_build_object(
       'anrede', p.daten #>> '{kunde,anrede}', 'vorname', p.daten #>> '{kunde,vorname}', 'nachname', p.daten #>> '{kunde,nachname}',
-      'strasse', p.daten #>> '{kunde,strasse}', 'ort', p.daten #>> '{kunde,ort}',
+      'strasse', p.daten #>> '{kunde,strasse}', 'hausnr', p.daten #>> '{kunde,hausnr}', 'ort', p.daten #>> '{kunde,ort}',
       'telefon', p.daten #>> '{kunde,telefon}', 'mobil', p.daten #>> '{kunde,mobil}'),
     'termine', jsonb_build_object('baustart', p.daten #>> '{termine,baustart}', 'abnahme', p.daten #>> '{termine,abnahme}'),
     'formulare', coalesce((select jsonb_object_agg(f, p.daten -> 'formulare' -> f) from unnest(m.formulare) f where p.daten -> 'formulare' ? f), '{}'::jsonb),
     'meldung', p.daten -> 'partnerStatus' -> m.id,
+    'ordner', coalesce(p.daten -> 'freigaben' -> m.id, '["planung", "skizzen", "baustelle", "auswahl"]'::jsonb),
     'geaendert', p.geaendert
   ) order by p.daten #>> '{termine,baustart}'), '[]'::jsonb)
   from projekte p join mitglieder m on m.email = ich_email() and m.ebene = 'partner'

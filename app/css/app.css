@@ -833,3 +833,29 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .ics-mini { border: 0; background: none; cursor: pointer; font-size: .85rem; margin-left: 6px; padding: 0 2px; opacity: .7; }
 .ics-mini:hover { opacity: 1; }
 .dlg-hinweis { padding: 0 22px 12px; margin: 0; background: var(--tinte-weich); }
+
+/* ---------- Runde 3: zentrale Felder, Zuweisen & Freigaben, Adressbuch ---------- */
+.ff-zentral { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px dashed var(--fuge-stark); border-radius: 10px; background: var(--papier, #faf8f4); }
+.ff-zentral small { font-size: .72rem; color: var(--leise); }
+.zuweisen > select { margin-bottom: 10px; max-width: 100%; }
+.zugewiesen { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.zugewiesen > li { border: 1px solid var(--fuge-stark); border-radius: 12px; padding: 12px 14px; background: #fff; min-width: 0; }
+.zw-kopf { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.zw-kopf small { color: var(--leise); font-size: .78rem; }
+.zw-kopf .btn { margin-left: auto; }
+.chips.klein .chip { padding: 4px 10px; font-size: .78rem; }
+.chips.klein .chip.an::before { content: "✓ "; }
+.chip[disabled] { cursor: default; opacity: .85; }
+.optionen .q-gruppe { width: 100%; margin: 0 0 4px; }
+.i-adressbuch { border: 1.5px solid currentColor; border-radius: 2px 4px 4px 2px; width: 12px; height: 15px; margin: 0 2px; box-shadow: inset 3px 0 0 -1.5px currentColor; }
+.adr-tab { width: 100%; border-collapse: separate; border-spacing: 0 12px; }
+.adr-tab td { padding: 0; }
+.adr-karte { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 14px; padding: 16px; border: 1px solid var(--fuge-stark); border-radius: 14px; background: #fff; }
+.adr-karte .feld { min-width: 0; }
+.adr-karte .feld.breit { grid-column: span 3; }
+.adr-karte .lab { display: block; font-size: .72rem; color: var(--leise); margin-bottom: 3px; }
+.adr-karte input[readonly] { background: transparent; border-color: transparent; padding-left: 0; }
+.adr-aktionen { display: flex; gap: 6px; align-items: end; flex-wrap: wrap; }
+.adressbuch .suche { min-width: 240px; }
+@media (max-width: 900px) { .adr-karte { grid-template-columns: repeat(2, minmax(0, 1fr)); } .adr-karte .feld.breit { grid-column: span 2; } }
+@media (max-width: 560px) { .adr-karte { grid-template-columns: 1fr; } .adr-karte .feld.breit { grid-column: auto; } .adressbuch .suche { min-width: 0; width: 100%; } }

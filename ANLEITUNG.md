@@ -21,13 +21,23 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
 | --- | --- | --- |
 | **Geschäftsführung** | alles, plus Team-Auslastung im Cockpit | alles, inkl. Einrichtung (Firma, Team, Partner, Rechte), interne Freigaben, Projekte löschen |
 | **Planung / Bearbeitung** | alle Projekte; im Cockpit wahlweise nur die eigenen | Anfragen anlegen, Schritte erledigen, Level freischalten, Mails & Kundenlinks, Monteure/Partner zuweisen |
-| **Monteur** | „Meine Baustellen“ – nur zugewiesene Projekte, ohne Angebote, Aufträge, Rechnungen | Besichtigung, Restarbeiten, Abnahmeprotokoll (mit Unterschrift), Fotos, Monteurmappe |
-| **Externer Partner** | „Meine Einsätze“ – Adresse, Termine, Pläne und die Formulare seines Gewerks | Fotos hochladen, „Gewerk erledigt“ oder Hinweis ans Büro melden |
+| **Monteur** | „Meine Baustellen“ – nur zugewiesene Projekte und darin nur die **freigegebenen Ordner** | Besichtigung, Restarbeiten, Abnahmeprotokoll (mit Unterschrift), Fotos, 3D-Planung in PaletteMove öffnen |
+| **Externer Partner** | „Meine Einsätze“ – Adresse, Termine, die Formulare seines Gewerks und die **freigegebenen Ordner** | Fotos hochladen, „Gewerk erledigt“ oder Hinweis ans Büro melden |
 
 - Wer was erledigen darf, steht an jedem Schritt in `einstellungen/ablauf.js` (`ebene: [...]`).
   Schritte anderer Ebenen sind sichtbar, aber gesperrt („Erledigt: Planung / Bearbeitung“).
-- Monteure und Partner werden im Projekt zugewiesen: Level 10 „Monteure & Partner zuweisen“
-  oder jederzeit im Reiter **Team** der Akte. Dort erscheinen auch die Rückmeldungen der Partner.
+- Monteure und Partner werden im Projekt zugewiesen: Level 10 „Monteure & Partner zuweisen –
+  Ordner freigeben“ oder jederzeit im Reiter **Team** der Akte. Je Person lässt sich per Klick
+  festlegen, welche Ordner sie sieht (Standard Monteur: alles außer Angebote, Auftrag, Rechnungen;
+  Standard Partner: Skizzen, Planung, Baustelle, Auswahl). Dort erscheinen auch die Rückmeldungen.
+  Die Monteurmappe entfällt dadurch.
+- Wird in der **Projekt-Übersicht** bei „Wer?“ ein Partner gewählt (Abriss, Elektro, Fliesen,
+  Fenster, Tür), bekommt er automatisch Zugriff aufs Projekt. Der **Baustellenplan** übernimmt
+  Gewerk und Firma als Subunternehmer-Zeilen, die Gewerke-Formulare zeigen die Firma zentral an.
+- **Partner-Adressbuch** (Menü links): Firma, Gewerk, Ansprechpartner, Adresse, Telefon, Mobil,
+  E-Mail, Notiz. Alle im Büro lesen, die Geschäftsführung pflegt. Zugänge stehen unter Konten.
+- **Projekte löschen** darf nur die Geschäftsführung. Gelöschte Projekte liegen 30 Tage im
+  **Papierkorb** (Projekte → Papierkorb) und lassen sich wiederherstellen.
 - Welche Formulare ein Partner sieht, hängt an seinem Gewerk (`gewerke` in `firma.js`).
 - Was jede Ebene sieht, steht als Tabelle unter **Konten → Wer sieht was**.
 
@@ -77,7 +87,7 @@ Anmeldefenster zum Anklicken anbietet. Ohne `?demo=1` beginnt das Dashboard mit 
 | 07 Materialauswahl | Projekt-Übersicht, Auswahlgespräch mit Unterschrift; Fliesen-, Elektro-, Abriss-Formular und Spanndecke erscheinen nur, wenn sie gebraucht werden |
 | 08 Freigabe | Exposé, PaletteMove-Code, Freigabe-Mail, unterschriebene Freigabe (vom Kunden per Link) |
 | 09 Materialbestellung | Bestellungen in KWP anlegen, abgleichen, versenden |
-| 10 Baustelle planen | Baustart, Subunternehmer, Abschlagsrechnung, Monteurmappe |
+| 10 Baustelle planen | Baustart, Mail „Termin Umsetzung“, Baustellenplan (Subunternehmer vorbelegt), Abschlagsrechnung, Monteure & Partner zuweisen + Ordner freigeben |
 | 11 Ausführung | Kundenerinnerung, Baustellenfotos, Restarbeiten |
 | 12 Abnahme & Übergabe | Abnahmeprotokoll mit Unterschrift, Schlussrechnung, Mail |
 | 13 Abschluss | Bewertung, Bilder fertiges Bad, Showroom — dann archivieren |
@@ -95,8 +105,20 @@ Gespeichert wird automatisch. **Drucken / PDF** erzeugt eine A4-Fassung im Firme
 Im Abnahmeprotokoll übernimmt **Mängel → Restarbeiten** alle als Mangel markierten
 Punkte als offene Restarbeiten.
 
-**Monteurmappe** (oben im Projekt) druckt Deckblatt mit Adresse und Zugang, alle
-Auswahl- und Gewerke-Formulare sowie Pläne und Skizzen in einem Rutsch.
+**3D in PaletteMove** (oben im Projekt, sobald ein Download-Code eingetragen ist) kopiert
+den Code und öffnet die App. Solange Palette kein Link-Schema nennt, öffnet sich der
+App-Store-Eintrag bzw. die installierte App, und der Code wird eingefügt. Ist das Schema
+bekannt, kommt es in `firma.js` unter `programme.app3dLink` (mit `{code}`), dann wird der Code
+direkt übergeben.
+
+**Signatur:** Unter jede Mail setzt das Dashboard die Signatur der angemeldeten Person
+(Name, Funktion, Telefon, E-Mail aus **Konten**).
+
+**Ziele & Kalkulation** (Umsatzziel, Kostensatz je Stunde) stehen jetzt unter
+**Unternehmen → Ziele & Kalkulation**, nicht mehr in der Einrichtung.
+
+**Ordner auf dem NAS:** `werkzeuge/ordner-sync/` spiegelt alle Projektordner als echte
+Ordner und übernimmt Palette-Exporte automatisch, siehe die README dort.
 
 ## Mehrere Personen gleichzeitig (Schreibschutz)
 

@@ -24,6 +24,8 @@
    anhangOrdner:  Projektordner, deren neueste Datei beim „In Outlook öffnen“ angehängt wird.
    Optionale Absätze: [[id]] … [[/id]] — im Dashboard per Häkchen an/aus.
    Felder, die noch leer sind, erscheinen als markierte Lücke ‹…›.
+   Unter jede Mail setzt das Dashboard die Signatur des angemeldeten Nutzers
+   (Name, Funktion, Durchwahl, E-Mail – gepflegt unter Konten).
    ========================================================================== */
 
 window.MAILVORLAGEN = [
@@ -32,12 +34,10 @@ window.MAILVORLAGEN = [
     phase: 2,
     titel: "Terminbestätigung Erstgespräch",
     datei: "vorlagen/02-terminbestaetigung/Mail-Terminbestaetigung.oft",
-    anhaenge: ["Broschüre Bad", "Fotoanleitung Bad", "Broschüre Heizung", "Fotoanleitung Heizung"],
+    anhaenge: ["Broschüre Bad", "Fotoanleitung Bad"],
     anhangDateien: [
       "vorlagen/02-terminbestaetigung/anhaenge/Broschuere_Bad.pdf",
       "vorlagen/02-terminbestaetigung/anhaenge/Fotoanleitung_Bad.pdf",
-      "vorlagen/02-terminbestaetigung/anhaenge/Broschuere_Heizung.pdf",
-      "vorlagen/02-terminbestaetigung/anhaenge/Fotoanleitung_Heizung.pdf",
     ],
     anredeStil: "formell",
     betreff: "Ihr persönliches Traumbad und Ihre sparsame Heizung werden Wirklichkeit …",
@@ -73,8 +73,6 @@ und unserem Badexperten Herr {berater}:
 
 Damit wir Sie optimal beraten können, freuen wir uns vorab über folgende Unterlagen:
 •  einen Grundriss und einige Fotos Ihres aktuellen Badezimmers
-•  Fotos von Ihrem Heizraum sowie von Ihrem Haus (Außenansicht)
-•  Angaben zur Wohnfläche und zum bisherigen Heizungsverbrauch
 
 Am einfachsten laden Sie alles über Ihren persönlichen Link hoch – direkt vom Handy, ohne Anmeldung:
 👉 {uploadLink}
@@ -122,6 +120,30 @@ Bitte senden Sie uns die unterschriebene Planung (Exposé) sowie das unterschrie
 👉 {uploadLink}
 
 Vielen Dank und herzliche Grüße`,
+  },
+
+  {
+    id: "umsetzung",
+    phase: 10,
+    titel: "Bestätigung Umsetzungstermin",
+    datei: "",
+    anhaenge: [],
+    anredeStil: "formell",
+    betreff: "Ihr Termin für die Umsetzung Ihres neuen Bades",
+    optionen: [{ id: "abnahme", label: "Geplanten Fertigstellungstermin nennen" }],
+    text:
+`{anrede}
+
+vielen Dank für Ihr Vertrauen! Gerne bestätigen wir Ihnen den Termin für die Umsetzung Ihres neuen Bades:
+
+📅 Baustart: {baustart.wochentag}, {baustart.datum}
+[[abnahme]]📅 Geplante Fertigstellung: {abnahme.wochentag}, {abnahme.datum}
+[[/abnahme]]
+Rund eine Woche vor Baubeginn melden wir uns noch einmal mit allen Informationen zum Ablauf – zum Beispiel, wann unsere Monteure kommen und was Sie vorab vorbereiten können.
+
+Sollten Sie bis dahin Fragen haben oder sich an Ihrem Termin etwas ändern, melden Sie sich gerne jederzeit bei uns.
+
+Mit freundlichen Grüßen`,
   },
 
   {
