@@ -140,17 +140,40 @@
   const ebene = () => (S.ich ? S.ich.ebene : "geschaeftsfuehrung");
   const istGF = () => ebene() === "geschaeftsfuehrung";
   const istBuero = () => ebene() === "geschaeftsfuehrung" || ebene() === "planung";
-  const darfSchritt = (s) => istGF() || (s.ebene || ["planung"]).includes(ebene());
+  /* ---------- Rechte je Schritt (Konten → Wer sieht was) ----------
+     Haken = die Ebene sieht den Schritt samt Inhalt. Erledigen darf, wer ihn sieht und laut ablauf.js zuständig ist.
+     Ohne eigene Einstellung gilt der Standard unten. Die Geschäftsführung sieht und darf immer alles. */
+  const ALLE_SCHRITTE = PHASEN.flatMap((ph) => ph.schritte.map((s) => Object.assign(s, { _nr: ph.nr })));
+  const RECHTE_EBENEN = ["planung", "monteur", "partner"];
+  const gewerkFormulare = () => new Set(Object.values(cfg().gewerke || {}).flat());
+  const MONTEUR_STANDARD_LEVEL = [6, 7, 10, 11, 12, 13];
+  function rechteStandard(s) {
+    const l = ["planung"];
+    const zust = s.ebene || ["planung"];
+    if (zust.includes("monteur") || (MONTEUR_STANDARD_LEVEL.includes(s._nr) && s.typ !== "mail" && !["abschlag", "rechnung", "team"].includes(s.id))) l.push("monteur");
+    if (zust.includes("partner") || (s.typ === "formular" && gewerkFormulare().has(s.formular))) l.push("partner");
+    return l;
+  }
+  const siehtListe = (s) => { const r = (cfg().rechte || {})[s.id]; return Array.isArray(r) ? r : rechteStandard(s); };
+  const siehtSchritt = (s) => istGF() || siehtListe(s).includes(ebene());
+  const darfSchritt = (s) => istGF() || (siehtSchritt(s) && (s.ebene || ["planung"]).includes(ebene()));
+  const formularSchritte = (fid) => ALLE_SCHRITTE.filter((s) => s.typ === "formular" && s.formular === fid);
+  const siehtFormular = (fid) => istGF() || (formularSchritte(fid).length ? formularSchritte(fid).some(siehtSchritt) : istBuero());
+  /* Formulare, die ein Partner sieht: freigegeben UND (eigenes Gewerk oder keinem Gewerk zugeordnet) */
+  function partnerFormulare(gewerk) {
+    const eigene = (cfg().gewerke || {})[gewerk] || [], alleG = gewerkFormulare();
+    return [...new Set(ALLE_SCHRITTE.filter((s) => s.typ === "formular" && siehtListe(s).includes("partner") && (eigene.includes(s.formular) || !alleG.has(s.formular))).map((s) => s.formular))];
+  }
   const darfKat = (kat) => istBuero() || (ebene() === "monteur" ? !GESPERRT_MONTEUR.includes(kat) : PARTNER_ORDNER.includes(kat));
   const darfHochladen = (kat) => istBuero() || (ebene() === "monteur" ? ["baustelle", "fertig"].includes(kat) : kat === "baustelle");
-  const darfFormular = (fid) => istBuero() || (ebene() === "monteur" && (window.MONTEUR_FORMULARE || []).includes(fid));
+  const darfFormular = (fid) => istGF() || (formularSchritte(fid).length ? formularSchritte(fid).some(darfSchritt) : istBuero());
   const zugewiesen = (p) => !!S.ich && (p.zugriff || []).includes(S.ich.id);
   const ebenenText = (l) => (l || ["planung"]).map((e) => EBENE_TITEL[e] || e).join(" / ");
   const monteure = () => cfg().team.filter((m) => m.ebene === "monteur" && m.name);
 
   /* Was ein Partner von einem Projekt sehen darf (gleicher Auszug wie partner_auftraege() in der Cloud) */
   function partnerSicht(p, partner) {
-    const forms = (cfg().gewerke || {})[partner.gewerk] || [];
+    const forms = partnerFormulare(partner.gewerk);
     const k = p.kunde || {};
     return {
       id: p.id, projektnr: p.projektnr, phase: p.phase, status: p.status, geaendert: p.geaendert,
@@ -1148,7 +1171,8 @@
       }
     }
     const darf = darfSchritt(s);
-    if (!darf) {
+    if (!siehtSchritt(s)) inhalt = `<p class="q-fremd">Nicht freigegeben – erledigt: ${esc(ebenenText(s.ebene))}</p>`;
+    else if (!darf) {
       if (s.typ === "formular") inhalt = Object.keys(Formular.werteVon(p, s.formular)).length ? `<div class="q-aktion"><a class="btn" href="#/projekt/${p.id}/formular/${s.formular}">Ansehen</a></div>` : "";
       else if (s.typ === "dateien") inhalt = ablage(p, s.kategorie, true);
       else inhalt = "";
@@ -1237,6 +1261,7 @@
   function ansichtFormular(pid, fid) {
     const p = finde(pid), d = Formular.def(fid);
     if (!p || !d) return `<div class="seite"><a class="btn" href="#/projekte">← zurück</a></div>`;
+    if (!siehtFormular(fid)) return `<div class="seite"><a class="btn" href="#/projekt/${p.id}">← ${esc(anzeigeName(p))}</a><p class="leer-hinweis">Dieses Formular ist für dich nicht freigegeben.</p></div>`;
     const lesen = !darfFormular(fid) || gesperrt(p);
     if (!lesen && Formular.vorbelegen(fid, p)) speichern(p);
     if (!lesen && fid === "baustellenplan" && subsVorbelegen(p)) speichern(p);
@@ -1681,6 +1706,7 @@
       if (m.funktion) { const [rolle, bezeichnung] = m.funktion.split("|"); Object.assign(m, { rolle, bezeichnung }); delete m.funktion; }
       return m;
     }).filter((m) => m.name || m.kuerzel);
+    if ($("#rechte")) c.rechte = Object.fromEntries($$("#rechte [data-r-schritt]").map((z) => [z.dataset.rSchritt, $$("[data-r-e]", z).filter((x) => x.checked).map((x) => x.dataset.rE)]));
     if ($("#partner")) {
       const ids = new Set(), alt = cfg().partner || [];
       c.partner = $$("#partner tr[data-id]").map((tr) => {
@@ -1697,23 +1723,29 @@
   /* ================================================================
      Konten & Rechte (nur Geschäftsführung)
      ================================================================ */
-  const RECHTE = [
-    ["Cockpit mit Fälligkeiten und Terminen", "✓", "✓", "–", "–"],
-    ["Projekte sehen", "alle", "alle", "nur zugewiesene", "Auszug zugewiesener"],
-    ["Anfragen anlegen, Level freischalten", "✓", "✓", "–", "–"],
-    ["Kundendaten", "alle", "alle", "Adresse, Telefon", "Adresse, Telefon"],
-    ["Interne Notizen, Verlauf", "✓", "✓", "–", "–"],
-    ["Projektordner", "alle", "alle", "nur freigegebene (Standard: ohne Angebot, Auftrag, Rechnungen)", "nur freigegebene (Standard: Planung, Skizzen, Baustelle, Auswahl)"],
-    ["Formulare bearbeiten", "alle", "alle", "Besichtigung, Restarbeiten, Abnahme", "– (eigenes Gewerk lesen)"],
-    ["Fotos hochladen", "✓", "✓", "Baustelle, fertiges Bad", "Baustelle"],
-    ["Kundenmails und Kundenlinks", "✓", "✓", "–", "–"],
-    ["Monteure und Partner zuweisen, Ordner freigeben", "✓", "✓", "–", "–"],
-    ["Partner-Adressbuch", "pflegen", "lesen", "–", "–"],
-    ["Projekte löschen (Papierkorb)", "✓", "–", "–", "–"],
-    ["Unternehmen (Umsatz, Kosten, Marge)", "✓", "–", "–", "–"],
-    ["Konten und Rechte verwalten", "✓", "–", "–", "–"],
-    ["Einrichtung (Firma, Ziele, Fristen)", "✓", "–", "–", "–"],
-  ];
+  function rechteMatrix() {
+    const zelle = (attr, an, teil) => `<span class="r-zelle"><input type="checkbox" ${attr}${an ? " checked" : ""}${teil ? " data-teil" : ""}></span>`;
+    const levels = PHASEN.map((ph) => {
+      const zeilen = ph.schritte.map((s) => {
+        const l = siehtListe(s);
+        return `<div class="r-zeile r-schritt" data-r-schritt="${esc(s.id)}"><span class="r-titel">${esc(ersetzen(s.titel))}<small>${esc({ formular: "Formular", dateien: "Dateien", termin: "Termin", mail: "Mail", erledigt: "Bestätigung", entscheidung: "Entscheidung", feld: "Eintrag", team: "Zuweisung" }[s.typ] || "")} · erledigt: ${esc(ebenenText(s.ebene))}</small></span>
+          <span class="r-zelle r-gf" aria-label="Geschäftsführung: ja">✓</span>${RECHTE_EBENEN.map((e) => zelle(`data-r-e="${e}" aria-label="${esc((EBENE_TITEL[e] || e) + ": " + s.titel)}"`, l.includes(e))).join("")}</div>`;
+      }).join("");
+      const kopf = RECHTE_EBENEN.map((e) => { const n = ph.schritte.filter((s) => siehtListe(s).includes(e)).length; return zelle(`data-r-level="${e}" aria-label="${esc((EBENE_TITEL[e] || e) + ": ganzes Level " + ph.nr)}"`, n === ph.schritte.length, n > 0 && n < ph.schritte.length); }).join("");
+      return `<div class="r-level" data-r-nr="${ph.nr}"><div class="r-zeile r-kopf"><button type="button" class="r-auf" data-aktion="r-auf" aria-expanded="false"><span class="r-pfeil" aria-hidden="true">›</span><b>${zwei(ph.nr)}</b> ${esc(ph.titel)}<small>${ph.schritte.length} Schritte</small></button>
+        <span class="r-zelle r-gf">alle</span>${kopf}</div><div class="r-schritte" hidden>${zeilen}</div></div>`;
+    }).join("");
+    return `<section class="panel" id="rechte"><div class="r-titelzeile"><h2 class="panel-titel">Wer sieht was</h2><span class="kopf-aktionen"><button type="button" class="btn klein still" data-aktion="r-alle" data-wert="1">Alle aufklappen</button><button type="button" class="btn klein still" data-aktion="r-alle" data-wert="0">Alle zuklappen</button><button type="button" class="btn klein still" data-aktion="r-standard">Standard wiederherstellen</button></span></div>
+      <p class="leise klein-text panel-innen">Haken = diese Ebene sieht den Schritt mit Inhalt (Formulare, Dateien). Erledigen darf, wer ihn sieht und im Ablauf dafür zuständig ist. Die Geschäftsführung sieht immer alles. Mit „Änderungen übernehmen“ speichern.</p>
+      <div class="r-matrix"><div class="r-zeile r-th"><span>Level / Schritt</span><span>${esc(EBENE_TITEL.geschaeftsfuehrung || "Geschäftsführung")}</span>${RECHTE_EBENEN.map((e) => `<span>${esc(EBENE_TITEL[e] || e)}</span>`).join("")}</div>${levels}</div>
+      <p class="vb-max">Ordner je Projekt gibt das Büro im Reiter „Team“ frei. ${Daten.modus === "cloud" ? "Die Datenbank setzt Ordner- und Partner-Freigaben durch." : "Im Demo-Modus liegen die Daten nur in diesem Browser."}</p></section>`;
+  }
+  function rechteTeilzustand() {
+    $$("#rechte .r-level").forEach((lv) => RECHTE_EBENEN.forEach((e) => {
+      const alleK = $$(`.r-schritt [data-r-e="${e}"]`, lv), n = alleK.filter((x) => x.checked).length, k = $(`[data-r-level="${e}"]`, lv);
+      k.checked = n === alleK.length; k.indeterminate = n > 0 && n < alleK.length;
+    }));
+  }
   function ansichtKonten() {
     const c = cfg();
     const rollen = [...new Set([...window.FIRMA.team.map((t) => t.rolle), ...c.team.map((t) => t.rolle)])];
@@ -1731,10 +1763,7 @@
         <div class="tab-wrap ohne-rand"><table class="team-tabelle konten-tab"><thead><tr><th>Firma</th><th>Zugang</th><th></th></tr></thead>
         <tbody>${(c.partner || []).map((x) => partnerKonto(x)).join("") || '<tr><td colspan="3" class="leise">Noch keine Partner – im Adressbuch anlegen.</td></tr>'}</tbody></table></div>
         <div class="aktionen panel-innen"><a class="btn klein" href="#/adressbuch">Partner im Adressbuch pflegen</a></div></section>
-      <section class="panel"><h2 class="panel-titel">Wer sieht was</h2>
-        <div class="tab-wrap ohne-rand"><table class="kz-tab rechte"><thead><tr><th>Bereich</th>${(window.EBENEN || []).map((e) => `<th>${esc(e.titel)}</th>`).join("")}</tr></thead>
-        <tbody>${RECHTE.map(([b, ...w]) => `<tr><td>${esc(b)}</td>${w.map((x) => `<td class="${x === "✓" ? "ja" : x === "–" ? "nein" : "teil"}">${esc(x)}</td>`).join("")}</tr>`).join("")}</tbody></table></div>
-        <p class="vb-max">${Daten.modus === "cloud" ? "Diese Regeln setzt die Datenbank durch – was eine Ebene nicht sehen darf, wird gar nicht erst ausgeliefert." : "Im Demo-Modus liegen die Daten nur in diesem Browser; im Cloud-Betrieb setzt die Datenbank diese Regeln durch."}</p></section>
+      ${rechteMatrix()}
     </div>`;
   }
   async function kontenLaden() {
@@ -1766,7 +1795,7 @@
         e.preventDefault(); e.stopPropagation();
         const b = $("#kn-b", dlg).value.trim(), pw = $("#kn-p", dlg).value;
         try {
-          await Daten.kontoAnlegen({ benutzer: b, passwort: pw, id: m.id, ebene: m.ebene, name: m.name, formulare: m.ebene === "partner" ? ((cfg().gewerke || {})[m.gewerk] || []) : [] });
+          await Daten.kontoAnlegen({ benutzer: b, passwort: pw, id: m.id, ebene: m.ebene, name: m.name, formulare: m.ebene === "partner" ? partnerFormulare(m.gewerk) : [] });
           await kontenLaden(); render(); zugangErgebnis(dlg, m.name, b.toLowerCase(), pw);
         } catch (err) { const f = $("#kn-f", dlg); f.textContent = err.message || String(err); f.classList.remove("versteckt"); }
       });
@@ -1865,7 +1894,7 @@
     const vorhanden = new Set((await Daten.konten()).map((k) => k.id));
     for (const [b, id] of DEMO_KONTEN) {
       const m = mitgliedZu(id); if (!m || vorhanden.has(id)) continue;
-      await Daten.kontoAnlegen({ benutzer: b, passwort: DEMO_PW, id, ebene: m.ebene, name: m.name, formulare: m.ebene === "partner" ? ((cfg().gewerke || {})[m.gewerk] || []) : [] }, true);
+      await Daten.kontoAnlegen({ benutzer: b, passwort: DEMO_PW, id, ebene: m.ebene, name: m.name, formulare: m.ebene === "partner" ? partnerFormulare(m.gewerk) : [] }, true);
     }
     try { localStorage.setItem("baddashboard:demo", "1"); } catch (e) { /* egal */ }
   }
@@ -1944,6 +1973,7 @@
       r.name === "konten" && istGF() ? ansichtKonten() :
       r.name === "adressbuch" ? ansichtAdressbuch() : ansichtCockpit();
     $("#main").innerHTML = html;
+    if ($("#rechte")) rechteTeilzustand();
     navRendern();
     const nav = r.name === "projekt" ? (istBuero() ? "projekte" : "cockpit") : ["einrichtung", "projekte", "kennzahlen", "konten", "adressbuch"].includes(r.name) ? r.name : "cockpit";
     $$(".nav a").forEach((a) => (a.dataset.nav === nav ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
@@ -2054,6 +2084,13 @@
         p.meldung = { erledigt, notiz: notiz.trim(), am: Date.now() };
         toast(erledigt ? "Erledigt gemeldet – danke!" : "Hinweis gesendet"); return render();
       } catch (err) { return toast("Senden fehlgeschlagen", "fehler"); }
+    }
+    if (akt === "r-auf") { const lv = a.closest(".r-level"), box = $(".r-schritte", lv), auf = box.hidden; box.hidden = !auf; a.setAttribute("aria-expanded", String(auf)); lv.classList.toggle("offen", auf); return; }
+    if (akt === "r-alle") { $$("#rechte .r-level").forEach((lv) => { const auf = a.dataset.wert === "1"; $(".r-schritte", lv).hidden = !auf; $(".r-auf", lv).setAttribute("aria-expanded", String(auf)); lv.classList.toggle("offen", auf); }); return; }
+    if (akt === "r-standard") {
+      if (!confirm("Alle Haken auf den Standard zurücksetzen? Gespeichert wird erst mit „Änderungen übernehmen“.")) return;
+      $$("#rechte [data-r-schritt]").forEach((z) => { const st = rechteStandard(ALLE_SCHRITTE.find((s) => s.id === z.dataset.rSchritt)); $$("[data-r-e]", z).forEach((x) => { x.checked = st.includes(x.dataset.rE); }); });
+      rechteTeilzustand(); toast("Standard gesetzt – mit „Änderungen übernehmen“ speichern"); return;
     }
     if (akt === "adr-neu" && istGF()) { $(".adr-tab .leer-hinweis")?.closest("tr").remove(); $("#partner").insertAdjacentHTML("afterbegin", partnerZeileAdr({ gewerk: Object.keys(cfg().gewerke || {})[0] }).replace('data-id=""', 'data-id="" data-neu')); $("#partner [data-partner=firma]").focus(); return; }
     if (akt === "adr-speichern" && istGF()) {
@@ -2189,7 +2226,7 @@
         for (const k of S.konten || []) {
           const m = mitgliedZu(k.id);
           if (!m) { if (k.aktiv && k.id !== S.ich.id) await Daten.kontoAktiv(k.email, false); continue; }
-          const forms = m.ebene === "partner" ? ((cfg().gewerke || {})[m.gewerk] || []) : [];
+          const forms = m.ebene === "partner" ? partnerFormulare(m.gewerk) : [];
           if (m.ebene !== k.ebene || m.name !== k.name || m.ebene === "partner") await Daten.kontoAendern(k.id, m.ebene, m.name, forms);
         }
         await kontenLaden(); toast("Übernommen"); render();
@@ -2322,6 +2359,8 @@
       if ((el.dataset.ff && el.tagName === "SELECT") || (el.dataset.tab && el.type === "checkbox")) formularNeuZeichnen(finde(seite.dataset.projekt), seite.dataset.formular, true);
       return;
     }
+    if (el.matches("#rechte [data-r-level]")) { $$(`.r-schritt [data-r-e="${el.dataset.rLevel}"]`, el.closest(".r-level")).forEach((x) => { x.checked = el.checked; }); return rechteTeilzustand(); }
+    if (el.matches("#rechte [data-r-e]")) return rechteTeilzustand();
     if (el.matches("[data-zuweisen]") && p && istBuero() && el.value) {
       const id = el.value, m = mitgliedZu(id);
       aendern(p, (x) => { x.zugriff = [...new Set([...(x.zugriff || []), id])]; }, `Zugewiesen: ${m ? m.name : id}`);

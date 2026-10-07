@@ -859,3 +859,30 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .adressbuch .suche { min-width: 240px; }
 @media (max-width: 900px) { .adr-karte { grid-template-columns: repeat(2, minmax(0, 1fr)); } .adr-karte .feld.breit { grid-column: span 2; } }
 @media (max-width: 560px) { .adr-karte { grid-template-columns: 1fr; } .adr-karte .feld.breit { grid-column: auto; } .adressbuch .suche { min-width: 0; width: 100%; } }
+
+/* ---------- Wer sieht was: Level-Matrix ---------- */
+.r-titelzeile { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; justify-content: space-between; padding-right: 16px; }
+.r-titelzeile .kopf-aktionen { display: flex; flex-wrap: wrap; gap: 6px; }
+.r-matrix { border-top: 1px solid var(--fuge-stark); }
+.r-zeile { display: grid; grid-template-columns: minmax(0, 1fr) repeat(4, 128px); align-items: center; min-height: 48px; border-bottom: 1px solid var(--fuge); padding: 0 16px; }
+.r-th { min-height: 40px; font-size: .68rem; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--leise); }
+.r-th span:not(:first-child) { text-align: center; }
+.r-zelle { display: flex; justify-content: center; align-items: center; }
+.r-zelle input { width: 20px; height: 20px; accent-color: var(--tinte); cursor: pointer; }
+.r-gf { color: var(--gruen, #2f6b3a); font-weight: 600; font-size: .9rem; }
+.r-auf { all: unset; cursor: pointer; display: flex; align-items: baseline; gap: 8px; padding: 12px 0; min-width: 0; font-weight: 500; }
+.r-auf:focus-visible { outline: 2px solid var(--akzent); outline-offset: 2px; border-radius: 4px; }
+.r-auf b { font-family: var(--serif, inherit); color: var(--akzent); min-width: 1.6em; }
+.r-auf small { color: var(--leise); font-size: .78rem; font-weight: 400; }
+.r-pfeil { display: inline-block; width: 1em; transition: transform 160ms var(--ease-out, ease); color: var(--leise); }
+.r-level.offen .r-pfeil { transform: rotate(90deg); }
+.r-level.offen > .r-kopf { background: color-mix(in oklab, var(--tinte) 5%, transparent); }
+.r-schritt { min-height: 42px; background: color-mix(in oklab, var(--papier) 45%, #fff); }
+.r-schritt .r-titel { padding: 8px 0 8px 44px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.r-schritt .r-titel small { color: var(--leise); font-size: .74rem; }
+.r-schritt .r-gf { font-size: .95rem; }
+@media (max-width: 760px) {
+  .r-zeile { grid-template-columns: minmax(0, 1fr) repeat(4, 52px); padding: 0 10px; }
+  .r-th span:not(:first-child) { font-size: .56rem; letter-spacing: .02em; writing-mode: vertical-rl; transform: rotate(180deg); justify-self: center; padding: 6px 0; }
+  .r-schritt .r-titel { padding-left: 18px; }
+}

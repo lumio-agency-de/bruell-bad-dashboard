@@ -39,7 +39,12 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
 - **Projekte löschen** darf nur die Geschäftsführung. Gelöschte Projekte liegen 30 Tage im
   **Papierkorb** (Projekte → Papierkorb) und lassen sich wiederherstellen.
 - Welche Formulare ein Partner sieht, hängt an seinem Gewerk (`gewerke` in `firma.js`).
-- Was jede Ebene sieht, steht als Tabelle unter **Konten → Wer sieht was**.
+- **Konten → Wer sieht was:** Level 1–13, jedes ausklappbar bis auf die einzelnen Schritte.
+  Pro Schritt per Haken festlegen, ob Planung, Monteur und Partner ihn **sehen** (inkl. Formular
+  und Dateien). Der Haken am Level setzt alle Schritte darin auf einmal („–“ = nur teilweise).
+  Erledigen darf, wer den Schritt sieht und im Ablauf dafür zuständig ist. Die Geschäftsführung
+  sieht immer alles. Bei Partnern gilt: freigegebene Formulare des eigenen Gewerks (plus
+  gewerkübergreifende wie die Projekt-Übersicht). „Standard wiederherstellen“ setzt alles zurück.
 
 ## Konten & Anmeldung
 

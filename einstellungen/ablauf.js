@@ -234,5 +234,5 @@ window.ABLAUF = [
   },
 ];
 
-/* Formulare, die Monteure ausfüllen dürfen (alle anderen sehen sie nur) */
-window.MONTEUR_FORMULARE = ["baustellenbesichtigung", "tuer", "restarbeiten", "abnahme"];
+/* Wer welchen Schritt sieht, stellt die Geschäftsführung unter Konten → „Wer sieht was“ ein.
+   ebene: [...] an einem Schritt legt fest, wer ihn erledigen darf (wenn er ihn sieht). */
