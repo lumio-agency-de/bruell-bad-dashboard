@@ -17,6 +17,8 @@
                     option.weiter: false   → Schritt bleibt offen (z. B. „Kunde überlegt noch")
                     option.status: "pausiert" | "verloren"
                     option.wiedervorlage: Tage → setzt eine Wiedervorlage
+     abschluss    Knopf „Projekt abschließen & archivieren“ (letztes Level)
+     frueher: n   Schritt lag früher in Level n – bisheriger Stand wird übernommen
      feld         ein Projektfeld ausfüllen                 { feld: "projektnr" | "zustaendig" | "downloadCode" }, mehrzeilig: true → Notizfeld
 
    portal: [...]    → Ordner, in die der Kunde in diesem Level über seinen Link hochladen kann
@@ -214,29 +216,31 @@ window.ABLAUF = [
   },
   {
     nr: 12, titel: "Abnahme & Übergabe", abschnitt: "baustelle",
-    ziel: "Abnahme protokollieren und abrechnen.",
+    ziel: "Abnahme protokollieren und das fertige Bad festhalten.",
     schritte: [
       { id: "abnahme-termin", typ: "termin", termin: "abnahme", titel: "Abnahmetermin" },
       { id: "protokoll", typ: "formular", formular: "abnahme", titel: "Abnahmeprotokoll mit Unterschrift", ebene: ["planung", "monteur"] },
-      { id: "rechnung", typ: "dateien", kategorie: "rechnungen", min: 2, titel: "Schlussrechnung ablegen",
-        hinweis: "Zweite Rechnung im Ordner (nach der Abschlagsrechnung)." },
-      { id: "mail-rechnung", typ: "mail", mail: "schlussrechnung", titel: "Schlussrechnung mit Bitte um Bewertung senden" },
+      { id: "fotos-fertig", typ: "dateien", kategorie: "fertig", titel: "Bilder vom neuen Bad", ebene: ["planung", "monteur"], frueher: 13 },
+      { id: "interview", typ: "entscheidung", pflicht: false, titel: "Interview für Social Media?", frueher: 13,
+        optionen: [{ id: "ja", label: "Ja, gemacht" }, { id: "nein", label: "Nein" }] },
     ],
   },
   {
     nr: 13, titel: "Abschluss", abschnitt: "baustelle",
-    ziel: "Bewertung, Bilder fürs Showroom — dann archivieren.",
+    ziel: "Abrechnen, Bewertung, Showroom — dann das Projekt abschließen.",
     schritte: [
+      { id: "rechnung", typ: "dateien", kategorie: "rechnungen", min: 2, titel: "Schlussrechnung ablegen", frueher: 12,
+        hinweis: "Zweite Rechnung im Ordner (nach der Abschlagsrechnung)." },
+      { id: "mail-rechnung", typ: "mail", mail: "schlussrechnung", titel: "Schlussrechnung mit Bitte um Bewertung senden", frueher: 12 },
       { id: "bewertung", typ: "entscheidung", titel: "Google-Bewertung", seitMail: "schlussrechnung",
         optionen: [
           { id: "erhalten", label: "Bewertung erhalten & beantwortet" },
           { id: "erinnert", label: "Erinnert – keine Bewertung" },
           { id: "warten", label: "Noch warten – in 7 Tagen erinnern", wiedervorlage: 7, weiter: false },
         ] },
-      { id: "fotos-fertig", typ: "dateien", kategorie: "fertig", titel: "Bilder vom neuen Bad", ebene: ["planung", "monteur"] },
       { id: "showroom", typ: "erledigt", titel: "Bilder in den Showroom geladen" },
-      { id: "interview", typ: "entscheidung", pflicht: false, titel: "Interview für Social Media?",
-        optionen: [{ id: "ja", label: "Ja, gemacht" }, { id: "nein", label: "Nein" }] },
+      { id: "abschluss", typ: "abschluss", pflicht: false, titel: "Projekt abschließen",
+        hinweis: "Archiviert das Projekt – es steht danach unter Projekte → Abgeschlossen." },
     ],
   },
 ];

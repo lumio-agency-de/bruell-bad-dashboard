@@ -306,6 +306,8 @@
 
   /* ---------- Spiel-Logik: Schritte & Level ---------- */
   const sKey = (nr, s) => `${nr}:${s.id}`;
+  /* Stand eines Schritts – bei verschobenen Schritten (frueher: n) auch unter der alten Level-Nummer */
+  const schrittStand = (p, nr, s) => { const l = p.schritte || {}; return l[sKey(nr, s)] || (s.frueher ? l[`${s.frueher}:${s.id}`] : null) || {}; };
   /* wenn: eine Bedingung oder eine Liste (eine davon genügt); undLeer: "formular.feld" muss noch leer sein */
   function bedingung(p, nr, c) {
     if (c.undLeer) { const [fid, feld] = c.undLeer.split("."); const x = Formular.werteVon(p, fid)[feld]; if (x !== undefined && x !== "") return false; }
@@ -322,13 +324,14 @@
   }
   function schrittErledigt(p, nr, s) {
     if (p.demo && nr < p.phase) return true;
-    const st = (p.schritte || {})[sKey(nr, s)] || {};
+    const st = schrittStand(p, nr, s);
     switch (s.typ) {
       case "formular": return Formular.status(s.formular, p, dateienVon(p.id)).vollstaendig;
       case "dateien": return !!st.ersatz || dateienVon(p.id, s.kategorie).length >= (s.min || 1);
       case "termin": return !!(p.termine || {})[s.termin];
       case "mail": return !!(p.mails || {})[s.mail];
       case "erledigt": return !!st.erledigt;
+      case "abschluss": return p.status === "abgeschlossen";
       case "entscheidung": { const o = (s.optionen || []).find((x) => x.id === st.wahl); return !!o && o.weiter !== false; }
       case "feld": return !!String(p[s.feld] || "").trim();
       case "team": return (p.zugriff || []).length > 0;
@@ -556,7 +559,7 @@
     if (bs && p.phase <= 11 && tageBis(bs) >= 0 && tageBis(bs) <= f.kundenerinnerungVorBaustart && !m.baustart)
       add("Kundenerinnerung vor Baustart senden", plusTage(bs, -f.kundenerinnerungVorBaustart), `Baustart ${fTermin(t.baustart)}`);
     const an = datum(t.abnahme);
-    if (p.phase === 12 && an && tageBis(an) <= 0 && !m.schlussrechnung) add("Schlussrechnung senden", an, `Abnahme ${fTermin(t.abnahme)}`);
+    if (p.phase >= 12 && an && tageBis(an) <= 0 && !m.schlussrechnung) add("Schlussrechnung senden", an, `Abnahme ${fTermin(t.abnahme)}`);
     /* x Tage nach der Schlussrechnung: Abschluss prüfen & Google-Bewertung checken (bis eine Entscheidung getroffen ist) */
     const bw = ((p.schritte || {})["13:bewertung"] || {}).wahl;
     if (m.schlussrechnung && !["erhalten", "erinnert", "warten"].includes(bw)) {
@@ -1125,7 +1128,7 @@
   }
 
   function quest(p, nr, x, k) {
-    const s = x.s, key = sKey(nr, s), st = (p.schritte || {})[key] || {};
+    const s = x.s, key = sKey(nr, s), st = schrittStand(p, nr, s);
     const titel = ersetzen(s.titel);
     let inhalt = "", meta = "";
     switch (s.typ) {
@@ -1170,6 +1173,14 @@
         }
         inhalt = `<div class="chips">${s.optionen.map((o) => `<button type="button" class="chip${st.wahl === o.id ? " an" : ""}${o.status === "verloren" ? " warn" : ""}" data-aktion="wahl" data-key="${key}" data-nr="${nr}" data-schritt="${s.id}" data-wert="${o.id}">${esc(ersetzen(o.label))}</button>`).join("")}</div>`;
         break;
+      case "abschluss": {
+        const st13 = phaseStatus(p, nr);
+        meta = p.status === "abgeschlossen" ? `abgeschlossen ${abschlussZeit(p) ? "am " + fDatum(new Date(abschlussZeit(p))) : ""}` : "";
+        inhalt = p.status === "abgeschlossen" ? ""
+          : p.phase === nr && st13.komplett && istBuero() ? `<div class="q-aktion"><button class="btn jetzt" data-aktion="abschliessen">Projekt abschließen & archivieren →</button></div>`
+          : `<p class="leise klein-text">Möglich, sobald die Punkte oben erledigt sind.</p>`;
+        break;
+      }
       case "team": {
         const z = p.zugriff || [];
         meta = z.length ? `${z.length} zugewiesen` : "noch niemand";
@@ -1198,7 +1209,7 @@
     const fehltHier = S.zeigeOffen && !x.erledigt && x.pflicht && darf && nr === p.phase;
     return `<li class="quest ${x.erledigt ? "erledigt" : "offen"}${x.pflicht ? "" : " optional"}${darf ? "" : " fremd"}${fehltHier ? " fehlt" : ""}" data-quest="${key}">
       <span class="q-marker" aria-hidden="true">${x.erledigt ? "✓" : k + 1}</span>
-      <div class="q-inhalt">${fehltHier ? '<p class="q-fehlt">Fehlt noch – bitte erledigen</p>' : ""}<div class="q-kopf"><h3>${esc(titel)}</h3>${x.pflicht ? "" : '<span class="q-tag">optional</span>'}${meta ? `<span class="q-meta">${meta}</span>` : ""}</div>
+      <div class="q-inhalt">${fehltHier ? '<p class="q-fehlt">Fehlt noch – bitte erledigen</p>' : ""}<div class="q-kopf"><h3>${esc(titel)}</h3>${x.pflicht || s.typ === "abschluss" ? "" : '<span class="q-tag">optional</span>'}${meta ? `<span class="q-meta">${meta}</span>` : ""}</div>
         ${s.hinweis ? `<p class="q-hinweis">${esc(ersetzen(s.hinweis))}</p>` : ""}${inhalt}</div></li>`;
   }
 
