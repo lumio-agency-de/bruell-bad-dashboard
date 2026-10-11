@@ -195,8 +195,8 @@
           if (s.typ === "janein") return `<td><select class="eingabe" ${a}><option value=""></option><option value="ja"${val === "ja" ? " selected" : ""}>ja</option><option value="nein"${val === "nein" ? " selected" : ""}>nein</option></select></td>`;
           return `<td><input class="eingabe" ${a} value="${esc(val)}"${s.typ === "zahl" ? ' inputmode="decimal"' : ""} aria-label="${esc(s.titel)}"></td>`;
         };
-        return wrap(`${lab}${f.adressbuchLink ? '<a class="ff-adresslink" href="#/adressbuch">Adressbuch öffnen →</a>' : ""}<div class="tab-wrap"><table class="ff-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}${!f.zeilen || rows.length > fest ? "<th></th>" : ""}</tr></thead>
-          <tbody>${zeilen.map(({ label, eigen, kopie, basis, r, i }) => `<tr class="${eigen ? "eigen" : ""}${kopie ? " kopie" : ""}">${label && !eigen ? `<th scope="row"><span class="tz-label">${esc(label)}</span>${f.zeilen && !kopie ? `<button type="button" class="tz-plus" data-tab-plus="${esc(f.id)}" data-nach="${basis}" title="Weitere Zeile „${esc(f.zeilen[basis])}“ hinzufügen" aria-label="Weitere Zeile ${esc(f.zeilen[basis])}">+</button>` : ""}</th>` : eigen ? `<th scope="row"><input class="eingabe" data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="_label" value="${esc(r._label || "")}" placeholder="Eigene Zeile" aria-label="Bezeichnung"></th>` : ""}${f.spalten.map((s) => zelle(s, r, i)).join("")}${!f.zeilen || eigen || kopie ? `<td class="mitte"><button type="button" class="btn klein still" data-tab-weg="${esc(f.id)}" data-zeile="${i}" aria-label="Zeile entfernen">✕</button></td>` : f.zeilen && rows.length > fest ? "<td></td>" : ""}</tr>`).join("")}</tbody></table></div>
+        return wrap(`${lab}${f.adressbuchLink ? '<a class="ff-adresslink" href="#/adressbuch">Adressbuch öffnen →</a>' : ""}<div class="tab-wrap"><table class="ff-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}${f.anfrage ? "<th>Anfrage</th>" : ""}${!f.zeilen || rows.length > fest ? "<th></th>" : ""}</tr></thead>
+          <tbody>${zeilen.map(({ label, eigen, kopie, basis, r, i }) => `<tr class="${eigen ? "eigen" : ""}${kopie ? " kopie" : ""}">${label && !eigen ? `<th scope="row"><span class="tz-label">${esc(label)}</span>${f.zeilen && !kopie ? `<button type="button" class="tz-plus" data-tab-plus="${esc(f.id)}" data-nach="${basis}" title="Weitere Zeile „${esc(f.zeilen[basis])}“ hinzufügen" aria-label="Weitere Zeile ${esc(f.zeilen[basis])}">+</button>` : ""}</th>` : eigen ? `<th scope="row"><input class="eingabe" data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="_label" value="${esc(r._label || "")}" placeholder="Eigene Zeile" aria-label="Bezeichnung"></th>` : ""}${f.spalten.map((s) => zelle(s, r, i)).join("")}${f.anfrage ? `<td class="tz-anfrage"><button type="button" class="btn klein${r.angefragt ? " still" : ""}" data-aktion="sub-anfrage" data-zeile="${i}"${r.firma ? "" : " disabled title=\"Erst eine Firma wählen\""}>${r.angefragt ? `✓ angefragt ${new Date(r.angefragt).toLocaleDateString("de-DE", { day: "2-digit", month: "2-digit" })}` : "Anfrage ✉"}</button></td>` : ""}${!f.zeilen || eigen || kopie ? `<td class="mitte"><button type="button" class="btn klein still" data-tab-weg="${esc(f.id)}" data-zeile="${i}" aria-label="Zeile entfernen">✕</button></td>` : f.zeilen && rows.length > fest ? "<td></td>" : ""}</tr>`).join("")}</tbody></table></div>
           <button type="button" class="btn klein" data-tab-neu="${esc(f.id)}">${f.zeilen ? "+ Eigene Zeile" : "+ Zeile"}</button>`, "breit-tab");
       }
       case "checkliste": {
@@ -318,6 +318,34 @@
       default: return v !== undefined && v !== "" ? esc(v).replace(/\n/g, "<br>") + (f.einheit ? " " + esc(f.einheit) : "") : leer;
     }
   }
+  /* Formular als Klartext (z. B. „Leistungen“ in der Anfrage an einen Subunternehmer) */
+  function text(id, p, firma) {
+    const d = def(id); if (!d) return "";
+    def.aktuell = d;
+    const w = werteVon(p, id), aus = [];
+    for (const f of d.felder) {
+      if (!f.id || !sichtbar(f, w, p) || ["dateien", "unterschrift", "checkliste", "abschnitt", "wer"].includes(f.typ)) continue;
+      const v = f.typ === "wer" && f.quelle ? quellWert(f, p) : w[f.id];
+      if (f.typ === "tabelle") {
+        const rows = Array.isArray(v) ? v : [];
+        const zeilen = f.zeilen ? tabellenZeilen(f, rows) : rows.map((r, i) => ({ r, i }));
+        const l = zeilen.filter(({ r }) => r && !Object.values(r).every((x) => x === "" || x == null || x === false) && !(f.spalten[0] && f.spalten[0].typ === "janein" && r[f.spalten[0].id] !== "ja"))
+          .map(({ label, r }) => "  – " + [label || r._label, ...f.spalten.filter((s) => s.typ !== "janein" && r[s.id] !== undefined && r[s.id] !== "" && r[s.id] !== false).map((s) => `${s.titel}: ${r[s.id] === true ? "✓" : r[s.id]}`)].filter(Boolean).join(", "));
+        if (l.length) aus.push(`${f.label}:`, ...l);
+        continue;
+      }
+      if (v === undefined || v === "" || (Array.isArray(v) && !v.length)) continue;
+      let t = v;
+      if (f.typ === "janein") t = v === "ja" ? "Ja" + (f.beiJa && w[f.id + "Text"] ? " – " + w[f.id + "Text"] : "") : "Nein";
+      else if (f.typ === "mehrfach") t = v.join(", ");
+      else if (f.typ === "wer") t = werName(v, firma);
+      else if (f.typ === "datum") t = new Date(v + "T00:00").toLocaleDateString("de-DE");
+      else if (f.typ === "regler") t = reglerText(f, reglerZahl(f, v));
+      else if (f.einheit) t = `${v} ${f.einheit}`;
+      aus.push(`${f.label}: ${t}`);
+    }
+    return aus.join("\n");
+  }
   function druck(id, p, ctx) {
     const d = def(id); def.aktuell = d;
     const w = werteVon(p, id);
@@ -343,5 +371,5 @@
       <footer class="d-fuss">${esc(ctx.firma.name)} · ${esc(ctx.firma.adresse.strasse)} · ${esc(ctx.firma.adresse.ort)} · Tel. ${esc(ctx.firma.telefon)} · ${esc(ctx.firma.email)}</footer></section>`;
   }
 
-  window.Formular = { werName, EIGEN, def, werteVon, sichtbar: (f, w, p) => sichtbar(f, w, p), status, editor, vorbelegen, druck, gefuellt };
+  window.Formular = { text, werName, EIGEN, def, werteVon, sichtbar: (f, w, p) => sichtbar(f, w, p), status, editor, vorbelegen, druck, gefuellt };
 })();

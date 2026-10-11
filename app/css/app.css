@@ -909,3 +909,7 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .r-matrix.breit .r-zeile { grid-template-columns: minmax(220px, 1fr) 110px repeat(var(--sp), 92px); }
 .r-matrix.breit .r-th span { font-size: .6rem; letter-spacing: .06em; text-align: center; line-height: 1.25; padding: 6px 2px; }
 .r-matrix.breit .r-th span:first-child { text-align: left; }
+.tz-anfrage { white-space: nowrap; }
+.anhang-wahl { margin-top: 14px; }
+.anhang-wahl ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 220px; overflow: auto; }
+.anhang-wahl small { color: var(--leise); margin-left: 4px; }

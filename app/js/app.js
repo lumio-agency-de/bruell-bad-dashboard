@@ -487,7 +487,7 @@
     aendern(p, () => {}, `${def.label} in den Kalender übernommen`);
   }
   const b64 = (str) => btoa(unescape(encodeURIComponent(str)));
-  async function emlDatei(p, betreff, text, anhaenge) {
+  async function emlDatei(p, betreff, text, anhaenge, an) {
     const grenze = "----=_Teil_" + uid().replace(/-/g, "");
     const teile = [`--${grenze}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(text).replace(/.{76}/g, "$&\r\n")];
     let fehlend = 0;
@@ -500,7 +500,7 @@
       } catch (e) { fehlend++; }
     }
     teile.push(`--${grenze}--`, "");
-    const kopf = ["X-Unsent: 1", `To: ${p.kunde.email || ""}`, `Subject: =?UTF-8?B?${b64(betreff)}?=`, "MIME-Version: 1.0", `Content-Type: multipart/mixed; boundary="${grenze}"`, "", ""].join("\r\n");
+    const kopf = ["X-Unsent: 1", `To: ${an !== undefined ? an : p.kunde.email || ""}`, `Subject: =?UTF-8?B?${b64(betreff)}?=`, "MIME-Version: 1.0", `Content-Type: multipart/mixed; boundary="${grenze}"`, "", ""].join("\r\n");
     herunterladen(`${betreff}.eml`.replace(/[\\/:*?"<>|]/g, ""), kopf + teile.join("\r\n"), "message/rfc822");
     return fehlend;
   }
@@ -1472,12 +1472,13 @@
     };
     return (t[stil] || t.formell)[p.kunde.anrede] || t.formell.Herr;
   }
-  function mailBauen(m, p, optionen, link) {
+  function mailBauen(m, p, optionen, link, extra = {}) {
     const c = cfg(), luecken = [];
     let text = m.text.replace(/\[\[(\w+)\]\]([\s\S]*?)\[\[\/\1\]\]/g, (_, id, inhalt) => (optionen[id] ? inhalt : ""));
     const label = (k) => (TERMINE.find((t) => t.key === k) || {}).label || k;
     text = text.replace(/\{([a-zA-Z.]+)\}/g, (ganz, key) => {
       const fehlt = (was) => { if (!luecken.includes(was)) luecken.push(was); return `‹${was}›`; };
+      if (key in extra) return extra[key] || fehlt(extra["_label:" + key] || key);
       if (key === "anrede") return anrede(p, m.anredeStil);
       if (key === "nachname") return p.kunde.nachname || fehlt("Nachname");
       if (key === "downloadCode") return p.downloadCode || fehlt(`${c.programme.app3d}-Code`);
@@ -1500,7 +1501,7 @@
       }
       return ganz;
     });
-    return { text: text.replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "") + signatur(), luecken };
+    return { text: text.replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "") + (extra._ohneSignatur ? "" : signatur()), luecken };
   }
   /* Signatur des angemeldeten Nutzers (Name, Funktion, Durchwahl, E-Mail) */
   function signatur() {
@@ -1548,6 +1549,73 @@
       });
       dlg.addEventListener("change", (e) => { const o = e.target.dataset.option; if (o) { optionen[o] = e.target.checked; zeichnen(dlg); } });
       dlg.addEventListener("input", (e) => { if (e.target.id === "mail-text" || e.target.id === "mail-betreff") $('[data-dlg="mailto"]', dlg).href = mailto(dlg); });
+    });
+  }
+
+  /* ---------- Anfrage an einen Subunternehmer (aus dem Baustellenplan) ---------- */
+  async function subAnfrageDialog(p, zeile) {
+    const m = window.MAILVORLAGEN.find((x) => x.id === "sub-anfrage"); if (!m) return;
+    const row = ((Formular.werteVon(p, "baustellenplan").subs) || [])[zeile]; if (!row || !row.firma) return toast("Erst eine Firma wählen", "fehler");
+    const c = cfg(), pa = (c.partner || []).find((x) => x.firma === row.firma);
+    if (!pa) return toast("Die Firma steht nicht im Adressbuch – dort anlegen, dann anfragen.", "fehler");
+    const gewerk = row.gewerk || pa.gewerk || "";
+    const bb = Formular.werteVon(p, "baustellenbesichtigung");
+    const masse = [["Raumhöhe", bb.raumhoehe], ["Länge", bb.raumlaenge], ["Breite", bb.raumbreite]].filter(([, v]) => v).map(([l, v]) => `  – ${l}: ${v} cm`).join("\n");
+    const forms = ((c.gewerke || {})[gewerk] || []).filter((f) => !["projektuebersicht", "auswahl"].includes(f) && Formular.def(f));
+    const leistungen = forms.map((f) => Formular.text(f, p, c)).filter(Boolean).join("\n\n");
+    const extra = {
+      anrede: pa.name ? `Hallo ${pa.name},` : "Sehr geehrte Damen und Herren,",
+      gewerk, termin: row.termin || "", masse, leistungen,
+      "baustelle.adresse": [adr(p.kunde)].filter(Boolean).join("") || "", "baustelle.ort": (p.kunde.ort || "").replace(/^\d{5}\s*/, ""),
+      "_label:termin": "Einsatztermin im Baustellenplan", "_label:masse": "Raummaße (Baustellenbesichtigung)", "_label:leistungen": "Leistungen (Gewerke-Formular)",
+      "_label:baustelle.adresse": "Adresse", "_label:baustelle.ort": "Ort",
+    };
+    /* Anhänge: alle Dateien aus den für das Gewerk freigegebenen Ordnern */
+    const ordner = freigabeStandard("partner:" + gewerk);
+    const anh = S.dateien.filter((d) => d.projekt_id === p.id && ordner.includes(d.kategorie));
+    const aus = new Set();
+    const optionen = Object.fromEntries(m.optionen.filter((o) => o.an).map((o) => [o.id, true]));
+    const groesse = (b) => b > 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
+    const zeichnen = (dlg) => {
+      const { text, luecken } = mailBauen(m, p, optionen, null, extra);
+      const betreff = mailBauen({ ...m, text: m.betreff }, p, {}, null, { ...extra, _ohneSignatur: true }).text;
+      const summe = anh.filter((d) => !aus.has(d.id)).reduce((a, d) => a + (d.groesse || 0), 0);
+      dlg.innerHTML = `<div class="dlg-kopf"><div><p class="eyebrow">Anfrage · ${esc(gewerk)} · ${esc(anzeigeName(p))}</p><h2>${esc(pa.firma)}</h2>
+          <p>${pa.email ? `An: ${esc(pa.email)}` : "Im Adressbuch ist noch keine E-Mail-Adresse hinterlegt."}${pa.telefon ? ` · Tel. ${esc(pa.telefon)}` : ""}</p></div><button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
+        <div class="dlg-inhalt">
+          <div class="optionen"><p class="q-gruppe">Diese Absätze mitschicken:</p>${m.optionen.map((o) => `<label><input type="checkbox" data-option="${o.id}"${optionen[o.id] ? " checked" : ""}> ${esc(o.label)}</label>`).join("")}</div>
+          ${luecken.length ? `<div class="luecken">Noch offen: ${luecken.map(esc).join(", ")} – im Projekt nachtragen oder im Text ersetzen.</div>` : ""}
+          <div class="feld"><label for="mail-betreff">Betreff</label><input class="eingabe" id="mail-betreff" value="${esc(betreff)}"></div>
+          <div class="feld abstand-o"><label for="mail-text">Text</label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
+          <div class="anhang-wahl"><p class="q-gruppe">Anhänge aus den freigegebenen Ordnern (${esc(gewerk)}): ${ordner.map(katTitel).map(esc).join(", ") || "keine"}</p>
+            ${anh.length ? `<ul>${anh.map((d) => `<li><label><input type="checkbox" data-anhang="${esc(d.id)}"${aus.has(d.id) ? "" : " checked"}> ${esc(d.name)} <small>${esc(katTitel(d.kategorie))}${d.groesse ? " · " + groesse(d.groesse) : ""}</small></label></li>`).join("")}</ul>
+              <p class="leise klein-text">Zusammen ${groesse(summe)}${summe > 20 * 1048576 ? " – viele Mailserver nehmen nur bis ca. 20 MB an, ggf. Fotos abwählen." : ""}</p>` : '<p class="leise klein-text">In diesen Ordnern liegen noch keine Dateien.</p>'}</div>
+        </div>
+        <div class="dlg-fuss"><span class="links"></span><button class="btn" data-dlg="kopieren">Text kopieren</button>
+          <button class="btn voll" data-dlg="eml">In Outlook öffnen</button><button class="btn jetzt" data-dlg="gesendet">Als angefragt markieren</button></div>
+        <p class="anhang-info dlg-hinweis">„In Outlook öffnen“ erzeugt einen fertigen Entwurf an ${esc(pa.email || "den Partner")} mit den gewählten Anhängen – Datei öffnen, prüfen und absenden.</p>`;
+    };
+    dialog("", (dlg) => {
+      zeichnen(dlg);
+      dlg.addEventListener("click", async (e) => {
+        const a = e.target.closest("[data-dlg]"); if (!a) return;
+        if (a.dataset.dlg === "kopieren") { await kopieren($("#mail-text", dlg).value); toast("Text kopiert"); }
+        if (a.dataset.dlg === "eml") {
+          const liste = [];
+          for (const d of anh.filter((x) => !aus.has(x.id))) { try { liste.push({ url: await dateiUrl(d), name: d.name }); } catch (err) { /* ohne */ } }
+          const fehlt = await emlDatei(p, $("#mail-betreff", dlg).value, $("#mail-text", dlg).value, liste, pa.email || "");
+          toast(fehlt ? `Entwurf erstellt – ${fehlt} Anhang/Anhänge bitte selbst anfügen` : "Entwurf erstellt – Datei öffnen, dann in Outlook absenden");
+        }
+        if (a.dataset.dlg === "gesendet") {
+          aendern(p, () => { const r = (formularWerte(p, "baustellenplan").subs || [])[zeile]; if (r) r.angefragt = Date.now(); }, `Anfrage an ${pa.firma} (${gewerk}) gesendet`);
+          dlg.close(); toast("Als angefragt vermerkt"); const r = route(); if (r.sub === "formular") formularNeuZeichnen(p, r.subArg, true); else teilRendern(p);
+        }
+      });
+      dlg.addEventListener("change", (e) => {
+        const o = e.target.dataset.option, an = e.target.dataset.anhang;
+        if (o) { optionen[o] = e.target.checked; zeichnen(dlg); }
+        if (an) { e.target.checked ? aus.delete(an) : aus.add(an); zeichnen(dlg); }
+      });
     });
   }
 
@@ -2150,6 +2218,7 @@
     if (akt === "neu-laden") return location.reload();
     if (akt === "kundenlink" && p) return kundenlinkDialog(p);
     if (akt === "mail" && p) return mailDialog(a.dataset.mail, p);
+    if (akt === "sub-anfrage" && p) return subAnfrageDialog(p, Number(a.dataset.zeile));
     if (akt === "datei") { const d = S.dateien.find((x) => x.id === a.dataset.datei); if (d) dateiDialog(d); return; }
     if (akt === "drucken" && p) return drucken(Formular.druck(a.dataset.formular, p, druckKontext(p)));
     if (akt === "demo") { demoLaden(); toast("Beispielprojekte geladen"); location.hash = "#/cockpit"; return render(); }

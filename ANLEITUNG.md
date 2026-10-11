@@ -30,7 +30,8 @@ liegen direkt im Projekt — kein Netzlaufwerk, keine Ordner zum Verschieben.
   Ordner freigeben“ oder jederzeit im Reiter **Team** der Akte. Je Person lässt sich per Klick
   festlegen, welche Ordner sie sieht (Standard Monteur: alles außer Angebote, Auftrag, Rechnungen;
   Standard Partner: Skizzen, Planung, Baustelle, Auswahl). Dort erscheinen auch die Rückmeldungen.
-  Die Monteurmappe entfällt dadurch.
+  Die Monteurmappe entfällt dadurch. (Seit 11.10.2026 gelten die Ordner fest je Rolle bzw. je
+  Partner-Gewerk unter Konten → „Ordner & Bilder“ – im Projekt wird nur noch zugewiesen.)
 - Wird in der **Projekt-Übersicht** bei „Wer?“ ein Partner gewählt (Abriss, Elektro, Fliesen,
   Fenster, Tür), bekommt er automatisch Zugriff aufs Projekt. Der **Baustellenplan** übernimmt
   Gewerk und Firma als Subunternehmer-Zeilen, die Gewerke-Formulare zeigen die Firma zentral an.
@@ -201,3 +202,17 @@ Dashboard/
 ```
 
 Die Originale liegen unverändert in `../Bad_Dashboard/`.
+
+## Subunternehmer anfragen (Level 10)
+
+Der **Baustellenplan** legt für jedes Gewerk aus der Materialauswahl eine Zeile an (Abriss,
+Elektro, Fliesen, Maler, Spanndecke, Fenster, Tür) – mit dem Termin aus dem Gewerke-Formular.
+Die Firma wird aus dem **Adressbuch** gewählt; die Wahl geht zurück in die Projekt-Übersicht,
+der Partner bekommt Zugriff aufs Projekt.
+
+**Anfrage ✉** in jeder Zeile öffnet eine fertige Mail an den Partner (E-Mail aus dem Adressbuch):
+Baustelle, Baustart, geplanter Einsatz, Raummaße aus der Baustellenbesichtigung und die
+Leistungen aus dem Gewerke-Formular. Als Anhang kommen alle Dateien aus den Ordnern, die für das
+Gewerk freigegeben sind (Konten → „Ordner & Bilder“) – einzeln abwählbar. „In Outlook öffnen“
+erzeugt den Entwurf mit Anhängen, „Als angefragt markieren“ vermerkt das Datum in der Zeile.
+Den Mailtext ändert man in `einstellungen/mailvorlagen.js` (`sub-anfrage`).

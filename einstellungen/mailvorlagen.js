@@ -29,6 +29,46 @@
    ========================================================================== */
 
 window.MAILVORLAGEN = [
+  /* An einen Subunternehmer (Knopf „Anfrage ✉“ im Baustellenplan). Zusätzliche Platzhalter:
+     {gewerk} {baustelle.adresse} {baustelle.ort} {termin} {masse} {leistungen}
+     Anhänge: alle Dateien aus den Ordnern, die für das Gewerk des Partners freigegeben sind
+     (Konten → „Ordner & Bilder“) – im Dialog einzeln abwählbar. */
+  {
+    id: "sub-anfrage",
+    an: "partner",
+    phase: 10,
+    titel: "Anfrage an Subunternehmer",
+    datei: "",
+    anhaenge: [],
+    betreff: "Anfrage {gewerk}: Badsanierung in {baustelle.ort} – Baustart {baustart.datum}",
+    optionen: [
+      { id: "termin", label: "Geplanten Einsatztermin nennen", an: true },
+      { id: "masse", label: "Raummaße mitschicken", an: true },
+      { id: "leistungen", label: "Leistungen aus dem Formular mitschicken", an: true },
+      { id: "zugang", label: "Hinweis auf den Zugang zum Bad-Dashboard" },
+    ],
+    text:
+`{anrede}
+
+wir planen eine Badsanierung und möchten Sie gern für die Arbeiten im Bereich {gewerk} anfragen.
+
+Baustelle: {baustelle.adresse}
+Geplanter Baustart: {baustart.wochentag}, {baustart.datum}
+[[termin]]Ihr geplanter Einsatz: {termin}
+[[/termin]]
+[[masse]]Raummaße laut Baustellenbesichtigung:
+{masse}
+
+[[/masse]][[leistungen]]Benötigte Leistungen:
+{leistungen}
+
+[[/leistungen]]Pläne, Skizzen und Fotos der Baustelle finden Sie im Anhang.[[zugang]] Alle Unterlagen stehen Ihnen außerdem in Ihrem Zugang zum Bad-Dashboard zur Verfügung.[[/zugang]]
+
+Bitte geben Sie uns kurz Bescheid, ob Sie den Termin übernehmen können, und senden Sie uns Ihr Angebot.
+
+Vielen Dank und freundliche Grüße`,
+  },
+
   {
     id: "terminbestaetigung",
     phase: 2,

@@ -379,7 +379,7 @@
       felder: [
         /* vorbelegenAus: für jedes benötigte Gewerk eine Zeile – Firma aus dem „Wer?“-Feld, Termin aus dem Gewerke-Formular.
            Wird hier eine Firma gewählt, geht sie zurück in die Projekt-Übersicht (und der Partner bekommt Zugriff). */
-        { id: "subs", typ: "tabelle", label: "Subunternehmer & Gewerke", pflicht: true,
+        { id: "subs", typ: "tabelle", label: "Subunternehmer & Gewerke", pflicht: true, anfrage: "sub-anfrage",
           vorbelegenAus: [
             { gewerk: "Abriss", wenn: { feld: "abriss", wert: "ja" }, wer: "abrissWer", termin: "abriss.termin" },
             { gewerk: "Elektro", wenn: { feld: "elektriker", wert: "ja" }, wer: "elektrikerWer", termin: "elektro.installation" },
