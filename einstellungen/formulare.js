@@ -337,7 +337,8 @@
       titel: "Baustellenplan",
       felder: [
         { id: "subs", typ: "tabelle", label: "Subunternehmer & Gewerke", pflicht: true,
-          spalten: [{ id: "gewerk", titel: "Gewerk" }, { id: "firma", titel: "Firma" }, { id: "termin", titel: "Termin" }, { id: "bestaetigt", titel: "bestätigt", typ: "haken" }] },
+          adressbuchLink: true,
+          spalten: [{ id: "gewerk", titel: "Gewerk", typ: "gewerk" }, { id: "firma", titel: "Firma", typ: "adressbuch" }, { id: "termin", titel: "Termin" }, { id: "bestaetigt", titel: "bestätigt", typ: "haken" }] },
         { id: "anschluss", typ: "textarea", label: "Anschlussmaße & Hinweise für die Monteure" },
         { id: "schluessel", typ: "text", label: "Schlüsselübergabe / Zugang" },
       ],

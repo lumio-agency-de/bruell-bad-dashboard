@@ -2391,7 +2391,13 @@
         if (q && !(q.zugriff || []).includes(el.value)) aendern(q, (x) => { x.zugriff = [...(x.zugriff || []), el.value]; }, `Automatisch zugewiesen (${fd.gewerk || fd.label}): ${m ? m.name : el.value}`);
       }
       /* Bedingungen (z. B. „wenn Mehrfamilienhaus“) neu auswerten, sobald ein Feld fertig ist */
-      if ((el.dataset.ff && el.tagName === "SELECT") || (el.dataset.tab && el.type === "checkbox")) formularNeuZeichnen(finde(seite.dataset.projekt), seite.dataset.formular, true);
+      /* Firma aus dem Adressbuch gewählt → Gewerk der Zeile ergänzen, falls leer */
+      const og = el.dataset.tab && el.tagName === "SELECT" && el.selectedOptions[0] && el.selectedOptions[0].dataset.gewerk;
+      if (og) {
+        const q = finde(seite.dataset.projekt), rows = formularWerte(q, seite.dataset.formular)[el.dataset.tab] || [], row = rows[Number(el.dataset.zeile)];
+        if (row && !row.gewerk) aendern(q, () => { row.gewerk = og; });
+      }
+      if ((el.dataset.ff && el.tagName === "SELECT") || (el.dataset.tab && (el.type === "checkbox" || el.tagName === "SELECT"))) formularNeuZeichnen(finde(seite.dataset.projekt), seite.dataset.formular, true);
       return;
     }
     if (el.matches(".r-matrix [data-r-level]")) { $$(`.r-schritt [data-r-e="${el.dataset.rLevel}"]`, el.closest(".r-level")).forEach((x) => { x.checked = el.checked; }); return rechteTeilzustand(); }

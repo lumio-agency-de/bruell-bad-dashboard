@@ -900,3 +900,5 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .ff-datumzeit input[type=date] { flex: 1 1 auto; min-width: 0; }
 .ff-datumzeit .zeit { flex: 0 0 120px; }
 .ff-quelle { font-size: .74rem; font-weight: 600; letter-spacing: .04em; color: var(--leise); margin: 6px 0 4px; }
+.ff-adresslink { display: inline-block; font-size: .82rem; font-weight: 600; margin: 0 0 8px; }
+.tz-tel { display: block; font-size: .76rem; margin-top: 3px; }

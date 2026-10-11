@@ -171,6 +171,22 @@
           const val = r[s.id];
           const a = `data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="${esc(s.id)}"`;
           if (s.typ === "haken") return `<td class="mitte"><input type="checkbox" class="haken" ${a}${val ? " checked" : ""} aria-label="${esc(s.titel)}"></td>`;
+          if (s.typ === "gewerk") {
+            const g = Object.keys((ctx.firma || window.FIRMA).gewerke || {});
+            return `<td><select class="eingabe" ${a} aria-label="${esc(s.titel)}"><option value=""></option>${g.map((n) => `<option${val === n ? " selected" : ""}>${esc(n)}</option>`).join("")}${val && !g.includes(val) ? `<option selected>${esc(val)}</option>` : ""}</select></td>`;
+          }
+          if (s.typ === "adressbuch") {
+            /* Firma aus dem Partner-Adressbuch – passend zum Gewerk der Zeile zuerst */
+            const fa = ctx.firma || window.FIRMA, pa = fa.partner || [], eigen = werName(EIGEN, fa);
+            const passend = pa.filter((x) => r.gewerk && x.gewerk === r.gewerk), rest = pa.filter((x) => !passend.includes(x));
+            const o = (x) => `<option value="${esc(x.firma)}" data-gewerk="${esc(x.gewerk || "")}"${val === x.firma ? " selected" : ""}>${esc(x.firma)}${r.gewerk && x.gewerk === r.gewerk ? "" : ` · ${esc(x.gewerk || "")}`}</option>`;
+            const treffer = pa.find((x) => x.firma === val), tel = treffer && (treffer.telefon || treffer.mobil);
+            return `<td><select class="eingabe" ${a} aria-label="${esc(s.titel)}"><option value=""></option><option value="${esc(eigen)}"${val === eigen ? " selected" : ""}>${esc(eigen)}</option>
+              ${passend.length ? `<optgroup label="${esc("Adressbuch · " + r.gewerk)}">${passend.map(o).join("")}</optgroup>` : ""}
+              ${rest.length ? `<optgroup label="${passend.length ? "Weitere aus dem Adressbuch" : "Adressbuch"}">${rest.map(o).join("")}</optgroup>` : ""}
+              ${val && val !== eigen && !treffer ? `<option selected>${esc(val)}</option>` : ""}</select>
+              ${tel ? `<a class="tz-tel" href="tel:${esc(tel.replace(/[^\d+]/g, ""))}">${esc(tel)}</a>` : ""}</td>`;
+          }
           if (s.typ === "person") {
             const fa = ctx.firma || window.FIRMA;
             const namen = [...(fa.team || []).filter((m) => m.name).map((m) => m.name), ...(fa.partner || []).map((x) => x.firma)];
@@ -179,7 +195,7 @@
           if (s.typ === "janein") return `<td><select class="eingabe" ${a}><option value=""></option><option value="ja"${val === "ja" ? " selected" : ""}>ja</option><option value="nein"${val === "nein" ? " selected" : ""}>nein</option></select></td>`;
           return `<td><input class="eingabe" ${a} value="${esc(val)}"${s.typ === "zahl" ? ' inputmode="decimal"' : ""} aria-label="${esc(s.titel)}"></td>`;
         };
-        return wrap(`${lab}<div class="tab-wrap"><table class="ff-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}${!f.zeilen || rows.length > fest ? "<th></th>" : ""}</tr></thead>
+        return wrap(`${lab}${f.adressbuchLink ? '<a class="ff-adresslink" href="#/adressbuch">Adressbuch öffnen →</a>' : ""}<div class="tab-wrap"><table class="ff-tab"><thead><tr>${f.zeilen ? "<th></th>" : ""}${f.spalten.map((s) => `<th>${esc(s.titel)}</th>`).join("")}${!f.zeilen || rows.length > fest ? "<th></th>" : ""}</tr></thead>
           <tbody>${zeilen.map(({ label, eigen, kopie, basis, r, i }) => `<tr class="${eigen ? "eigen" : ""}${kopie ? " kopie" : ""}">${label && !eigen ? `<th scope="row"><span class="tz-label">${esc(label)}</span>${f.zeilen && !kopie ? `<button type="button" class="tz-plus" data-tab-plus="${esc(f.id)}" data-nach="${basis}" title="Weitere Zeile „${esc(f.zeilen[basis])}“ hinzufügen" aria-label="Weitere Zeile ${esc(f.zeilen[basis])}">+</button>` : ""}</th>` : eigen ? `<th scope="row"><input class="eingabe" data-tab="${esc(f.id)}" data-zeile="${i}" data-spalte="_label" value="${esc(r._label || "")}" placeholder="Eigene Zeile" aria-label="Bezeichnung"></th>` : ""}${f.spalten.map((s) => zelle(s, r, i)).join("")}${!f.zeilen || eigen || kopie ? `<td class="mitte"><button type="button" class="btn klein still" data-tab-weg="${esc(f.id)}" data-zeile="${i}" aria-label="Zeile entfernen">✕</button></td>` : f.zeilen && rows.length > fest ? "<td></td>" : ""}</tr>`).join("")}</tbody></table></div>
           <button type="button" class="btn klein" data-tab-neu="${esc(f.id)}">${f.zeilen ? "+ Eigene Zeile" : "+ Zeile"}</button>`, "breit-tab");
       }
