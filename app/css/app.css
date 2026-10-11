@@ -893,3 +893,5 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 
 /* Ja/Nein mit Eingabefeld bei „Ja“ */
 .ff-beija { margin-top: 8px; width: 100%; }
+.q-notiz { display: block; }
+.q-notiz textarea { width: 100%; min-height: 96px; resize: vertical; }

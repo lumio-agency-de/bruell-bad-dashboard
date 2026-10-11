@@ -17,7 +17,7 @@
                     option.weiter: false   → Schritt bleibt offen (z. B. „Kunde überlegt noch")
                     option.status: "pausiert" | "verloren"
                     option.wiedervorlage: Tage → setzt eine Wiedervorlage
-     feld         ein Projektfeld ausfüllen                 { feld: "projektnr" | "zustaendig" | "downloadCode" }
+     feld         ein Projektfeld ausfüllen                 { feld: "projektnr" | "zustaendig" | "downloadCode" }, mehrzeilig: true → Notizfeld
 
    portal: [...]    → Ordner, in die der Kunde in diesem Level über seinen Link hochladen kann
    ebene: [...]     → wer den Schritt erledigen darf (Standard: ["planung"]).
@@ -128,6 +128,8 @@ window.ABLAUF = [
           { id: "abgesagt", label: "Abgesagt", status: "verloren", weiter: false },
         ] },
       { id: "unterschrift", typ: "dateien", kategorie: "auftrag", kundenlink: true, titel: "Unterschriebenes Angebot einscannen / hochladen", wenn: { schritt: "ergebnis", wert: "auftrag" } },
+      { id: "angebot-notiz", typ: "feld", feld: "angebotNotiz", mehrzeilig: true, pflicht: false, titel: "Notizen zum Angebot",
+        platzhalter: "z. B. Änderungswünsche, Rabatt, offene Fragen, was nachgereicht wird …" },
       { id: "bb-termin", typ: "termin", termin: "baustellenbesichtigung", titel: "Baustellenbesichtigung mit {projektleiter} vereinbaren", wenn: { schritt: "ergebnis", wert: "auftrag" } },
     ],
   },

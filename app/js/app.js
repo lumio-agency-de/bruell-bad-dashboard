@@ -1162,8 +1162,10 @@
       }
       case "feld": {
         const v = p[s.feld] || "";
-        meta = v ? esc(v) : "";
-        inhalt = s.feld === "zustaendig"
+        meta = v ? (s.mehrzeilig ? "notiert" : esc(v)) : "";
+        inhalt = s.mehrzeilig
+          ? `<div class="q-aktion q-notiz"><textarea class="eingabe" data-pfeld="${s.feld}" rows="4" aria-label="${esc(titel)}" placeholder="${esc(s.platzhalter || "eintragen")}">${esc(v)}</textarea></div>`
+          : s.feld === "zustaendig"
           ? `<div class="chips">${leute("badplanung").map((m) => `<button type="button" class="chip${v === m.kuerzel ? " an" : ""}" data-aktion="setze-feld" data-feld="zustaendig" data-wert="${esc(m.kuerzel)}">${esc(m.name)} (${esc(m.kuerzel)})</button>`).join("")}</div>`
           : `<div class="q-aktion"><input class="eingabe auto" data-pfeld="${s.feld}" value="${esc(v)}" aria-label="${esc(titel)}" placeholder="eintragen"></div>`;
         break;
@@ -2404,7 +2406,7 @@
     }
     if (el.dataset.pfeld && p) {
       const k = el.dataset.pfeld;
-      aendern(p, (x) => { x[k] = el.value.trim(); }, k === "status" ? `Status: ${STATUS.find((s) => s.id === el.value)?.label}` : k === "projektnr" ? `Projektnummer: ${el.value.trim()}` : k === "downloadCode" ? `Download-Code: ${el.value.trim()}` : null);
+      aendern(p, (x) => { x[k] = el.value.trim(); }, k === "angebotNotiz" ? "Notizen zum Angebot geändert" : k === "status" ? `Status: ${STATUS.find((s) => s.id === el.value)?.label}` : k === "projektnr" ? `Projektnummer: ${el.value.trim()}` : k === "downloadCode" ? `Download-Code: ${el.value.trim()}` : null);
       kopfNeu(p); return teilRendern(p);
     }
     if ((el.dataset.nk || el.dataset.nkTab) && p && istGF()) {
