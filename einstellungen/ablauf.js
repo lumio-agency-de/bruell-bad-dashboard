@@ -170,6 +170,8 @@ window.ABLAUF = [
     portal: ["freigabe"],
     schritte: [
       { id: "expose", typ: "dateien", kategorie: "expose", titel: "Exposé mit 2D-Ansichten als PDF ablegen" },
+      { id: "angebot-angepasst", typ: "dateien", kategorie: "angebot", pflicht: false, titel: "Angepasstes Angebot ablegen",
+        hinweis: "Nur wenn sich durch die Materialauswahl etwas geändert hat. Geht mit der Freigabe-Mail an den Kunden." },
       { id: "code", typ: "feld", feld: "downloadCode", titel: "{programm.app3d}-Download-Code" },
       { id: "mail-freigabe", typ: "mail", mail: "freigabe", titel: "Planung zur Prüfung & Freigabe senden" },
       { id: "freigabe", typ: "dateien", kategorie: "freigabe", kundenlink: true, titel: "Unterschriebenes Exposé & Angebot zurück",

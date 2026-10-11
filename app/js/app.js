@@ -111,7 +111,7 @@
   const kuerzelListe = () => cfg().team.filter((m) => m.kuerzel).map((m) => m.kuerzel);
   function ersetzen(text) {
     const c = cfg();
-    return String(text).replace(/\{([a-zA-Z.]+)\}/g, (m, key) => {
+    return String(text).replace(/\{([a-zA-Z0-9.]+)\}/g, (m, key) => {
       if (key.startsWith("programm.")) return c.programme[key.slice(9)] ?? m;
       if (c.team.some((t) => t.rolle === key)) return namen(key);
       return m;
