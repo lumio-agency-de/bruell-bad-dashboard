@@ -105,6 +105,7 @@
       vorlage: "vorlagen/03-erstgespraech/Erstgespraechs-Notizen.docx",
       felder: [
         { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:erstgespraech" },
+        { id: "budgetBesprochen", typ: "zahl", label: "Besprochenes Budget", einheit: "€", breite: "halb" },
         { typ: "abschnitt", titel: "Was soll gemacht werden?" },
         { id: "sanierung", typ: "auswahl", label: "Sanierung", optionen: ["Komplettsanierung", "Teilsanierung"], pflicht: true, breite: "halb" },
         { id: "bereich", typ: "text", label: "Welcher Bereich?", wenn: { feld: "sanierung", wert: "Teilsanierung" } },
