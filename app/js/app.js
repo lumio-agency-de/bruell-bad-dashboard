@@ -2278,6 +2278,12 @@
     if (akt === "export") return herunterladen(`bad-dashboard-projekte-${isoTag(new Date())}.json`, JSON.stringify({ projekte: S.projekte, einstellungen: S.einstellungen }, null, 1));
   });
 
+  /* Regler: auch ein Klick auf die Mittelstellung zählt als Eingabe */
+  document.addEventListener("click", (e) => {
+    const r = e.target.closest && e.target.closest(".ff-regler.unberuehrt input[type=range]");
+    if (r) r.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+
   /* Original-Blatt: Werkzeuge */
   document.addEventListener("click", (e) => {
     const m = e.target.closest("[data-blatt-modus]");
@@ -2340,9 +2346,14 @@
     const seite = el.closest(".formularseite");
     if (seite && (el.dataset.ff || el.dataset.tab || el.dataset.checkNotiz)) {
       const p = finde(seite.dataset.projekt), fid = seite.dataset.formular, w = formularWerte(p, fid);
+      if (el.type === "range") {
+        const box = el.closest(".ff-regler"), o = box && $("[data-regler-ausgabe]", box);
+        if (o) o.textContent = `${Number(el.value).toLocaleString("de-DE")}${el.dataset.einheit ? " " + el.dataset.einheit : ""}`;
+        if (box) box.classList.remove("unberuehrt");
+      }
       aendern(p, () => {
         if (el.dataset.kunde) p.kunde[el.dataset.kunde] = el.value;
-        else if (el.dataset.ff) w[el.dataset.ff] = el.value;
+        else if (el.dataset.ff) w[el.dataset.ff] = el.type === "range" ? Number(el.value) : el.value;
         else if (el.dataset.tab) {
           const rows = (w[el.dataset.tab] = w[el.dataset.tab] || []); const i = Number(el.dataset.zeile);
           for (let k = 0; k <= i; k++) rows[k] = rows[k] || {};

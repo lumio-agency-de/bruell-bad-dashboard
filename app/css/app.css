@@ -874,3 +874,19 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
   .r-th span:not(:first-child) { font-size: .56rem; letter-spacing: .02em; writing-mode: vertical-rl; transform: rotate(180deg); justify-self: center; padding: 6px 0; }
   .r-schritt .r-titel { padding-left: 18px; }
 }
+
+/* ---------- Regler (z. B. Budgetvorstellung) ---------- */
+.ff-regler { display: grid; gap: 6px; }
+.regler-wert { font: 400 1.5rem/1.1 var(--serif); color: var(--tinte); }
+.ff-regler.unberuehrt .regler-wert { font: 500 .95rem/1.4 inherit; color: var(--leise); }
+.regler { -webkit-appearance: none; appearance: none; width: 100%; height: 28px; background: transparent; cursor: pointer; margin: 0; }
+.regler::-webkit-slider-runnable-track { height: 6px; border-radius: 99px; background: linear-gradient(90deg, var(--tinte), var(--akzent)); }
+.regler::-moz-range-track { height: 6px; border-radius: 99px; background: linear-gradient(90deg, var(--tinte), var(--akzent)); }
+.regler::-webkit-slider-thumb { -webkit-appearance: none; width: 26px; height: 26px; margin-top: -10px; border-radius: 50%; background: #fff; border: 3px solid var(--tinte); box-shadow: 0 2px 6px rgb(0 0 0 / .18); transition: transform 150ms var(--ease-out, ease); }
+.regler::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: #fff; border: 3px solid var(--tinte); box-shadow: 0 2px 6px rgb(0 0 0 / .18); }
+.regler:active::-webkit-slider-thumb { transform: scale(1.12); }
+.regler:focus-visible { outline: 2px solid var(--akzent); outline-offset: 4px; border-radius: 6px; }
+.ff-regler.unberuehrt .regler::-webkit-slider-runnable-track { background: var(--fuge-stark); }
+.ff-regler.unberuehrt .regler::-moz-range-track { background: var(--fuge-stark); }
+.ff-regler.unberuehrt .regler::-webkit-slider-thumb { border-color: var(--leise); }
+.regler-skala { display: flex; justify-content: space-between; font-size: .76rem; color: var(--leise); }

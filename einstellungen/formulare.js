@@ -5,6 +5,7 @@
      abschnitt   Zwischenüberschrift                 { titel }
      text        einzeilig            textarea  mehrzeilig
      zahl        Zahl (einheit: "m²")  datum     Datum
+     regler      Schieberegler        { min, max, schritt, einheit: "€" }
      janein      Ja / Nein
      auswahl     eine Option          { optionen: [...] }
      mehrfach    mehrere Optionen     { optionen: [...] }
@@ -92,8 +93,7 @@
         { typ: "abschnitt", titel: "3. Realisierung & 4. Budget" },
         { id: "von", typ: "text", label: "Realisierungszeitraum von", breite: "halb" },
         { id: "bis", typ: "text", label: "bis", breite: "halb" },
-        { id: "budget", typ: "auswahl", label: "Budgetvorstellung", optionen: ["ca. 10.000 €", "ca. 15.000 €", "ca. 30.000 €", "anderes"], pflicht: true },
-        { id: "budgetFrei", typ: "text", label: "Budget (eigene Angabe)", wenn: { feld: "budget", wert: "anderes" } },
+        { id: "budget", typ: "regler", label: "Budgetvorstellung", min: 10000, max: 50000, schritt: 100, einheit: "€", pflicht: true },
 
         { typ: "abschnitt", titel: "5. Bemerkungen" },
         { id: "bemerkungen", typ: "textarea", label: "Bemerkungen" },

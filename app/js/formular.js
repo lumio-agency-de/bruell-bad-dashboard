@@ -41,6 +41,13 @@
   };
   const quellWert = (f, p) => { const [fid, feld] = f.quelle.split("."); return werteVon(p, fid)[feld]; };
 
+  /* Regler: Zahl aus dem gespeicherten Wert (alte Angaben wie „ca. 15.000 €“ werden übernommen) */
+  function reglerZahl(f, v) {
+    if (v === undefined || v === null || v === "") return null;
+    const n = typeof v === "number" ? v : Number(String(v).replace(/[^\d]/g, ""));
+    return Number.isFinite(n) && n > 0 ? Math.min(f.max, Math.max(f.min, n)) : null;
+  }
+  const reglerText = (f, n) => `${Number(n).toLocaleString("de-DE")}${f.einheit ? " " + f.einheit : ""}`;
   function gefuellt(f, v, p, dateien) {
     switch (f.typ) {
       case "abschnitt": return true;
@@ -105,6 +112,12 @@
         return `<h3 class="ff-abschnitt" id="abs-${esc(f.titel.replace(/\W+/g, "-"))}">${esc(f.titel)}</h3>`;
       case "text": case "zahl": case "datum":
         return wrap(`<label>${lab}<span class="ff-eingabe-wrap"><input class="eingabe" ${attr} type="${f.typ === "zahl" ? "number" : f.typ === "datum" ? "date" : "text"}" value="${esc(v)}"${f.typ === "zahl" ? ' inputmode="decimal" step="any"' : ""}>${f.einheit ? `<span class="einheit">${esc(f.einheit)}</span>` : ""}</span></label>`);
+      case "regler": {
+        const n = reglerZahl(f, v), gesetzt = n != null;
+        return wrap(`<label class="ff-regler${gesetzt ? "" : " unberuehrt"}">${lab}<output class="regler-wert" data-regler-ausgabe>${gesetzt ? esc(reglerText(f, n)) : "bitte einstellen"}</output>
+          <input type="range" class="regler" ${attr} min="${f.min}" max="${f.max}" step="${f.schritt || 1}" value="${gesetzt ? n : Math.round((f.min + f.max) / 2 / (f.schritt || 1)) * (f.schritt || 1)}" data-einheit="${esc(f.einheit || "")}">
+          <span class="regler-skala" aria-hidden="true"><span>${esc(reglerText(f, f.min))}</span><span>${esc(reglerText(f, f.max))}</span></span></label>`);
+      }
       case "textarea":
         return wrap(`<label>${lab}<textarea class="eingabe" ${attr} rows="3">${esc(v)}</textarea></label>`);
       case "kunde":
@@ -262,6 +275,7 @@
     const leer = '<span class="d-leer">—</span>';
     switch (f.typ) {
       case "wer": { const x = f.quelle ? quellWert(f, ctx.p) : v; return x ? esc(werName(x, ctx.firma)) : leer; }
+      case "regler": { const n = reglerZahl(f, v); return n != null ? esc(reglerText(f, n)) : leer; }
       case "janein": return v ? (v === "ja" ? "Ja" : "Nein") : leer;
       case "mehrfach": return Array.isArray(v) && v.length ? esc(v.join(", ")) : leer;
       case "datum": return v ? esc(new Date(v + "T00:00").toLocaleDateString("de-DE")) : leer;
