@@ -138,6 +138,8 @@
       }
       case "janein":
         return wrap(`${lab}<div class="seg" role="radiogroup">${["ja", "nein"].map((o) => `<button type="button" class="seg-k${v === o ? " an" : ""}" data-ff-wahl="${esc(f.id)}" data-wert="${o}" role="radio" aria-checked="${v === o}">${o === "ja" ? "Ja" : "Nein"}</button>`).join("")}</div>
+          ${f.beiJaFormular && v === "ja" && def(f.beiJaFormular) ? (() => { const n = Object.keys(werteVon(p, f.beiJaFormular)).filter((k) => !k.startsWith("_")).length;
+            return `<a class="btn ${n ? "" : "jetzt "}klein ff-folge" href="#/projekt/${esc(p.id)}/formular/${esc(f.beiJaFormular)}">${esc(def(f.beiJaFormular).titel)} ${n ? "ansehen" : "ausfüllen"} →</a>`; })() : ""}
           ${f.beiJa && v === "ja" ? `<input class="eingabe ff-beija" data-ff="${esc(f.id)}Text" value="${esc(w[f.id + "Text"] || "")}" placeholder="${esc(f.beiJa === true ? "Details …" : f.beiJa)}" aria-label="${esc(f.label)} – Details">` : ""}`);
       case "auswahl":
         return wrap(`${lab}<div class="chips" role="radiogroup">${f.optionen.map((o) => `<button type="button" class="chip${v === o ? " an" : ""}" data-ff-wahl="${esc(f.id)}" data-wert="${esc(o)}" role="radio" aria-checked="${v === o}">${esc(o)}</button>`).join("")}</div>`);

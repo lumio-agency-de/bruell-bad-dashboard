@@ -7,6 +7,7 @@
      zahl        Zahl (einheit: "m²")  datum     Datum
      regler      Schieberegler        { min, max, schritt, einheit: "€" }
      janein      Ja / Nein   { beiJa: "Platzhalter" } → bei „Ja“ erscheint ein Eingabefeld
+                                { beiJaFormular: "tuer" } → bei „Ja“ erscheint ein Knopf zu diesem Formular
      auswahl     eine Option          { optionen: [...] }
      mehrfach    mehrere Optionen     { optionen: [...] }
      kunde       Feld der Kundendaten (wird mit dem Projekt geteilt)   { feld: "vorname" }
@@ -144,7 +145,7 @@
       vorlage: "vorlagen/06-baustellenbesichtigung/Checkliste-Baustellenbesichtigung.docx",
       felder: [
         { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:baustellenbesichtigung" },
-        { id: "tuertausch", typ: JN, label: "Türentausch geplant? (bei Ja folgt „Angaben zur Tür“)", pflicht: true, breite: "halb" },
+        { id: "tuertausch", typ: JN, label: "Türentausch geplant?", pflicht: true, breite: "halb", beiJaFormular: "tuer" },
         { typ: "abschnitt", titel: "Vor Ort erledigt" },
         { id: "check", typ: "checkliste", modus: "janein", label: "Checkliste", pflicht: true, punkte: [
           { id: "fotoBad", label: "Fotos vom Bad" },
