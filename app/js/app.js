@@ -305,14 +305,19 @@
 
   /* ---------- Spiel-Logik: Schritte & Level ---------- */
   const sKey = (nr, s) => `${nr}:${s.id}`;
-  function schrittGilt(p, nr, s) {
-    if (!s.wenn) return true;
-    if (s.wenn.schritt) return ((p.schritte || {})[`${nr}:${s.wenn.schritt}`] || {}).wahl === s.wenn.wert;
-    if (s.wenn.formular) {
-      const w = Formular.werteVon(p, s.wenn.formular)[s.wenn.feld];
-      return Array.isArray(w) ? w.includes(s.wenn.wert) : w === s.wenn.wert;
+  /* wenn: eine Bedingung oder eine Liste (eine davon genügt); undLeer: "formular.feld" muss noch leer sein */
+  function bedingung(p, nr, c) {
+    if (c.undLeer) { const [fid, feld] = c.undLeer.split("."); const x = Formular.werteVon(p, fid)[feld]; if (x !== undefined && x !== "") return false; }
+    if (c.schritt) return ((p.schritte || {})[`${nr}:${c.schritt}`] || {}).wahl === c.wert;
+    if (c.formular) {
+      const w = Formular.werteVon(p, c.formular)[c.feld];
+      return Array.isArray(w) ? w.includes(c.wert) : w === c.wert;
     }
     return true;
+  }
+  function schrittGilt(p, nr, s) {
+    if (!s.wenn) return true;
+    return (Array.isArray(s.wenn) ? s.wenn : [s.wenn]).some((c) => bedingung(p, nr, c));
   }
   function schrittErledigt(p, nr, s) {
     if (p.demo && nr < p.phase) return true;

@@ -896,3 +896,6 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .q-notiz { display: block; }
 .q-notiz textarea { width: 100%; min-height: 96px; resize: vertical; }
 .ff-folge { margin-top: 8px; display: inline-flex; }
+.ff-datumzeit { display: flex; align-items: center; gap: 8px; }
+.ff-datumzeit input[type=date] { flex: 1 1 auto; min-width: 0; }
+.ff-datumzeit .zeit { flex: 0 0 120px; }

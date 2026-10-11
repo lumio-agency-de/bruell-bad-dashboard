@@ -28,7 +28,8 @@
      wenn: { feld, wert }        nur sichtbar, wenn ein anderes Feld diesen Wert hat
      wenn: { formular, feld, wert }  … oder ein Feld eines anderen Formulars
                                     (ist das andere Formular leer, wird angezeigt)
-     vorbelegen: "termin:erstgespraech" | "heute"
+     vorbelegen: "termin:erstgespraech" | "heute" | "feld:formular.feld"
+     uhrzeit: true (bei datum) → zusätzliches Uhrzeit-Feld, aus dem Termin vorbelegt
    ========================================================================== */
 
 (function () {
@@ -105,7 +106,7 @@
       titel: "Erstgesprächs-Notizen",
       vorlage: "vorlagen/03-erstgespraech/Erstgespraechs-Notizen.docx",
       felder: [
-        { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:erstgespraech" },
+        { id: "datum", typ: "datum", uhrzeit: true, label: "Datum & Uhrzeit", pflicht: true, breite: "halb", vorbelegen: "termin:erstgespraech" },
         { id: "budgetBesprochen", typ: "zahl", label: "Besprochenes Budget", einheit: "€", breite: "halb" },
         { typ: "abschnitt", titel: "Was soll gemacht werden?" },
         { id: "sanierung", typ: "auswahl", label: "Sanierung", optionen: ["Komplettsanierung", "Teilsanierung"], pflicht: true, breite: "halb" },
@@ -144,8 +145,8 @@
       titel: "Checkliste Baustellenbesichtigung",
       vorlage: "vorlagen/06-baustellenbesichtigung/Checkliste-Baustellenbesichtigung.docx",
       felder: [
-        { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:baustellenbesichtigung" },
-        { id: "tuertausch", typ: JN, label: "Türentausch geplant?", pflicht: true, breite: "halb", beiJaFormular: "tuer" },
+        { id: "datum", typ: "datum", uhrzeit: true, label: "Datum & Uhrzeit", pflicht: true, breite: "halb", vorbelegen: "termin:baustellenbesichtigung" },
+        { id: "tuertausch", typ: JN, label: "Türentausch geplant?", pflicht: true, breite: "halb", beiJaFormular: "tuer", vorbelegen: "feld:erstgespraech.tuer" },
         { typ: "abschnitt", titel: "Vor Ort erledigt" },
         { id: "check", typ: "checkliste", modus: "janein", label: "Checkliste", pflicht: true, punkte: [
           { id: "fotoBad", label: "Fotos vom Bad" },
@@ -278,7 +279,7 @@
         { typ: "abschnitt", titel: "Eigene Notizen" },
         { id: "notizen", typ: "textarea", label: "Notizen zum Auswahlgespräch" },
         { typ: "abschnitt", titel: "Bestätigung" },
-        { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:materialauswahl" },
+        { id: "datum", typ: "datum", uhrzeit: true, label: "Datum & Uhrzeit", pflicht: true, breite: "halb", vorbelegen: "termin:materialauswahl" },
         { id: "unterschrift", typ: "unterschrift", label: "Unterschrift Kunde", pflicht: true },
       ],
     },
@@ -368,7 +369,7 @@
       titel: "Abnahmeprotokoll Fertigmontage",
       vorlage: "vorlagen/10-baustellenablauf/Abnahmeprotokoll-Fertigmontage.pdf",
       felder: [
-        { id: "datum", typ: "datum", label: "Datum", pflicht: true, breite: "halb", vorbelegen: "termin:abnahme" },
+        { id: "datum", typ: "datum", uhrzeit: true, label: "Datum & Uhrzeit", pflicht: true, breite: "halb", vorbelegen: "termin:abnahme" },
         { typ: "abschnitt", titel: "Waschtisch-Anlage + Möbel", wenn: { formular: "auswahl", feld: "waschtisch-noetig", wert: "ja" } },
         { id: "wt", typ: "checkliste", modus: "pruefung", pflicht: true, wenn: { formular: "auswahl", feld: "waschtisch-noetig", wert: "ja" }, punkte: [
           { id: "fronten", label: "Schubladen- / Türfronten sind ausgerichtet" },

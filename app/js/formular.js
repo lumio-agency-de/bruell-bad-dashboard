@@ -110,7 +110,11 @@
     switch (f.typ) {
       case "abschnitt":
         return `<h3 class="ff-abschnitt" id="abs-${esc(f.titel.replace(/\W+/g, "-"))}">${esc(f.titel)}</h3>`;
-      case "text": case "zahl": case "datum":
+      case "datum":
+        if (f.uhrzeit) return wrap(`${lab}<span class="ff-datumzeit"><input class="eingabe" ${attr} type="date" value="${esc(v)}" aria-label="${esc(f.label)}">
+          <input class="eingabe zeit" data-ff="${esc(f.id)}Zeit" type="time" step="300" value="${esc(w[f.id + "Zeit"] || "")}" aria-label="Uhrzeit"><span class="einheit">Uhr</span></span>`);
+      // fallthrough
+      case "text": case "zahl":
         return wrap(`<label>${lab}<span class="ff-eingabe-wrap"><input class="eingabe" ${attr} type="${f.typ === "zahl" ? "number" : f.typ === "datum" ? "date" : "text"}" value="${esc(v)}"${f.typ === "zahl" ? ' inputmode="decimal" step="any"' : ""}>${f.einheit ? `<span class="einheit">${esc(f.einheit)}</span>` : ""}</span></label>`);
       case "regler": {
         const n = reglerZahl(f, v), gesetzt = n != null;
@@ -265,8 +269,14 @@
     const fo = (p.formulare[id] = p.formulare[id] || { werte: {} });
     let geaendert = false;
     for (const f of d.felder) {
+      /* Uhrzeit aus dem Termin übernehmen – auch nachträglich, wenn das Datum schon steht und zum Termin passt */
+      if (f.uhrzeit && f.vorbelegen && f.vorbelegen.startsWith("termin:") && !fo.werte[f.id + "Zeit"]) {
+        const t = (p.termine || {})[f.vorbelegen.slice(7)] || "";
+        if (t.length > 10 && (!fo.werte[f.id] || fo.werte[f.id] === t.slice(0, 10))) { fo.werte[f.id + "Zeit"] = t.slice(11, 16); geaendert = true; }
+      }
       if (!f.vorbelegen || fo.werte[f.id]) continue;
       if (f.vorbelegen === "heute") fo.werte[f.id] = new Date().toISOString().slice(0, 10);
+      else if (f.vorbelegen.startsWith("feld:")) { const [fid, feld] = f.vorbelegen.slice(5).split("."); const x = werteVon(p, fid)[feld]; if (x) fo.werte[f.id] = x; }
       else if (f.vorbelegen.startsWith("termin:")) { const t = (p.termine || {})[f.vorbelegen.slice(7)]; if (t) fo.werte[f.id] = t.slice(0, 10); }
       if (fo.werte[f.id]) geaendert = true;
     }
@@ -281,7 +291,7 @@
       case "regler": { const n = reglerZahl(f, v); return n != null ? esc(reglerText(f, n)) : leer; }
       case "janein": { if (!v) return leer; const t = v === "ja" && f.beiJa && ctx.w ? ctx.w[f.id + "Text"] : ""; return (v === "ja" ? "Ja" : "Nein") + (t ? " – " + esc(t) : ""); }
       case "mehrfach": return Array.isArray(v) && v.length ? esc(v.join(", ")) : leer;
-      case "datum": return v ? esc(new Date(v + "T00:00").toLocaleDateString("de-DE")) : leer;
+      case "datum": { if (!v) return leer; const z = f.uhrzeit && ctx.w ? ctx.w[f.id + "Zeit"] : ""; return esc(new Date(v + "T00:00").toLocaleDateString("de-DE")) + (z ? `, ${esc(z)} Uhr` : ""); }
       case "unterschrift": return v ? `<img class="d-sign" src="${esc(v)}" alt="Unterschrift">` : '<span class="d-linie"></span>';
       case "dateien": { const n = ctx.dateien.filter((d) => d.kategorie === f.kategorie); return n.length ? esc(n.map((d) => d.name).join(", ")) : leer; }
       default: return v !== undefined && v !== "" ? esc(v).replace(/\n/g, "<br>") + (f.einheit ? " " + esc(f.einheit) : "") : leer;
