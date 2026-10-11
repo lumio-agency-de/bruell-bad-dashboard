@@ -1297,16 +1297,36 @@
     }
   }
   /* Baustellenplan: Gewerke + Firmen aus den „Wer“-Feldern der Projekt-Übersicht übernehmen */
+  /* Baustellenplan: je benötigtem Gewerk eine Zeile – Firma aus der Projekt-Übersicht, Termin aus dem Gewerke-Formular.
+     Leere Felder bestehender Zeilen werden nachgefüllt, Eingaben im Plan bleiben unangetastet. */
+  const subsQuellen = () => ((Formular.def("baustellenplan").felder || []).find((f) => f.id === "subs") || {}).vorbelegenAus || [];
   function subsVorbelegen(p) {
     const w = formularWerte(p, "baustellenplan"), pu = Formular.werteVon(p, "projektuebersicht");
-    const rows = Array.isArray(w.subs) ? w.subs : [];
-    const vorhanden = new Set(rows.map((r) => r && r.gewerk));
-    const neu = (Formular.def("projektuebersicht").felder || [])
-      .filter((f) => f.typ === "wer" && pu[f.id] && Formular.sichtbar(f, pu, p) && !vorhanden.has(f.gewerk))
-      .map((f) => ({ gewerk: f.gewerk, firma: Formular.werName(pu[f.id], cfg()), _auto: 1 }));
-    if (!neu.length) return false;
-    w.subs = [...rows.filter((r) => r && Object.values(r).some((x) => x !== "" && x != null && x !== false)), ...neu];
-    return true;
+    let rows = (Array.isArray(w.subs) ? w.subs : []).filter((r) => r && Object.values(r).some((x) => x !== "" && x != null && x !== false));
+    let geaendert = rows.length !== (w.subs || []).length;
+    for (const q of subsQuellen()) {
+      const v = pu[q.wenn.feld];
+      if (!(Array.isArray(v) ? v.includes(q.wenn.wert) : v === q.wenn.wert)) continue;
+      const firma = q.wer && pu[q.wer] ? Formular.werName(pu[q.wer], cfg()) : "";
+      const [tf, tk] = (q.termin || "").split("."), termin = tf ? Formular.werteVon(p, tf)[tk] : "";
+      const tText = termin ? fDatum(new Date(termin + "T00:00")) : "";
+      let r = rows.find((x) => x.gewerk === q.gewerk);
+      if (!r) { rows.push((r = { gewerk: q.gewerk, _auto: 1 })); geaendert = true; }
+      if (!r.firma && firma) { r.firma = firma; geaendert = true; }
+      if (!r.termin && tText) { r.termin = tText; geaendert = true; }
+    }
+    if (geaendert) w.subs = rows;
+    return geaendert;
+  }
+  /* Firma im Plan gewählt → zurück in die Projekt-Übersicht + Partner bekommt Zugriff */
+  function subsFirmaUebernehmen(p, row) {
+    const q = subsQuellen().find((x) => x.gewerk === row.gewerk && x.wer); if (!q) return;
+    const c = cfg(), pa = (c.partner || []).find((x) => x.firma === row.firma);
+    const id = pa ? pa.id : row.firma === Formular.werName(Formular.EIGEN, c) ? Formular.EIGEN : null;
+    if (!id) return;
+    const pu = formularWerte(p, "projektuebersicht");
+    if (pu[q.wer] !== id) pu[q.wer] = id;
+    if (pa && !(p.zugriff || []).includes(pa.id)) { p.zugriff = [...(p.zugriff || []), pa.id]; (p.verlauf = p.verlauf || []).unshift({ ts: Date.now(), text: `Automatisch zugewiesen (${row.gewerk}): ${pa.firma}`, von: S.ich ? S.ich.name : "" }); }
   }
   function formularWerte(p, fid) {
     p.formulare = p.formulare || {};
@@ -1895,12 +1915,12 @@
       { zustaendig: pl[0] || "", projektnr: "B-2026-027", termine: { erstgespraech: t(-30, "10:00"), angebotsbesprechung: t(-9, "15:00") } });
     mk({ anrede: "Herr", vorname: "Jonas", nachname: "Vorlage", ort: "71101 Schönaich", strasse: "Gartenstr.", hausnr: "8", email: "jonas@beispiel.de" }, 7,
       { zustaendig: pl[1] || "", projektnr: "B-2026-019", termine: { baustellenbesichtigung: t(-12, "08:30"), materialauswahl: t(-4, "10:00") },
-        formulare: { projektuebersicht: { werte: { abriss: "ja", abrissWer: "eigen", elektriker: "ja", fliesen: "ja", fliesenWo: ["Wand", "Boden"], decke: ["Spanndecke"], fenster: "nein", tuer: "nein" } } } });
+        formulare: { projektuebersicht: { werte: { abriss: "ja", abrissWer: "eigen", elektriker: "ja", fliesen: "ja", fliesenWo: ["Wand", "Boden"], decke: ["Spanndecke"], fenster: "nein", tuer: "nein", maler: "nein" } } } });
     const mo = monteure().map((m) => m.kuerzel), pa = (cfg().partner || []).map((x) => x.id);
     mk({ anrede: "Familie", nachname: "Testfeld", ort: "71093 Weil im Schönbuch", strasse: "Schulstr.", hausnr: "1", email: "testfeld@beispiel.de", telefon: "07157 000000" }, 11,
       { zustaendig: pl[0] || "", projektnr: "B-2026-011", termine: { baustart: t(5), abnahme: t(16, "10:00") }, zugriff: [...mo.slice(0, 1), ...pa],
         notiz: "Interne Notiz: Kunde zahlt in zwei Raten.",
-        formulare: { projektuebersicht: { werte: { abriss: "ja", abrissWer: "eigen", elektriker: "ja", elektrikerWer: pa[0] || "eigen", fliesen: "ja", fliesenWer: pa[1] || "eigen", fliesenWo: ["Wand", "Boden"], decke: ["Streichen"], fenster: "nein", tuer: "nein", licht: ["Decke", "Spiegelschrank"], lichtNotiz: "2 Deckenspots über der Dusche" } },
+        formulare: { projektuebersicht: { werte: { abriss: "ja", abrissWer: "eigen", elektriker: "ja", elektrikerWer: pa[0] || "eigen", fliesen: "ja", fliesenWer: pa[1] || "eigen", fliesenWo: ["Wand", "Boden"], decke: ["Streichen"], fenster: "nein", tuer: "nein", maler: "ja", malerWer: "eigen", licht: ["Decke", "Spiegelschrank"], lichtNotiz: "2 Deckenspots über der Dusche" } },
           elektro: { werte: { firma: "Elektro-Partner", posten: [{ jn: "ja", wo: "Unterverteilung Flur" }, { jn: "ja", wo: "Decke über Dusche", anzahl: "2" }] } },
           fliesen: { werte: { firma: "Fliesen-Partner", flaechen: [{ menge: "24 m²", groesse: "60×120", verlegeart: "Halbverband", bez: "Feinsteinzeug Sand" }, { menge: "6 m²", groesse: "60×60", verlegeart: "Kreuzfuge", bez: "Feinsteinzeug Anthrazit" }] } } } });
   }
@@ -2396,6 +2416,10 @@
       if (og) {
         const q = finde(seite.dataset.projekt), rows = formularWerte(q, seite.dataset.formular)[el.dataset.tab] || [], row = rows[Number(el.dataset.zeile)];
         if (row && !row.gewerk) aendern(q, () => { row.gewerk = og; });
+      }
+      if (seite.dataset.formular === "baustellenplan" && el.dataset.tab === "subs" && el.dataset.spalte === "firma" && el.value) {
+        const q = finde(seite.dataset.projekt), row = (formularWerte(q, "baustellenplan").subs || [])[Number(el.dataset.zeile)];
+        if (row) aendern(q, (x) => subsFirmaUebernehmen(x, row));
       }
       if ((el.dataset.ff && el.tagName === "SELECT") || (el.dataset.tab && (el.type === "checkbox" || el.tagName === "SELECT"))) formularNeuZeichnen(finde(seite.dataset.projekt), seite.dataset.formular, true);
       return;

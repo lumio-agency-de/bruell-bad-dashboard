@@ -154,7 +154,8 @@ window.ABLAUF = [
       { id: "fliesen", typ: "formular", formular: "fliesen", titel: "Fliesenarbeiten", wenn: { formular: "projektuebersicht", feld: "fliesen", wert: "ja" } },
       { id: "elektro", typ: "formular", formular: "elektro", titel: "Elektroarbeiten", wenn: { formular: "projektuebersicht", feld: "elektriker", wert: "ja" } },
       { id: "abriss", typ: "formular", formular: "abriss", titel: "Abrissarbeiten", wenn: { formular: "projektuebersicht", feld: "abriss", wert: "ja" } },
-      { id: "decke", typ: "dateien", kategorie: "auswahl", titel: "Bestellformular Spanndecke (DPS) ausgefüllt hochladen",
+      { id: "maler", typ: "formular", formular: "maler", titel: "Maler- & Trockenbauarbeiten", wenn: { formular: "projektuebersicht", feld: "maler", wert: "ja" } },
+      { id: "decke", typ: "formular", formular: "spanndecke", titel: "Spanndecke (Deckenbestellung DPS)",
         vorlage: [
           { titel: "Bestellformular Decke", datei: "vorlagen/07-materialauswahl/Bestellformular-Spanndecke.pdf" },
           { titel: "Bestellformular Zubehör", datei: "vorlagen/07-materialauswahl/Bestellformular-Spanndecke-Zubehoer.pdf" },
