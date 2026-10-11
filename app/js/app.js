@@ -557,6 +557,12 @@
       add("Kundenerinnerung vor Baustart senden", plusTage(bs, -f.kundenerinnerungVorBaustart), `Baustart ${fTermin(t.baustart)}`);
     const an = datum(t.abnahme);
     if (p.phase === 12 && an && tageBis(an) <= 0 && !m.schlussrechnung) add("Schlussrechnung senden", an, `Abnahme ${fTermin(t.abnahme)}`);
+    /* x Tage nach der Schlussrechnung: Abschluss prüfen & Google-Bewertung checken (bis eine Entscheidung getroffen ist) */
+    const bw = ((p.schritte || {})["13:bewertung"] || {}).wahl;
+    if (m.schlussrechnung && !["erhalten", "erinnert", "warten"].includes(bw)) {
+      const d = plusTage(new Date(m.schlussrechnung), f.bewertungNachRechnung ?? 7);
+      if (tageBis(d) <= 0) add("Abschluss prüfen & Google-Bewertung checken", d, `Schlussrechnung gesendet am ${fDatum(new Date(m.schlussrechnung))}`);
+    }
     return out;
   }
 
@@ -1158,6 +1164,10 @@
         break;
       case "entscheidung":
         meta = st.wahl ? esc(ersetzen((s.optionen.find((o) => o.id === st.wahl) || {}).label || "")) : "";
+        if (s.seitMail && (p.mails || {})[s.seitMail]) {
+          const gs = new Date(p.mails[s.seitMail]), fr = (cfg().fristen || {}).bewertungNachRechnung ?? 7;
+          meta = (meta ? meta + " · " : "") + `Schlussrechnung gesendet am ${fDatum(gs)}${st.wahl ? "" : ` · prüfen ab ${fDatum(plusTage(gs, fr))}`}`;
+        }
         inhalt = `<div class="chips">${s.optionen.map((o) => `<button type="button" class="chip${st.wahl === o.id ? " an" : ""}${o.status === "verloren" ? " warn" : ""}" data-aktion="wahl" data-key="${key}" data-nr="${nr}" data-schritt="${s.id}" data-wert="${o.id}">${esc(ersetzen(o.label))}</button>`).join("")}</div>`;
         break;
       case "team": {
@@ -1721,6 +1731,7 @@
           ${f("fristen.angebotsverfolgung", "Angebotsverfolgung – Tage nach Besprechung", c.fristen.angebotsverfolgung, "number")}
           ${f("fristen.freigabeNachMaterialauswahl", "Freigabe – Tage nach Materialauswahl", c.fristen.freigabeNachMaterialauswahl, "number")}
           ${f("fristen.kundenerinnerungVorBaustart", "Kundenerinnerung – Tage vor Baustart", c.fristen.kundenerinnerungVorBaustart, "number")}
+          ${f("fristen.bewertungNachRechnung", "Google-Bewertung prüfen – Tage nach Schlussrechnung", c.fristen.bewertungNachRechnung ?? 7, "number")}
         </div></section>
         <section class="panel"><h3>Für eine andere Firma übernehmen</h3>
           <p class="leise">Einstellungen übernehmen, dann als <code>firma.js</code> herunterladen und im Ordner <code>einstellungen/</code> ersetzen. Level, Formulare und Mailtexte stehen in <code>ablauf.js</code>, <code>formulare.js</code> und <code>mailvorlagen.js</code> – siehe <code>ANLEITUNG.md</code>.</p>

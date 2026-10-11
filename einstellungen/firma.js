@@ -122,6 +122,7 @@ window.FIRMA = {
     angebotsverfolgung: 7,            // nach Angebotsbesprechung
     freigabeNachMaterialauswahl: 3,   // Exposé zur Freigabe schicken
     kundenerinnerungVorBaustart: 7,
+    bewertungNachRechnung: 7,         // Abschluss prüfen & Google-Bewertung checken
   },
 };
 

@@ -227,7 +227,7 @@ window.ABLAUF = [
     nr: 13, titel: "Abschluss", abschnitt: "baustelle",
     ziel: "Bewertung, Bilder fürs Showroom — dann archivieren.",
     schritte: [
-      { id: "bewertung", typ: "entscheidung", titel: "Google-Bewertung",
+      { id: "bewertung", typ: "entscheidung", titel: "Google-Bewertung", seitMail: "schlussrechnung",
         optionen: [
           { id: "erhalten", label: "Bewertung erhalten & beantwortet" },
           { id: "erinnert", label: "Erinnert – keine Bewertung" },
