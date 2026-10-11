@@ -890,3 +890,6 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .ff-regler.unberuehrt .regler::-moz-range-track { background: var(--fuge-stark); }
 .ff-regler.unberuehrt .regler::-webkit-slider-thumb { border-color: var(--leise); }
 .regler-skala { display: flex; justify-content: space-between; font-size: .76rem; color: var(--leise); }
+
+/* Ja/Nein mit Eingabefeld bei „Ja“ */
+.ff-beija { margin-top: 8px; width: 100%; }

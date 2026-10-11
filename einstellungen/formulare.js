@@ -6,7 +6,7 @@
      text        einzeilig            textarea  mehrzeilig
      zahl        Zahl (einheit: "m²")  datum     Datum
      regler      Schieberegler        { min, max, schritt, einheit: "€" }
-     janein      Ja / Nein
+     janein      Ja / Nein   { beiJa: "Platzhalter" } → bei „Ja“ erscheint ein Eingabefeld
      auswahl     eine Option          { optionen: [...] }
      mehrfach    mehrere Optionen     { optionen: [...] }
      kunde       Feld der Kundendaten (wird mit dem Projekt geteilt)   { feld: "vorname" }
@@ -120,13 +120,13 @@
         { id: "fliesenAlt", typ: "auswahl", label: "Fliesen", optionen: ["raus", "bleiben"], pflicht: true, breite: "halb" },
         { id: "fliesenAltWo", typ: "mehrfach", label: "Wo?", optionen: ["Wand", "Boden"], breite: "halb" },
         { typ: "abschnitt", titel: "Wand / Boden / Decke" },
-        { id: "fugenlos", typ: JN, label: "Fugenlos", pflicht: true, breite: "drittel" },
-        { id: "wandFliesen", typ: JN, label: "Wand: Fliesen", breite: "drittel" },
-        { id: "wandRenoDeko", typ: JN, label: "Wand: Reno Deko", breite: "drittel" },
-        { id: "wandPutz", typ: JN, label: "Wand: Putz", breite: "drittel" },
-        { id: "wandTapete", typ: JN, label: "Wand: Tapete", breite: "drittel" },
-        { id: "bodenFliesen", typ: JN, label: "Boden: Fliesen", breite: "drittel" },
-        { id: "bodenVinyl", typ: JN, label: "Boden: Vinyl", breite: "drittel" },
+        { id: "fugenlos", typ: JN, beiJa: "z. B. welches System, welche Flächen", label: "Fugenlos", pflicht: true, breite: "drittel" },
+        { id: "wandFliesen", typ: JN, beiJa: "z. B. Format, Höhe, welche Wände", label: "Wand: Fliesen", breite: "drittel" },
+        { id: "wandRenoDeko", typ: JN, beiJa: "z. B. Farbe, Flächen", label: "Wand: Reno Deko", breite: "drittel" },
+        { id: "wandPutz", typ: JN, beiJa: "z. B. Putzart, Flächen", label: "Wand: Putz", breite: "drittel" },
+        { id: "wandTapete", typ: JN, beiJa: "z. B. welche Tapete, Flächen", label: "Wand: Tapete", breite: "drittel" },
+        { id: "bodenFliesen", typ: JN, beiJa: "z. B. Format, Farbe", label: "Boden: Fliesen", breite: "drittel" },
+        { id: "bodenVinyl", typ: JN, beiJa: "z. B. Dekor, Fläche", label: "Boden: Vinyl", breite: "drittel" },
         { id: "wbdNotiz", typ: "textarea", label: "Wand / Boden / Decke – Notizen" },
         { typ: "abschnitt", titel: "Elektrik, Fenster, Tür" },
         { id: "fi", typ: JN, label: "FI-Schutzschalter vorhanden", pflicht: true, breite: "drittel" },

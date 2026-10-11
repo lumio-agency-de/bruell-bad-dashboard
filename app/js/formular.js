@@ -137,7 +137,8 @@
           ${andere.length ? `<optgroup label="Andere Partner">${andere.map((x) => o(x.id, `${x.firma} · ${x.gewerk}`)).join("")}</optgroup>` : ""}</select></label>`);
       }
       case "janein":
-        return wrap(`${lab}<div class="seg" role="radiogroup">${["ja", "nein"].map((o) => `<button type="button" class="seg-k${v === o ? " an" : ""}" data-ff-wahl="${esc(f.id)}" data-wert="${o}" role="radio" aria-checked="${v === o}">${o === "ja" ? "Ja" : "Nein"}</button>`).join("")}</div>`);
+        return wrap(`${lab}<div class="seg" role="radiogroup">${["ja", "nein"].map((o) => `<button type="button" class="seg-k${v === o ? " an" : ""}" data-ff-wahl="${esc(f.id)}" data-wert="${o}" role="radio" aria-checked="${v === o}">${o === "ja" ? "Ja" : "Nein"}</button>`).join("")}</div>
+          ${f.beiJa && v === "ja" ? `<input class="eingabe ff-beija" data-ff="${esc(f.id)}Text" value="${esc(w[f.id + "Text"] || "")}" placeholder="${esc(f.beiJa === true ? "Details …" : f.beiJa)}" aria-label="${esc(f.label)} – Details">` : ""}`);
       case "auswahl":
         return wrap(`${lab}<div class="chips" role="radiogroup">${f.optionen.map((o) => `<button type="button" class="chip${v === o ? " an" : ""}" data-ff-wahl="${esc(f.id)}" data-wert="${esc(o)}" role="radio" aria-checked="${v === o}">${esc(o)}</button>`).join("")}</div>`);
       case "mehrfach": {
@@ -276,7 +277,7 @@
     switch (f.typ) {
       case "wer": { const x = f.quelle ? quellWert(f, ctx.p) : v; return x ? esc(werName(x, ctx.firma)) : leer; }
       case "regler": { const n = reglerZahl(f, v); return n != null ? esc(reglerText(f, n)) : leer; }
-      case "janein": return v ? (v === "ja" ? "Ja" : "Nein") : leer;
+      case "janein": { if (!v) return leer; const t = v === "ja" && f.beiJa && ctx.w ? ctx.w[f.id + "Text"] : ""; return (v === "ja" ? "Ja" : "Nein") + (t ? " – " + esc(t) : ""); }
       case "mehrfach": return Array.isArray(v) && v.length ? esc(v.join(", ")) : leer;
       case "datum": return v ? esc(new Date(v + "T00:00").toLocaleDateString("de-DE")) : leer;
       case "unterschrift": return v ? `<img class="d-sign" src="${esc(v)}" alt="Unterschrift">` : '<span class="d-linie"></span>';
@@ -302,7 +303,7 @@
         const txt = { true: "✓", ja: "Ja", nein: "Nein", ok: "in Ordnung", mangel: "MANGEL", entfaellt: "entfällt" };
         return `<table class="d-tab d-check"><tbody>${f.punkte.map((pt) => { const e = o[pt.id] || {}; return `<tr><td>${esc(pt.label)}</td><td class="${e.s === "mangel" ? "d-mangel" : ""}">${e.s ? txt[e.s] : "☐"}</td><td>${esc(e.n || "")}</td></tr>`; }).join("")}</tbody></table>`;
       }
-      return `<div class="d-zeile${f.typ === "unterschrift" ? " d-unterschrift" : ""}"><b>${esc(f.label)}</b><span>${druckWert(f, v, { ...ctx, p })}</span></div>`;
+      return `<div class="d-zeile${f.typ === "unterschrift" ? " d-unterschrift" : ""}"><b>${esc(f.label)}</b><span>${druckWert(f, v, { ...ctx, p, w })}</span></div>`;
     }).join("");
     return `<section class="d-seite"><header class="d-kopf"><img src="${esc(ctx.firma.logo)}" alt=""><div><strong>${esc(d.titel)}</strong><span>${esc(ctx.kopfzeile)}</span></div></header>
       <div class="d-inhalt">${teile}</div>
