@@ -114,8 +114,8 @@ window.ABLAUF = [
       { id: "kwp-projekt", typ: "erledigt", titel: "Projekt in {programm.erp} angelegt",
         hinweis: "Titel „Realisierung Ihres Traumbades“, Abteilung Bad/Sanitär, rote Farbe. Musterangebot Titel für Titel anpassen." },
       { id: "projektnr", typ: "feld", feld: "projektnr", titel: "Projektnummer aus {programm.erp}" },
-      { id: "angebot", typ: "dateien", kategorie: "angebot", titel: "Angebot als PDF ablegen" },
       { id: "freigabe-intern", typ: "erledigt", titel: "{badberater} hat Angebot & Planung geprüft", ebene: ["geschaeftsfuehrung"] },
+      { id: "angebot", typ: "dateien", kategorie: "angebot", titel: "Angebot als PDF ablegen" },
     ],
   },
   {
@@ -140,9 +140,6 @@ window.ABLAUF = [
     ziel: "Vor Ort aufmessen und alles für Planung und Monteure festhalten.",
     schritte: [
       { id: "checkliste", typ: "formular", formular: "baustellenbesichtigung", titel: "Checkliste Baustellenbesichtigung", ebene: ["planung", "monteur"] },
-      { id: "tuer", typ: "formular", formular: "tuer", titel: "Angaben zur Tür", ebene: ["planung", "monteur"],
-        // erscheint, sobald im Erstgespräch „Türe: Ja“ angekreuzt ist – oder bei „Türentausch geplant: Ja“ in der Besichtigung
-        wenn: [{ formular: "baustellenbesichtigung", feld: "tuertausch", wert: "ja" }, { formular: "erstgespraech", feld: "tuer", wert: "ja", undLeer: "baustellenbesichtigung.tuertausch" }] },
       { id: "masse", typ: "erledigt", titel: "Raummaße in {programm.cad} übernommen, Planung angepasst" },
       { id: "ma-termin", typ: "termin", termin: "materialauswahl", titel: "Termin Materialauswahl in der Ausstellung" },
     ],

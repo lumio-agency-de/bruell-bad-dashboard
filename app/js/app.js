@@ -157,7 +157,13 @@
   const siehtListe = (s) => { const r = (cfg().rechte || {})[s.id]; return Array.isArray(r) ? r : rechteStandard(s); };
   const siehtSchritt = (s) => istGF() || siehtListe(s).includes(ebene());
   const darfSchritt = (s) => istGF() || (siehtSchritt(s) && (s.ebene || ["planung"]).includes(ebene()));
-  const formularSchritte = (fid) => ALLE_SCHRITTE.filter((s) => s.typ === "formular" && s.formular === fid);
+  /* Schritte, über die ein Formular erreichbar ist – auch indirekt (z. B. „Angaben zur Tür“ über den Knopf in der Besichtigung) */
+  const formularSchritte = (fid) => {
+    const direkt = ALLE_SCHRITTE.filter((s) => s.typ === "formular" && s.formular === fid);
+    if (direkt.length) return direkt;
+    const eltern = Object.keys(window.FORMULARE).filter((id) => (window.FORMULARE[id].felder || []).some((f) => f.beiJaFormular === fid));
+    return ALLE_SCHRITTE.filter((s) => s.typ === "formular" && eltern.includes(s.formular));
+  };
   const siehtFormular = (fid) => istGF() || (formularSchritte(fid).length ? formularSchritte(fid).some(siehtSchritt) : istBuero());
   /* Formulare, die ein Partner sieht: freigegeben UND (eigenes Gewerk oder keinem Gewerk zugeordnet) */
   function partnerFormulare(gewerk) {
