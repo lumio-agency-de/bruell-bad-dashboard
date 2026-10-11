@@ -74,7 +74,7 @@ Anmeldefenster zum Anklicken anbietet. Ohne `?demo=1` beginnt das Dashboard mit 
 
 | Bereich | Wofür |
 | --- | --- |
-| **Cockpit** | Zahlen je Abschnitt, was **fällig** ist (Nachfassen, Erinnerungen), was **als Nächstes** zu tun ist (je Projekt der nächste offene Schritt), **Neu vom Kunden**, Termine der nächsten 14 Tage, Fliesenspiegel aller Bäder. |
+| **Cockpit** | Zahlen je Abschnitt, was **fällig** ist (Nachfassen, Erinnerungen), was **als Nächstes** zu tun ist (je Projekt der nächste offene Schritt), **Neu vom Kunden** und Termine der nächsten 14 Tage. |
 | **Projekte** | Alle Bäder nach Abschnitt, mit Suche und Filtern. |
 | **Projekt** | Die Spielfläche: oben die Level-Karte, links die Schritte des aktuellen Levels, rechts die Akte (Dateien-Ordner, Kunde, Termine, Verlauf). |
 | **Unternehmen** | (nur Geschäftsführung) Ordner wie am iPhone: Finanzen, Vertrieb, Zeit & Ablauf, Kapazität & Team, Nachkalkulation. Darin: Jahresziel, Umsatz, Deckungsbeitrag, Quote, Dauer, Auftragsbestand, offene Forderungen, Kapazität der nächsten 8 Wochen, Vertriebstrichter — jeweils mit Vergleich zum Vorzeitraum. Euro-Beträge pro Projekt unter Akte → Zahlen. |

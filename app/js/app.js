@@ -652,11 +652,6 @@
         </div>
       </div>
 
-      <section class="panel wand" style="--n:${N}">
-        <h2 class="panel-titel">Fliesenspiegel <small>jede Fliese ein Bad, in der Spalte seines Levels</small></h2>
-        <div class="wand-raster">${PHASEN.map((ph) => `<div class="wand-spalte">${laufend.filter((p) => p.phase === ph.nr).map((p) => `<a class="wand-stein${phaseStatus(p, p.phase).komplett ? " bereit" : ""}${faelligkeiten(p).length ? " faellig" : ""}" href="#/projekt/${p.id}" title="${esc(anzeigeName(p))}">${esc(p.kunde.nachname)}</a>`).join("") || '<span class="wand-leer"></span>'}</div>`).join("")}</div>
-        <div class="wand-fuss">${PHASEN.map((ph) => `<span title="${esc(ph.titel)}">${zwei(ph.nr)}</span>`).join("")}</div>
-      </section>
     </div>`;
   }
 

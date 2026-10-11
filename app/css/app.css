@@ -185,17 +185,6 @@ a.zeile:hover { background: var(--tinte-weich); }
 .leer-hinweis { padding: 12px 10px; color: var(--leise); font-size: .88rem; }
 .ueberfaellig { color: var(--rot); font-weight: 600; }
 
-.wand { padding-bottom: 14px; }
-.wand-raster { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 4px; align-items: end; padding: 0 18px; }
-.wand-spalte { display: flex; flex-direction: column-reverse; gap: 3px; min-height: 52px; }
-.wand-stein { display: block; height: 22px; padding: 0 5px; background: var(--tinte); color: #fff; border-radius: 1px; text-decoration: none; font-size: .66rem; font-weight: 600; line-height: 22px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: background-color 150ms ease, transform 150ms var(--ease-out); }
-.wand-stein:hover { background: color-mix(in oklab, var(--tinte) 80%, #fff); }
-.wand-stein:active { transform: scale(.95); }
-.wand-stein.faellig { background: var(--rot); }
-.wand-stein.bereit { background: var(--akzent); color: var(--tinte); }
-.wand-leer { height: 22px; border: 1px dashed var(--fuge-stark); border-radius: 1px; }
-.wand-fuss { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 4px; margin: 6px 18px 0; border-top: 1px solid var(--fuge-stark); padding-top: 6px; }
-.wand-fuss span { font: 400 .82rem var(--serif); text-align: center; color: var(--leise); }
 
 /* ---------- Projekte ---------- */
 .werkzeuge { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 18px; }
@@ -504,7 +493,6 @@ textarea.mail-text { min-height: 330px; font-size: .88rem; }
   .felder, .felder.drei { grid-template-columns: 1fr; }
   .mission-kopf { grid-template-columns: auto 1fr; }
   .fortschritt { grid-column: 1 / -1; justify-items: start; }
-  .wand-stein { font-size: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
