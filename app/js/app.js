@@ -585,13 +585,13 @@
   }).join("");
 
   /* Datei-Ablage einer Kategorie: Vorschauen + Upload-Feld */
-  function ablage(p, kat, kompakt) {
+  function ablage(p, kat, kompakt, ohneUpload) {
     const l = dateienVon(p.id, kat);
     return `<div class="ablage${kompakt ? " kompakt" : ""}" data-ablage="${esc(kat)}">
       ${l.length ? `<ul class="thumbs">${l.map((d) => `<li><button type="button" class="thumb${d.neu ? " neu" : ""}" data-aktion="datei" data-datei="${esc(d.id)}" title="${esc(d.name)}">
         ${istBild(d) ? `<img data-vorschau="${esc(d.id)}" alt="">` : `<span class="typ">${esc((d.name.split(".").pop() || "").toUpperCase().slice(0, 4))}</span>`}
         <span class="thumb-name">${esc(d.name)}</span>${d.quelle === "kunde" ? '<span class="vom-kunden">Kunde</span>' : d.quelle === "partner" ? '<span class="vom-kunden partner">Partner</span>' : ""}</button></li>`).join("")}</ul>` : ""}
-      ${darfHochladen(kat) && darfKatP(p.id, kat) ? `<label class="drop"><input type="file" multiple data-upload="${esc(kat)}" hidden>
+      ${!ohneUpload && darfHochladen(kat) && darfKatP(p.id, kat) ? `<label class="drop"><input type="file" multiple data-upload="${esc(kat)}" hidden>
         <span class="drop-icon" aria-hidden="true">＋</span><span>Dateien hierher ziehen oder <u>auswählen</u></span></label>` : l.length ? "" : '<p class="leise klein-text">Noch keine Dateien.</p>'}</div>`;
   }
 
@@ -1283,7 +1283,7 @@
           <button class="btn" data-aktion="drucken" data-formular="${fid}">Drucken / PDF</button>
           ${lesen ? `<a class="btn voll" href="#/projekt/${p.id}">Zurück</a>` : `<button class="btn jetzt" data-aktion="formular-fertig">Fertig</button>`}</div>
       </header>
-      <fieldset class="panel f-flaeche" id="f-flaeche"${lesen ? " disabled" : ""}>${Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k) => ablage(p, kat, k), firma: cfg(), projektName: anzeigeName(p), projektNr: p.projektnr || "" })}</fieldset></div>`;
+      <fieldset class="panel f-flaeche" id="f-flaeche"${lesen ? " disabled" : ""}>${Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k, o) => ablage(p, kat, k, o), firma: cfg(), projektName: anzeigeName(p), projektNr: p.projektnr || "" })}</fieldset></div>`;
   }
   const formularStatusHtml = (st) => `<span class="${st.vollstaendig ? "ok" : ""}">${st.vollstaendig ? "✓ vollständig" : `${st.ok} von ${st.gesamt} Pflichtfeldern`}</span>`;
   function formularNeuZeichnen(p, fid, ganz) {
@@ -1292,7 +1292,7 @@
     if (ganz) {
       const fl = $("#f-flaeche"); if (!fl) return;
       const y = window.scrollY;
-      fl.innerHTML = Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k) => ablage(p, kat, k), firma: cfg(), projektName: anzeigeName(p), projektNr: p.projektnr || "" });
+      fl.innerHTML = Formular.editor(fid, p, { dateien: dateienVon(p.id), zeigeFehler: S.zeigeFehler, ablage: (kat, k, o) => ablage(p, kat, k, o), firma: cfg(), projektName: anzeigeName(p), projektNr: p.projektnr || "" });
       window.scrollTo(0, y); vorschauenLaden(fl); unterschriftenAn(); blattStiftAn();
     }
   }

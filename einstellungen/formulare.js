@@ -16,6 +16,7 @@
                  { quelle: "projektuebersicht.elektrikerWer" } übernimmt den Wert
                  von dort (zentral eingetragen, hier nur angezeigt)
      dateien     Upload direkt im Formular → landet im Projektordner   { kategorie }
+                 { auchAus: ["grundriss"] } zeigt zusätzlich die Dateien dieser Ordner an
      unterschrift  Unterschriftenfeld (Maus, Finger, Stift)
      tabelle     { spalten: [{ id, titel, typ }], zeilen: ["Armatur", …] }
                  ohne zeilen → Zeilen frei hinzufügen
@@ -174,7 +175,7 @@
         { id: "raumhoehe", typ: "zahl", label: "Raumhöhe", einheit: "cm", breite: "drittel", pflicht: true },
         { id: "raumlaenge", typ: "zahl", label: "Länge", einheit: "cm", breite: "drittel" },
         { id: "raumbreite", typ: "zahl", label: "Breite", einheit: "cm", breite: "drittel" },
-        { id: "skizze", typ: "dateien", kategorie: "skizzen", label: "Raumskizze mit Bemaßung" },
+        { id: "skizze", typ: "dateien", kategorie: "skizzen", auchAus: ["grundriss"], label: "Raumskizze mit Bemaßung" },
         { typ: "abschnitt", titel: "Stundeneinschätzung" },
         { id: "stunden", typ: "tabelle", label: "Ungefähre Stunden je Arbeit (jede Zeile ausfüllen, 0 wenn entfällt)", pflicht: true, alleZeilen: "h", spalten: [{ id: "h", titel: "Stunden", typ: "zahl" }],
           zeilen: ["Staubschutz", "Abrissarbeiten", "Installationsarbeiten", "Malerarbeiten", "Fliesenarbeiten", "Fertigmontage"] },

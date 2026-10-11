@@ -48,12 +48,13 @@
     return Number.isFinite(n) && n > 0 ? Math.min(f.max, Math.max(f.min, n)) : null;
   }
   const reglerText = (f, n) => `${Number(n).toLocaleString("de-DE")}${f.einheit ? " " + f.einheit : ""}`;
+  const katName = (k) => ((window.KATEGORIEN || []).find((x) => x.id === k) || { titel: k }).titel;
   function gefuellt(f, v, p, dateien) {
     switch (f.typ) {
       case "abschnitt": return true;
       case "wer": return f.quelle ? true : !!v;
       case "mehrfach": return Array.isArray(v) && v.length > 0;
-      case "dateien": return dateien.filter((d) => d.kategorie === f.kategorie).length > 0;
+      case "dateien": return dateien.filter((d) => d.kategorie === f.kategorie || (f.auchAus || []).includes(d.kategorie)).length > 0;
       case "tabelle": {
         if (!Array.isArray(v)) return false;
         if (f.zeilen && f.alleZeilen) return f.zeilen.every((_, i) => v[i] && v[i][f.alleZeilen] !== undefined && String(v[i][f.alleZeilen]).trim() !== "");
@@ -151,8 +152,12 @@
         const arr = Array.isArray(v) ? v : [];
         return wrap(`${lab}<div class="chips">${f.optionen.map((o) => `<button type="button" class="chip mehr${arr.includes(o) ? " an" : ""}" data-ff-mehr="${esc(f.id)}" data-wert="${esc(o)}" aria-pressed="${arr.includes(o)}">${esc(o)}</button>`).join("")}</div>`);
       }
-      case "dateien":
-        return wrap(`${lab}${ctx.ablage(f.kategorie, true)}`);
+      case "dateien": {
+        /* auchAus: Dateien aus anderen Ordnern hier mit anzeigen (z. B. Grundriss aus Level 2), Upload bleibt im eigenen Ordner */
+        const fremd = (f.auchAus || []).filter((k) => ctx.dateien.some((d) => d.kategorie === k));
+        return wrap(`${lab}${fremd.map((k) => `<p class="ff-quelle">Übernommen aus „${esc(katName(k))}“</p>${ctx.ablage(k, true, true)}`).join("")}
+          ${fremd.length ? '<p class="ff-quelle">Weitere Skizzen / Dateien hinzufügen</p>' : ""}${ctx.ablage(f.kategorie, true)}`);
+      }
       case "unterschrift":
         return wrap(`${lab}<div class="sign${v ? " voll" : ""}" data-sign="${esc(f.id)}">
           <canvas width="900" height="260" aria-label="Unterschriftenfeld"></canvas>
@@ -293,7 +298,7 @@
       case "mehrfach": return Array.isArray(v) && v.length ? esc(v.join(", ")) : leer;
       case "datum": { if (!v) return leer; const z = f.uhrzeit && ctx.w ? ctx.w[f.id + "Zeit"] : ""; return esc(new Date(v + "T00:00").toLocaleDateString("de-DE")) + (z ? `, ${esc(z)} Uhr` : ""); }
       case "unterschrift": return v ? `<img class="d-sign" src="${esc(v)}" alt="Unterschrift">` : '<span class="d-linie"></span>';
-      case "dateien": { const n = ctx.dateien.filter((d) => d.kategorie === f.kategorie); return n.length ? esc(n.map((d) => d.name).join(", ")) : leer; }
+      case "dateien": { const n = ctx.dateien.filter((d) => d.kategorie === f.kategorie || (f.auchAus || []).includes(d.kategorie)); return n.length ? esc(n.map((d) => d.name).join(", ")) : leer; }
       default: return v !== undefined && v !== "" ? esc(v).replace(/\n/g, "<br>") + (f.einheit ? " " + esc(f.einheit) : "") : leer;
     }
   }

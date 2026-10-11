@@ -899,3 +899,4 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .ff-datumzeit { display: flex; align-items: center; gap: 8px; }
 .ff-datumzeit input[type=date] { flex: 1 1 auto; min-width: 0; }
 .ff-datumzeit .zeit { flex: 0 0 120px; }
+.ff-quelle { font-size: .74rem; font-weight: 600; letter-spacing: .04em; color: var(--leise); margin: 6px 0 4px; }
