@@ -98,8 +98,8 @@ window.ABLAUF = [
     schritte: [
       { id: "notizen", typ: "formular", formular: "erstgespraech", titel: "Erstgesprächs-Notizen", ebene: ["planung", "geschaeftsfuehrung"] },
       { id: "skizze", typ: "dateien", kategorie: "skizzen", pflicht: false, titel: "Skizze fotografieren & hochladen" },
-      { id: "planerin", typ: "feld", feld: "zustaendig", titel: "Zuständige Badplanerin festlegen" },
       { id: "ab-termin", typ: "termin", termin: "angebotsbesprechung", titel: "Termin Angebots- & Planungsbesprechung" },
+      { id: "planerin", typ: "feld", feld: "zustaendig", titel: "Zuständige Badplanerin festlegen" },
       { id: "ab-kwp", typ: "erledigt", titel: "Termin Angebotsbesprechung in {programm.erp} eingetragen" },
     ],
   },
