@@ -89,14 +89,20 @@ $$;
 create or replace function public.zugewiesen(d jsonb) returns boolean language sql stable as $$
   select coalesce(d -> 'zugriff' ? ich_id(), false)
 $$;
--- Standard-Ordner einer Rolle (Konten → „Ordner & Bilder“, gespeichert in einstellungen.daten.freigabeStandard)
+-- Ordner einer Rolle bzw. eines Partner-Gewerks (Konten → „Ordner & Bilder“, einstellungen.daten.freigabeStandard)
+--   e = 'planung' | 'monteur' | 'partner:<Gewerk>'
 create or replace function public.ordner_standard(e text) returns jsonb language sql stable security definer set search_path = public as $$
   select coalesce(
     (select daten -> 'freigabeStandard' -> e from einstellungen where id = 1 and jsonb_typeof(daten -> 'freigabeStandard' -> e) = 'array'),
-    case e
+    (select daten -> 'freigabeStandard' -> 'partner' from einstellungen where id = 1 and e like 'partner%' and jsonb_typeof(daten -> 'freigabeStandard' -> 'partner') = 'array'),
+    case split_part(e, ':', 1)
       when 'planung' then '["bilder-alt","grundriss","heizung","skizzen","planung","angebot","auftrag","baustelle","auswahl","expose","freigabe","rechnungen","fertig","sonstiges"]'::jsonb
       when 'monteur' then '["bilder-alt","grundriss","heizung","skizzen","planung","baustelle","auswahl","expose","freigabe","fertig","sonstiges"]'::jsonb
       else '["planung","skizzen","baustelle","auswahl"]'::jsonb end)
+$$;
+-- Gewerk eines Partners (aus dem Adressbuch in den Einstellungen)
+create or replace function public.partner_gewerk(pid text) returns text language sql stable security definer set search_path = public as $$
+  select x ->> 'gewerk' from einstellungen, jsonb_array_elements(coalesce(daten -> 'partner', '[]'::jsonb)) x where id = 1 and x ->> 'id' = pid limit 1
 $$;
 -- Darf ich Dateien dieses Projekts in diesem Ordner sehen?
 create or replace function public.darf_datei(pid text, kat text) returns boolean language sql stable security definer set search_path = public as $$
@@ -104,12 +110,8 @@ create or replace function public.darf_datei(pid text, kat text) returns boolean
     or (ich_ebene() = 'planung' and ordner_standard('planung') ? kat)
     or exists (
       select 1 from projekte p
-      where p.id = pid and not p.geloescht and ich_ebene() in ('monteur', 'partner') and zugewiesen(p.daten) and (
-        -- Ordner-Freigabe je Person im Projekt (Reiter „Team“) …
-        case when coalesce(p.daten -> 'freigaben' ? ich_id(), false) then (p.daten -> 'freigaben' -> ich_id()) ? kat
-        -- … sonst der Standard der Rolle
-        else ordner_standard(ich_ebene()) ? kat end
-      )
+      where p.id = pid and not p.geloescht and ich_ebene() in ('monteur', 'partner') and zugewiesen(p.daten)
+        and ordner_standard(case when ich_ebene() = 'partner' then 'partner:' || coalesce(partner_gewerk(ich_id()), '') else ich_ebene() end) ? kat
     )
 $$;
 -- Darf ich in diesen Ordner hochladen?
@@ -241,7 +243,7 @@ returns jsonb language sql stable security definer set search_path = public as $
     'termine', jsonb_build_object('baustart', p.daten #>> '{termine,baustart}', 'abnahme', p.daten #>> '{termine,abnahme}'),
     'formulare', coalesce((select jsonb_object_agg(f, p.daten -> 'formulare' -> f) from unnest(m.formulare) f where p.daten -> 'formulare' ? f), '{}'::jsonb),
     'meldung', p.daten -> 'partnerStatus' -> m.id,
-    'ordner', coalesce(p.daten -> 'freigaben' -> m.id, ordner_standard('partner')),
+    'ordner', ordner_standard('partner:' || coalesce(partner_gewerk(m.id), '')),
     'geaendert', p.geaendert
   ) order by p.daten #>> '{termine,baustart}'), '[]'::jsonb)
   from projekte p join mitglieder m on m.email = ich_email() and m.ebene = 'partner'

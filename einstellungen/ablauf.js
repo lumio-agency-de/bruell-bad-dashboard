@@ -192,15 +192,15 @@ window.ABLAUF = [
   },
   {
     nr: 10, titel: "Baustelle planen", abschnitt: "auftrag",
-    ziel: "Termin festlegen und bestätigen, Subunternehmer, Abschlag – und wer welche Ordner sieht.",
+    ziel: "Termin festlegen und bestätigen, Subunternehmer anfragen, Abschlag – und wer mitarbeitet.",
     schritte: [
       { id: "baustart", typ: "termin", termin: "baustart", titel: "Umsetzungstermin (Baustart)" },
       { id: "mail-umsetzung", typ: "mail", mail: "umsetzung", titel: "Umsetzungstermin per Mail bestätigen" },
       { id: "plan", typ: "formular", formular: "baustellenplan", titel: "Subunternehmer & Ablauf",
-        hinweis: "Die Subunternehmer aus der Projekt-Übersicht (Abriss, Elektro, Fliesen, Fenster, Tür) sind schon eingetragen." },
+        hinweis: "Alle Gewerke aus der Materialauswahl sind schon eingetragen – Firma aus dem Adressbuch wählen." },
       { id: "abschlag", typ: "formular", formular: "abschlag", titel: "Abschlagsrechnung" },
-      { id: "team", typ: "team", titel: "Monteure & Partner zuweisen – Ordner freigeben",
-        hinweis: "Wer zugewiesen ist, sieht diese Baustelle – und nur die Ordner, die hier freigegeben sind." },
+      { id: "team", typ: "team", titel: "Monteure & Partner zuweisen",
+        hinweis: "Wer zugewiesen ist, sieht diese Baustelle. Welche Ordner, ist unter Konten → „Ordner & Bilder“ festgelegt." },
     ],
   },
   {

@@ -223,19 +223,20 @@
   const strHnr = (k) => [k.strasse, k.hausnr].filter(Boolean).join(" ");
   const adr = (k) => [strHnr(k), k.ort].filter(Boolean).join(", ");
 
-  /* ---------- Ordner-Freigaben: wer zugewiesen ist, sieht nur freigegebene Ordner ---------- */
+  /* ---------- Ordner-Zugriff: fest je Rolle bzw. je Partner-Gewerk (Konten → „Ordner & Bilder“) ---------- */
   function freigabeStandard(art) {
-    const e = (cfg().freigabeStandard || {})[art];
-    if (Array.isArray(e)) return e;
+    const fs = cfg().freigabeStandard || {};
+    if (Array.isArray(fs[art])) return fs[art];
+    if (art.startsWith("partner:") && Array.isArray(fs.partner)) return fs.partner;   // ältere Einstellung ohne Gewerk
     return ordnerStandard(art);
   }
   /* Werkseinstellung, solange unter Konten → „Ordner & Bilder“ nichts gespeichert ist */
   const ordnerStandard = (art) => art === "planung" ? KAT.map((k) => k.id)
     : art === "monteur" ? KAT.map((k) => k.id).filter((k) => !GESPERRT_MONTEUR.includes(k)) : [...PARTNER_ORDNER];
+  const partnerArt = (id) => "partner:" + (((cfg().partner || []).find((x) => x.id === id) || {}).gewerk || "");
   function ordnerFuer(p, personId, art) {
     if (p && p.ordner && ebene() === "partner") return p.ordner;            // Partner-Auszug
-    const f = p && p.freigaben && p.freigaben[personId];
-    return Array.isArray(f) ? f : freigabeStandard(art);
+    return freigabeStandard(art === "partner" ? partnerArt(personId) : art);
   }
   const darfKatP = (pid, kat) => {
     if (istGF()) return true;
@@ -252,10 +253,10 @@
     return `<div class="zuweisen">${istBuero() ? `<select class="eingabe auto" data-zuweisen aria-label="Person zuweisen"><option value="">+ Monteur oder Partner zuweisen …</option>
         ${frei.filter((x) => x.art === "monteur").length ? `<optgroup label="Monteure">${frei.filter((x) => x.art === "monteur").map((x) => `<option value="${esc(x.id)}">${esc(x.name)}</option>`).join("")}</optgroup>` : ""}
         ${frei.filter((x) => x.art === "partner").length ? `<optgroup label="Externe Partner">${frei.filter((x) => x.art === "partner").map((x) => `<option value="${esc(x.id)}">${esc(x.name)} · ${esc(x.unter.replace("Partner · ", ""))}</option>`).join("")}</optgroup>` : ""}</select>` : ""}
-      ${zugewiesen.length ? `<ul class="zugewiesen">${zugewiesen.map((x) => { const ord = ordnerFuer(p, x.id, x.art); return `<li>
+      ${zugewiesen.length ? `<ul class="zugewiesen">${zugewiesen.map((x) => { return `<li>
         <div class="zw-kopf"><b>${esc(x.name)}</b><small>${esc(x.unter)}</small>${st[x.id] ? `<small class="${st[x.id].erledigt ? "gruen" : ""}">${st[x.id].erledigt ? "✓ erledigt gemeldet" : "Rückmeldung"} ${fKurz(new Date(st[x.id].am))}${st[x.id].notiz ? ": " + esc(st[x.id].notiz) : ""}</small>` : ""}
           ${istBuero() ? `<button class="btn klein still gefahr" data-aktion="zuweisen" data-id="${esc(x.id)}">Entfernen</button>` : ""}</div>
-        <p class="q-gruppe">Freigegebene Ordner</p><div class="chips klein">${KAT.filter((k) => !k.nurMitDateien).map((k) => `<button type="button" class="chip${ord.includes(k.id) ? " an" : ""}" data-aktion="freigabe" data-id="${esc(x.id)}" data-art="${x.art}" data-kat="${k.id}"${istBuero() ? "" : " disabled"}>${esc(k.titel)}</button>`).join("")}</div></li>`; }).join("")}</ul>`
+</li>`; }).join("")}</ul>`
         : `<p class="leise klein-text">Noch niemand zugewiesen.</p>`}</div>`;
   }
 
@@ -1221,7 +1222,7 @@
           <dt>Status</dt><dd>${g.abgeschlossen ? `abgeschlossen ${fDatum(new Date(g.abgeschlossen))}` : "offen"}</dd></dl>
         <a class="btn voll" href="#/projekt/${p.id}/nachkalkulation">Nachkalkulation öffnen <span class="pfeil">→</span></a>`;
     } else if (t === "team") {
-      inhalt = `<p class="leise klein-text">Zugewiesene sehen dieses Projekt – und nur die Ordner, die hier freigegeben sind.</p>${teamVerwaltung(p)}`;
+      inhalt = `<p class="leise klein-text">Zugewiesene sehen dieses Projekt. Welche Ordner sie sehen, ist unter Konten → „Ordner & Bilder“ je Rolle bzw. Gewerk festgelegt. </p>${teamVerwaltung(p)}`;
     } else if (t === "dateien") {
       inhalt = `<ul class="ordner">${KAT.filter((k) => darfKatP(p.id, k.id) && (!k.nurMitDateien || dateienVon(p.id, k.id).length)).map((k) => {
         const l = dateienVon(p.id, k.id), neu = l.filter((d) => d.neu).length, auf = S.ordnerOffen === k.id;
@@ -1732,7 +1733,7 @@
       if (m.funktion) { const [rolle, bezeichnung] = m.funktion.split("|"); Object.assign(m, { rolle, bezeichnung }); delete m.funktion; }
       return m;
     }).filter((m) => m.name || m.kuerzel);
-    if ($("#ordnerrechte")) c.freigabeStandard = Object.fromEntries(RECHTE_EBENEN.map((e) => [e, $$("#ordnerrechte [data-r-ordner]").filter((z) => $(`[data-r-e="${e}"]`, z).checked).map((z) => z.dataset.rOrdner)]));
+    if ($("#ordnerrechte")) c.freigabeStandard = Object.fromEntries(ordnerSpalten().map(([e]) => [e, $$("#ordnerrechte [data-r-ordner]").filter((z) => $(`[data-r-e="${e}"]`, z).checked).map((z) => z.dataset.rOrdner)]));
     if ($("#rechte")) c.rechte = Object.fromEntries($$("#rechte [data-r-schritt]").map((z) => [z.dataset.rSchritt, $$("[data-r-e]", z).filter((x) => x.checked).map((x) => x.dataset.rE)]));
     if ($("#partner")) {
       const ids = new Set(), alt = cfg().partner || [];
@@ -1767,19 +1768,22 @@
       <div class="r-matrix"><div class="r-zeile r-th"><span>Level / Schritt</span><span>${esc(EBENE_TITEL.geschaeftsfuehrung || "Geschäftsführung")}</span>${RECHTE_EBENEN.map((e) => `<span>${esc(EBENE_TITEL[e] || e)}</span>`).join("")}</div>${levels}</div>
       <p class="vb-max">Ordner je Projekt gibt das Büro im Reiter „Team“ frei. ${Daten.modus === "cloud" ? "Die Datenbank setzt Ordner- und Partner-Freigaben durch." : "Im Demo-Modus liegen die Daten nur in diesem Browser."}</p></section>`;
   }
+  const ordnerSpalten = () => [["planung", EBENE_TITEL.planung || "Planung"], ["monteur", EBENE_TITEL.monteur || "Monteur"],
+    ...Object.keys(cfg().gewerke || {}).map((g) => ["partner:" + g, "Partner " + g])];
   function ordnerMatrix() {
     const zelle = (attr, an) => `<span class="r-zelle"><input type="checkbox" ${attr}${an ? " checked" : ""}></span>`;
+    const SP = ordnerSpalten();
     const ord = KAT.filter((k) => !k.nurMitDateien);
     const zeilen = ord.map((k) => `<div class="r-zeile r-schritt" data-r-ordner="${esc(k.id)}"><span class="r-titel">${esc(k.titel)}${k.kunde ? "<small>auch per Kundenlink befüllt</small>" : ""}</span>
-      <span class="r-zelle r-gf" aria-label="Geschäftsführung: ja">✓</span>${RECHTE_EBENEN.map((e) => zelle(`data-r-e="${e}" aria-label="${esc((EBENE_TITEL[e] || e) + ": " + k.titel)}"`, freigabeStandard(e).includes(k.id))).join("")}</div>`).join("");
+      <span class="r-zelle r-gf" aria-label="Geschäftsführung: ja">✓</span>${SP.map(([e, t]) => zelle(`data-r-e="${esc(e)}" aria-label="${esc(t + ": " + k.titel)}"`, freigabeStandard(e).includes(k.id))).join("")}</div>`).join("");
     return `<section class="panel" id="ordnerrechte"><div class="r-titelzeile"><h2 class="panel-titel">Ordner & Bilder</h2><span class="kopf-aktionen"><button type="button" class="btn klein still" data-aktion="r-ordner-standard">Standard wiederherstellen</button></span></div>
-      <p class="leise klein-text panel-innen">Auf welche Projektordner – und damit welche Bilder und Dokumente – jede Rolle zugreifen kann. Gilt für alle Projekte. Monteuren und Partnern kann das Büro im Projekt (Reiter „Team“) für einzelne Personen zusätzlich Ordner freigeben oder entziehen. Mit „Änderungen übernehmen“ speichern.</p>
-      <div class="r-matrix"><div class="r-zeile r-th"><span>Ordner</span><span>${esc(EBENE_TITEL.geschaeftsfuehrung || "Geschäftsführung")}</span>${RECHTE_EBENEN.map((e) => `<span>${esc(EBENE_TITEL[e] || e)}</span>`).join("")}</div>
-      <div class="r-level offen" data-r-nr="ordner"><div class="r-zeile r-kopf"><span class="r-auf r-statisch"><b>${ord.length}</b> Ordner<small>alle an- oder abwählen</small></span><span class="r-zelle r-gf">alle</span>${RECHTE_EBENEN.map((e) => zelle(`data-r-level="${e}" aria-label="${esc((EBENE_TITEL[e] || e) + ": alle Ordner")}"`, false)).join("")}</div>
-      <div class="r-schritte">${zeilen}</div></div></div></section>`;
+      <p class="leise klein-text panel-innen">Auf welche Projektordner – und damit welche Bilder und Dokumente – jede Rolle zugreifen kann. Gilt für alle Projekte. Externe Partner sehen die Ordner ihres Gewerks (Gewerk steht im Adressbuch). Mit „Änderungen übernehmen“ speichern.</p>
+      <div class="r-scroll"><div class="r-matrix breit" style="--sp:${SP.length}"><div class="r-zeile r-th"><span>Ordner</span><span>${esc(EBENE_TITEL.geschaeftsfuehrung || "Geschäftsführung")}</span>${SP.map(([, t]) => `<span>${esc(t)}</span>`).join("")}</div>
+      <div class="r-level offen" data-r-nr="ordner"><div class="r-zeile r-kopf"><span class="r-auf r-statisch"><b>${ord.length}</b> Ordner<small>alle an- oder abwählen</small></span><span class="r-zelle r-gf">alle</span>${SP.map(([e, t]) => zelle(`data-r-level="${esc(e)}" aria-label="${esc(t + ": alle Ordner")}"`, false)).join("")}</div>
+      <div class="r-schritte">${zeilen}</div></div></div></div></section>`;
   }
   function rechteTeilzustand() {
-    $$(".r-matrix .r-level").forEach((lv) => RECHTE_EBENEN.forEach((e) => {
+    $$(".r-matrix .r-level").forEach((lv) => [...new Set($$("[data-r-level]", lv).map((x) => x.dataset.rLevel))].forEach((e) => {
       const alleK = $$(`.r-schritt [data-r-e="${e}"]`, lv), n = alleK.filter((x) => x.checked).length, k = $(`[data-r-level="${e}"]`, lv);
       k.checked = n === alleK.length; k.indeterminate = n > 0 && n < alleK.length;
     }));

@@ -902,3 +902,10 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .ff-quelle { font-size: .74rem; font-weight: 600; letter-spacing: .04em; color: var(--leise); margin: 6px 0 4px; }
 .ff-adresslink { display: inline-block; font-size: .82rem; font-weight: 600; margin: 0 0 8px; }
 .tz-tel { display: block; font-size: .76rem; margin-top: 3px; }
+
+/* Ordner & Bilder: Spalten je Rolle und Partner-Gewerk */
+.r-scroll { overflow-x: auto; }
+.r-matrix.breit { min-width: calc(220px + 110px + var(--sp) * 92px); }
+.r-matrix.breit .r-zeile { grid-template-columns: minmax(220px, 1fr) 110px repeat(var(--sp), 92px); }
+.r-matrix.breit .r-th span { font-size: .6rem; letter-spacing: .06em; text-align: center; line-height: 1.25; padding: 6px 2px; }
+.r-matrix.breit .r-th span:first-child { text-align: left; }
