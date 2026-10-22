@@ -913,3 +913,11 @@ small.gut { color: var(--gruen); font-weight: 600; } small.schlecht { color: var
 .anhang-wahl { margin-top: 14px; }
 .anhang-wahl ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 220px; overflow: auto; }
 .anhang-wahl small { color: var(--leise); margin-left: 4px; }
+
+/* Signatur (Konten + Mail-Dialog) */
+.sig-zelle { white-space: nowrap; }
+.sig-zelle .btn { margin-left: 4px; }
+.sig-mini { height: 34px; width: auto; vertical-align: middle; border: 1px solid var(--fuge); border-radius: 4px; background: #fff; }
+.sig-vorschau { margin-top: 10px; }
+.sig-vorschau img { display: block; max-width: 360px; width: 100%; height: auto; margin-top: 4px; border: 1px solid var(--fuge); border-radius: 6px; background: #fff; }
+.breit-feld { min-width: min(520px, 100%); }

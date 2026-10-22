@@ -145,6 +145,13 @@
      Ohne eigene Einstellung gilt der Standard unten. Die Geschäftsführung sieht und darf immer alles. */
   const ALLE_SCHRITTE = PHASEN.flatMap((ph) => ph.schritte.map((s) => Object.assign(s, { _nr: ph.nr })));
   const RECHTE_EBENEN = ["planung", "monteur", "partner"];
+  /* Spalten in „Wer sieht was“: externe Partner aufgeteilt nach Gewerk, alle übrigen Gewerke unter „Weitere Partner“ */
+  const PARTNER_SPALTEN = [["Elektro", "Elektriker"], ["Fliesen", "Fliesenleger"], ["Maler / Trockenbau", "Maler"]];
+  const RECHTE_SPALTEN = () => [["planung", EBENE_TITEL.planung || "Planung"], ["monteur", EBENE_TITEL.monteur || "Monteur"],
+    ...PARTNER_SPALTEN.map(([g, t]) => ["partner:" + g, t]), ["partner", "Weitere Partner"]];
+  const partnerSchluessel = (gewerk) => (PARTNER_SPALTEN.some(([g]) => g === gewerk) ? "partner:" + gewerk : "partner");
+  /* Karins Standard: was die einzelnen Gewerke sehen */
+  const PARTNER_STANDARD = { "partner:Elektro": ["checkliste", "elektro", "fotos-bau"], "partner:Fliesen": ["fliesen", "fotos-bau"], "partner:Maler / Trockenbau": ["maler", "fotos-bau"] };
   const gewerkFormulare = () => new Set(Object.values(cfg().gewerke || {}).flat());
   const MONTEUR_STANDARD_LEVEL = [6, 7, 10, 11, 12, 13];
   function rechteStandard(s) {
@@ -152,9 +159,15 @@
     const zust = s.ebene || ["planung"];
     if (zust.includes("monteur") || (MONTEUR_STANDARD_LEVEL.includes(s._nr) && s.typ !== "mail" && !["abschlag", "rechnung", "team"].includes(s.id))) l.push("monteur");
     if (zust.includes("partner") || (s.typ === "formular" && gewerkFormulare().has(s.formular))) l.push("partner");
+    for (const [k, ids] of Object.entries(PARTNER_STANDARD)) if (ids.includes(s.id)) l.push(k);
     return l;
   }
-  const siehtListe = (s) => { const r = (cfg().rechte || {})[s.id]; return Array.isArray(r) ? r : rechteStandard(s); };
+  const siehtListe = (s) => {
+    const r = (cfg().rechte || {})[s.id];
+    if (!Array.isArray(r)) return rechteStandard(s);
+    /* ältere Einstellung ohne Gewerke-Spalten: Gewerke-Standard ergänzen */
+    return r.some((k) => k.startsWith("partner:")) || (cfg().rechteVersion || 0) >= 2 ? r : [...r, ...rechteStandard(s).filter((k) => k.startsWith("partner:"))];
+  };
   const siehtSchritt = (s) => istGF() || siehtListe(s).includes(ebene());
   const darfSchritt = (s) => istGF() || (siehtSchritt(s) && (s.ebene || ["planung"]).includes(ebene()));
   /* Schritte, über die ein Formular erreichbar ist – auch indirekt (z. B. „Angaben zur Tür“ über den Knopf in der Besichtigung) */
@@ -168,7 +181,7 @@
   /* Formulare, die ein Partner sieht: freigegeben UND (eigenes Gewerk oder keinem Gewerk zugeordnet) */
   function partnerFormulare(gewerk) {
     const eigene = (cfg().gewerke || {})[gewerk] || [], alleG = gewerkFormulare();
-    return [...new Set(ALLE_SCHRITTE.filter((s) => s.typ === "formular" && siehtListe(s).includes("partner") && (eigene.includes(s.formular) || !alleG.has(s.formular))).map((s) => s.formular))];
+    return [...new Set(ALLE_SCHRITTE.filter((s) => s.typ === "formular" && siehtListe(s).includes(partnerSchluessel(gewerk)) && (eigene.includes(s.formular) || !alleG.has(s.formular))).map((s) => s.formular))];
   }
   const darfKat = (kat) => istBuero() || (ebene() === "monteur" ? !GESPERRT_MONTEUR.includes(kat) : PARTNER_ORDNER.includes(kat));
   const darfHochladen = (kat) => istBuero() || (ebene() === "monteur" ? ["baustelle", "fertig"].includes(kat) : kat === "baustelle");
@@ -237,7 +250,8 @@
     return ordnerStandard(art);
   }
   /* Werkseinstellung, solange unter Konten → „Ordner & Bilder“ nichts gespeichert ist */
-  const ordnerStandard = (art) => art === "planung" ? KAT.map((k) => k.id)
+  const ORDNER_GEWERK = { "partner:Elektro": ["bilder-alt", "skizzen", "planung", "expose", "baustelle"], "partner:Fliesen": ["planung", "expose", "baustelle"], "partner:Maler / Trockenbau": ["planung", "expose", "baustelle"] };
+  const ordnerStandard = (art) => ORDNER_GEWERK[art] ? [...ORDNER_GEWERK[art]] : art === "planung" ? KAT.map((k) => k.id)
     : art === "monteur" ? KAT.map((k) => k.id).filter((k) => !GESPERRT_MONTEUR.includes(k)) : [...PARTNER_ORDNER];
   const partnerArt = (id) => "partner:" + (((cfg().partner || []).find((x) => x.id === id) || {}).gewerk || "");
   function ordnerFuer(p, personId, art) {
@@ -496,9 +510,50 @@
     aendern(p, () => {}, `${def.label} in den Kalender übernommen`);
   }
   const b64 = (str) => btoa(unescape(encodeURIComponent(str)));
-  async function emlDatei(p, betreff, text, anhaenge, an) {
-    const grenze = "----=_Teil_" + uid().replace(/-/g, "");
-    const teile = [`--${grenze}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", b64(text).replace(/.{76}/g, "$&\r\n")];
+  /* Bild verkleinern (z. B. Signatur) → Data-URL, auf weißem Grund als JPEG */
+  function bildVerkleinern(datei, maxBreite) {
+    return new Promise((res, rej) => {
+      const img = new Image(), u = URL.createObjectURL(datei);
+      img.onload = () => {
+        const f = Math.min(1, maxBreite / img.naturalWidth), c = document.createElement("canvas");
+        c.width = Math.round(img.naturalWidth * f); c.height = Math.round(img.naturalHeight * f);
+        const x = c.getContext("2d"); x.fillStyle = "#fff"; x.fillRect(0, 0, c.width, c.height); x.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(u); res(c.toDataURL("image/jpeg", 0.88));
+      };
+      img.onerror = rej; img.src = u;
+    });
+  }
+  async function alsBase64(url) {
+    const blob = await (await fetch(url)).blob();
+    const daten = await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.readAsDataURL(blob); });
+    return { typ: blob.type || "application/octet-stream", daten };
+  }
+  /* Mailtext → HTML für Outlook: Absätze, klickbare Links, Bilder „[Bild: name]“, Signaturbild */
+  function mailHtml(text, cids) {
+    const zeilen = esc(text).split("\n").map((z) => {
+      const b = z.match(/^\[Bild: (\w+)\]$/);
+      if (b) return cids[b[1]] ? `<img src="cid:${cids[b[1]]}" alt="" style="max-width:420px;height:auto;display:block;margin:6px 0">` : "";
+      return z.replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1">$1</a>');
+    });
+    const sig = cids._signatur ? `<br><img src="cid:${cids._signatur}" alt="Signatur" style="max-width:460px;height:auto;display:block">` : "";
+    return `<html><head><meta charset="utf-8"></head><body style="font-family:Calibri,Arial,sans-serif;font-size:11pt;color:#1f1f1f">${zeilen.join("<br>\n")}${sig}</body></html>`;
+  }
+  async function emlDatei(p, betreff, text, anhaenge, an, extra = {}) {
+    const grenze = "----=_Teil_" + uid().replace(/-/g, ""), gRel = grenze + "_rel", gAlt = grenze + "_alt";
+    const zeile76 = (x) => x.replace(/.{76}/g, "$&\r\n");
+    /* Inline-Bilder: Bilder der Vorlage + Signaturbild */
+    const inline = [], cids = {};
+    const bilder = { ...(extra.bilder || {}) }; if (signaturBild()) bilder._signatur = signaturBild();
+    for (const [name, url] of Object.entries(bilder)) {
+      if (name !== "_signatur" && !new RegExp(`^\\[Bild: ${name}\\]$`, "m").test(text)) continue;
+      try { const { typ, daten } = await alsBase64(url); const cid = `${name}.${uid().slice(0, 8)}@bad-dashboard`; cids[name] = cid; inline.push({ cid, typ, daten, name: (name === "_signatur" ? "signatur" : name) + (typ.includes("png") ? ".png" : ".jpg") }); } catch (e) { /* ohne Bild */ }
+    }
+    const nurText = text.replace(/^\[Bild: \w+\]\n?/gm, "") + (cids._signatur && signaturText() ? "\n\n" + signaturText() : "");
+    const teile = [`--${grenze}`, `Content-Type: multipart/related; boundary="${gRel}"`, "", `--${gRel}`, `Content-Type: multipart/alternative; boundary="${gAlt}"`, "",
+      `--${gAlt}`, "Content-Type: text/plain; charset=UTF-8", "Content-Transfer-Encoding: base64", "", zeile76(b64(nurText)),
+      `--${gAlt}`, "Content-Type: text/html; charset=UTF-8", "Content-Transfer-Encoding: base64", "", zeile76(b64(mailHtml(text, cids))), `--${gAlt}--`];
+    for (const b of inline) teile.push(`--${gRel}`, `Content-Type: ${b.typ}`, "Content-Transfer-Encoding: base64", `Content-ID: <${b.cid}>`, `Content-Disposition: inline; filename="${b.name}"`, "", zeile76(b.daten));
+    teile.push(`--${gRel}--`);
     let fehlend = 0;
     for (const a of anhaenge) {
       try {
@@ -1093,7 +1148,7 @@
         <span class="timer-box" id="timer-box">${timerHtml(p)}</span>
         ${neu && istBuero() ? `<button class="btn jetzt" data-aktion="akte-tab" data-tab="dateien">${neu} neu vom Kunden</button>` : ""}
         ${istBuero() ? `<button class="btn" data-aktion="kundenlink">Kundenlink</button>` : ""}
-        ${p.downloadCode ? `<button class="btn" data-aktion="palettemove" title="Code kopieren und PaletteMove öffnen">3D in ${esc(cfg().programme.app3d)}</button>` : ""}
+        ${p.downloadCode ? `<button class="btn" data-aktion="palettemove" title="3D-Ansicht öffnen">3D-Ansicht</button>` : ""}
         ${istGF() ? `<button class="btn still gefahr" data-aktion="loeschen">Löschen</button>` : ""}
       </div></header>`;
   }
@@ -1200,7 +1255,7 @@
           ? `<div class="q-aktion q-notiz"><textarea class="eingabe" data-pfeld="${s.feld}" rows="4" aria-label="${esc(titel)}" placeholder="${esc(s.platzhalter || "eintragen")}">${esc(v)}</textarea></div>`
           : s.feld === "zustaendig"
           ? `<div class="chips">${leute("badplanung").map((m) => `<button type="button" class="chip${v === m.kuerzel ? " an" : ""}" data-aktion="setze-feld" data-feld="zustaendig" data-wert="${esc(m.kuerzel)}">${esc(m.name)} (${esc(m.kuerzel)})</button>`).join("")}</div>`
-          : `<div class="q-aktion"><input class="eingabe auto" data-pfeld="${s.feld}" value="${esc(v)}" aria-label="${esc(titel)}" placeholder="eintragen"></div>`;
+          : `<div class="q-aktion"><input class="eingabe auto${s.feld === "downloadCode" ? " breit-feld" : ""}" data-pfeld="${s.feld}" value="${esc(v)}" aria-label="${esc(titel)}" placeholder="${esc(ersetzen(s.platzhalter || "eintragen"))}"></div>`;
         break;
       }
     }
@@ -1503,12 +1558,13 @@
     const c = cfg(), luecken = [];
     let text = m.text.replace(/\[\[(\w+)\]\]([\s\S]*?)\[\[\/\1\]\]/g, (_, id, inhalt) => (optionen[id] ? inhalt : ""));
     const label = (k) => (TERMINE.find((t) => t.key === k) || {}).label || k;
-    text = text.replace(/\{([a-zA-Z.]+)\}/g, (ganz, key) => {
+    text = text.replace(/\{([a-zA-Z0-9.]+)\}/g, (ganz, key) => {
       const fehlt = (was) => { if (!luecken.includes(was)) luecken.push(was); return `‹${was}›`; };
       if (key in extra) return extra[key] || fehlt(extra["_label:" + key] || key);
       if (key === "anrede") return anrede(p, m.anredeStil);
       if (key === "nachname") return p.kunde.nachname || fehlt("Nachname");
       if (key === "downloadCode") return p.downloadCode || fehlt(`${c.programme.app3d}-Code`);
+      if (key === "link3d") return p.downloadCode || fehlt(`Link zur 3D-Ansicht (Level 8)`);
       if (key === "uploadLink") return link || fehlt("Upload-Link");
       if (key === "berater") return leute("badberater")[0]?.name || fehlt("Badberater");
       if (key === "heizungsexperte") return leute("heizungsexperte")[0]?.name || fehlt("Heizungsexperte");
@@ -1531,14 +1587,19 @@
     return { text: text.replace(/\n{3,}/g, "\n\n").replace(/\s+$/, "") + (extra._ohneSignatur ? "" : signatur()), luecken };
   }
   /* Signatur des angemeldeten Nutzers (Name, Funktion, Durchwahl, E-Mail) */
-  function signatur() {
-    const c = cfg(), t = S.ich && c.team.find((m) => m.kuerzel === S.ich.id);
+  const ichTeam = () => S.ich && cfg().team.find((m) => m.kuerzel === S.ich.id);
+  /* Signaturbild der angemeldeten Person (Konten → Signatur); ohne Bild gibt es die Textsignatur */
+  const signaturBild = () => { const t = ichTeam(); return (t && t.signaturBild) || ""; };
+  function signaturText() {
+    const c = cfg(), t = ichTeam();
     if (!t || !t.name) return "";
-    return "\n\n" + [t.name, t.bezeichnung && `${t.bezeichnung} · ${c.name}`, t.telefon && `Telefon ${t.telefon}`, t.email].filter(Boolean).join("\n");
+    return [t.name, t.bezeichnung, c.name, c.adresse && [c.adresse.strasse, c.adresse.ort].filter(Boolean).join(", "), (t.telefon || c.telefon) && `Telefon ${t.telefon || c.telefon}`, t.email || c.email, c.website].filter(Boolean).join("\n");
   }
+  const signatur = () => (signaturBild() || !signaturText() ? "" : "\n\n" + signaturText());
   async function mailDialog(mailId, p) {
     const m = window.MAILVORLAGEN.find((x) => x.id === mailId);
-    const optionen = {};
+    const optionen = Object.fromEntries((m.optionen || []).filter((o) => o.an).map((o) => [o.id, true]));
+    const anhangAn = (name) => !(m.anhangOption || {})[name] || optionen[m.anhangOption[name]];
     let link = null;
     if (/\{uploadLink\}/.test(m.text)) { try { link = await kundenLink(p); } catch (e) { /* Lücke */ } }
     const mailto = (dlg) => `mailto:${encodeURIComponent(p.kunde.email || "")}?subject=${encodeURIComponent($("#mail-betreff", dlg).value)}&body=${encodeURIComponent($("#mail-text", dlg).value)}`;
@@ -1551,7 +1612,8 @@
           ${luecken.length ? `<div class="luecken">Noch offen: ${luecken.map(esc).join(", ")} – im Projekt nachtragen oder im Text ersetzen.</div>` : ""}
           <div class="feld"><label for="mail-betreff">Betreff</label><input class="eingabe" id="mail-betreff" value="${esc(m.betreff)}"></div>
           <div class="feld abstand-o"><label for="mail-text">Text</label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
-          <p class="anhang-info">Anhänge: ${m.anhangDateien ? m.anhangDateien.map((f, i) => `<a href="${esc(f)}" download>${esc(m.anhaenge[i] || f.split("/").pop())}</a>`).join(", ") : m.anhaenge.map(esc).join(", ") || "keine"} · Absender: ${esc(cfg().kundenPostfach)}</p></div>
+          ${signaturBild() ? `<div class="sig-vorschau"><span class="q-gruppe">Signatur (wird im Outlook-Entwurf angehängt)</span><img src="${esc(signaturBild())}" alt="Signatur"></div>` : ""}
+          <p class="anhang-info">Anhänge: ${m.anhangDateien ? m.anhangDateien.map((f, i) => `<a href="${esc(f)}" download>${esc(m.anhaenge[i] || f.split("/").pop())}</a>`).join(", ") : m.anhaenge.filter(anhangAn).map(esc).join(", ") || "keine"} · Absender: ${esc(cfg().kundenPostfach)}</p></div>
         <div class="dlg-fuss">${m.datei ? `<a class="btn links still" href="${esc(m.datei)}">Original-Vorlage</a>` : '<span class="links"></span>'}<button class="btn" data-dlg="kopieren">Text kopieren</button>
           <a class="btn still" data-dlg="mailto" href="#">Einfache Mail</a><button class="btn voll" data-dlg="eml">In Outlook öffnen</button><button class="btn jetzt" data-dlg="gesendet">Als gesendet markieren</button></div>
         <p class="anhang-info dlg-hinweis">„In Outlook öffnen“ erzeugt einen fertigen Entwurf mit Anhängen – Datei öffnen, in Outlook prüfen und absenden.</p>`;
@@ -1564,9 +1626,9 @@
         if (a.dataset.dlg === "kopieren") { await kopieren($("#mail-text", dlg).value); toast("Text kopiert"); }
         if (a.dataset.dlg === "mailto") a.href = mailto(dlg);
         if (a.dataset.dlg === "eml") {
-          const anh = [...(m.anhangDateien || []).map((f, i) => ({ url: f, name: (m.anhaenge[i] || f.split("/").pop()) + (/\.pdf$/i.test(m.anhaenge[i] || "") ? "" : ".pdf") }))];
-          for (const kat of m.anhangOrdner || []) for (const d of dateienVon(p.id, kat).slice(-1)) { try { anh.push({ url: await dateiUrl(d), name: d.name }); } catch (e) { /* ohne */ } }
-          const fehlt = await emlDatei(p, $("#mail-betreff", dlg).value, $("#mail-text", dlg).value, anh);
+          const anh = [...(m.anhangDateien || []).map((f, i) => ({ url: f, name: (m.anhaenge[i] || f.split("/").pop()) + (/\.pdf$/i.test(m.anhaenge[i] || "") ? "" : ".pdf") })).filter((x, i) => anhangAn(m.anhaenge[i]))];
+          for (const kat of (m.anhangOrdner || []).filter((k) => !(m.anhangOrdnerOption || {})[k] || optionen[m.anhangOrdnerOption[k]])) for (const d of dateienVon(p.id, kat).slice(-1)) { try { anh.push({ url: await dateiUrl(d), name: d.name }); } catch (e) { /* ohne */ } }
+          const fehlt = await emlDatei(p, $("#mail-betreff", dlg).value, $("#mail-text", dlg).value, anh, undefined, { bilder: m.bilder });
           toast(fehlt ? `Entwurf erstellt – ${fehlt} Anhang/Anhänge bitte selbst anfügen` : "Entwurf erstellt – Datei öffnen, dann in Outlook absenden");
         }
         if (a.dataset.dlg === "gesendet") {
@@ -1630,7 +1692,7 @@
         if (a.dataset.dlg === "eml") {
           const liste = [];
           for (const d of anh.filter((x) => !aus.has(x.id))) { try { liste.push({ url: await dateiUrl(d), name: d.name }); } catch (err) { /* ohne */ } }
-          const fehlt = await emlDatei(p, $("#mail-betreff", dlg).value, $("#mail-text", dlg).value, liste, pa.email || "");
+          const fehlt = await emlDatei(p, $("#mail-betreff", dlg).value, $("#mail-text", dlg).value, liste, pa.email || "", {});
           toast(fehlt ? `Entwurf erstellt – ${fehlt} Anhang/Anhänge bitte selbst anfügen` : "Entwurf erstellt – Datei öffnen, dann in Outlook absenden");
         }
         if (a.dataset.dlg === "gesendet") {
@@ -1812,7 +1874,9 @@
     return l.map((f) => `<option value="${esc(f.rolle + "|" + f.bezeichnung)}"${f === akt ? " selected" : ""}>${esc(f.bezeichnung)}</option>`).join("");
   };
   const teamZeile = (m) => `<tr data-id="${esc(m.kuerzel || "")}"><td><input class="eingabe" data-team="name" value="${esc(m.name || "")}" aria-label="Name"></td><td><select class="eingabe" data-team="funktion" aria-label="Funktion">${funktionOpt(m)}</select></td><td><input class="eingabe kurz" data-team="kuerzel" value="${esc(m.kuerzel || "")}" aria-label="Kürzel"></td>
-    <td><select class="eingabe" data-team="ebene" aria-label="Ebene">${opt(EBENE_OPT(), m.ebene || "planung")}</select></td><td><input class="eingabe" data-team="telefon" value="${esc(m.telefon || "")}" aria-label="Durchwahl" placeholder="Durchwahl"></td><td><input class="eingabe" type="email" data-team="email" value="${esc(m.email || "")}" aria-label="E-Mail"></td>${zugangZellen(m.kuerzel)}<td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`;
+    <td><select class="eingabe" data-team="ebene" aria-label="Ebene">${opt(EBENE_OPT(), m.ebene || "planung")}</select></td><td><input class="eingabe" data-team="telefon" value="${esc(m.telefon || "")}" aria-label="Durchwahl" placeholder="Durchwahl"></td><td><input class="eingabe" type="email" data-team="email" value="${esc(m.email || "")}" aria-label="E-Mail"></td>
+    <td class="sig-zelle"><input type="hidden" data-team="signaturBild" value="${esc(m.signaturBild || "")}">${m.signaturBild ? `<img class="sig-mini" src="${esc(m.signaturBild)}" alt="Signatur">` : '<span class="leise klein-text">Text</span>'}
+      <label class="btn klein still">Bild …<input type="file" accept="image/*" data-signatur hidden></label>${m.signaturBild ? '<button type="button" class="btn klein still gefahr" data-aktion="signatur-weg" aria-label="Signaturbild entfernen">✕</button>' : ""}</td>${zugangZellen(m.kuerzel)}<td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`;
   const partnerKonto = (x) => `<tr data-id="${esc(x.id)}"><td><b>${esc(x.firma)}</b><br><small class="leise">${esc([x.gewerk, x.name].filter(Boolean).join(" · "))}</small></td>${zugangZellen(x.id)}</tr>`;
   const partnerZeile = (x) => `<tr data-id="${esc(x.id || "")}"><td><input class="eingabe" data-partner="firma" value="${esc(x.firma || "")}" aria-label="Firma"></td><td><select class="eingabe" data-partner="gewerk" aria-label="Gewerk">${opt(Object.keys(cfg().gewerke || {}), x.gewerk)}</select></td>
     <td><input class="eingabe" data-partner="name" value="${esc(x.name || "")}" aria-label="Ansprechpartner"></td><td><input class="eingabe" data-partner="telefon" value="${esc(x.telefon || "")}" aria-label="Telefon"></td>${x.id ? zugangZellen(x.id) : '<td></td><td></td>'}<td><button class="btn still" data-aktion="team-weg" aria-label="Entfernen">✕</button></td></tr>`;
@@ -1830,6 +1894,7 @@
       return m;
     }).filter((m) => m.name || m.kuerzel);
     if ($("#ordnerrechte")) c.freigabeStandard = Object.fromEntries(ordnerSpalten().map(([e]) => [e, $$("#ordnerrechte [data-r-ordner]").filter((z) => $(`[data-r-e="${e}"]`, z).checked).map((z) => z.dataset.rOrdner)]));
+    if ($("#rechte")) c.rechteVersion = 2;
     if ($("#rechte")) c.rechte = Object.fromEntries($$("#rechte [data-r-schritt]").map((z) => [z.dataset.rSchritt, $$("[data-r-e]", z).filter((x) => x.checked).map((x) => x.dataset.rE)]));
     if ($("#partner")) {
       const ids = new Set(), alt = cfg().partner || [];
@@ -1848,21 +1913,22 @@
      Konten & Rechte (nur Geschäftsführung)
      ================================================================ */
   function rechteMatrix() {
+    const SP = RECHTE_SPALTEN();
     const zelle = (attr, an, teil) => `<span class="r-zelle"><input type="checkbox" ${attr}${an ? " checked" : ""}${teil ? " data-teil" : ""}></span>`;
     const levels = PHASEN.map((ph) => {
       const zeilen = ph.schritte.map((s) => {
         const l = siehtListe(s);
         return `<div class="r-zeile r-schritt" data-r-schritt="${esc(s.id)}"><span class="r-titel">${esc(ersetzen(s.titel))}<small>${esc({ formular: "Formular", dateien: "Dateien", termin: "Termin", mail: "Mail", erledigt: "Bestätigung", entscheidung: "Entscheidung", feld: "Eintrag", team: "Zuweisung" }[s.typ] || "")} · erledigt: ${esc(ebenenText(s.ebene))}</small></span>
-          <span class="r-zelle r-gf" aria-label="Geschäftsführung: ja">✓</span>${RECHTE_EBENEN.map((e) => zelle(`data-r-e="${e}" aria-label="${esc((EBENE_TITEL[e] || e) + ": " + s.titel)}"`, l.includes(e))).join("")}</div>`;
+          <span class="r-zelle r-gf" aria-label="Geschäftsführung: ja">✓</span>${SP.map(([e, t]) => zelle(`data-r-e="${esc(e)}" aria-label="${esc(t + ": " + s.titel)}"`, l.includes(e))).join("")}</div>`;
       }).join("");
-      const kopf = RECHTE_EBENEN.map((e) => { const n = ph.schritte.filter((s) => siehtListe(s).includes(e)).length; return zelle(`data-r-level="${e}" aria-label="${esc((EBENE_TITEL[e] || e) + ": ganzes Level " + ph.nr)}"`, n === ph.schritte.length, n > 0 && n < ph.schritte.length); }).join("");
+      const kopf = SP.map(([e, t]) => { const n = ph.schritte.filter((s) => siehtListe(s).includes(e)).length; return zelle(`data-r-level="${esc(e)}" aria-label="${esc(t + ": ganzes Level " + ph.nr)}"`, n === ph.schritte.length, n > 0 && n < ph.schritte.length); }).join("");
       return `<div class="r-level" data-r-nr="${ph.nr}"><div class="r-zeile r-kopf"><button type="button" class="r-auf" data-aktion="r-auf" aria-expanded="false"><span class="r-pfeil" aria-hidden="true">›</span><b>${zwei(ph.nr)}</b> ${esc(ph.titel)}<small>${ph.schritte.length} Schritte</small></button>
         <span class="r-zelle r-gf">alle</span>${kopf}</div><div class="r-schritte" hidden>${zeilen}</div></div>`;
     }).join("");
     return `<section class="panel" id="rechte"><div class="r-titelzeile"><h2 class="panel-titel">Wer sieht was</h2><span class="kopf-aktionen"><button type="button" class="btn klein still" data-aktion="r-alle" data-wert="1">Alle aufklappen</button><button type="button" class="btn klein still" data-aktion="r-alle" data-wert="0">Alle zuklappen</button><button type="button" class="btn klein still" data-aktion="r-standard">Standard wiederherstellen</button></span></div>
       <p class="leise klein-text panel-innen">Haken = diese Ebene sieht den Schritt mit Inhalt (Formulare, Dateien). Erledigen darf, wer ihn sieht und im Ablauf dafür zuständig ist. Die Geschäftsführung sieht immer alles. Mit „Änderungen übernehmen“ speichern.</p>
-      <div class="r-matrix"><div class="r-zeile r-th"><span>Level / Schritt</span><span>${esc(EBENE_TITEL.geschaeftsfuehrung || "Geschäftsführung")}</span>${RECHTE_EBENEN.map((e) => `<span>${esc(EBENE_TITEL[e] || e)}</span>`).join("")}</div>${levels}</div>
-      <p class="vb-max">Ordner je Projekt gibt das Büro im Reiter „Team“ frei. ${Daten.modus === "cloud" ? "Die Datenbank setzt Ordner- und Partner-Freigaben durch." : "Im Demo-Modus liegen die Daten nur in diesem Browser."}</p></section>`;
+      <div class="r-scroll"><div class="r-matrix breit" style="--sp:${SP.length}"><div class="r-zeile r-th"><span>Level / Schritt</span><span>${esc(EBENE_TITEL.geschaeftsfuehrung || "Geschäftsführung")}</span>${SP.map(([, t]) => `<span>${esc(t)}</span>`).join("")}</div>${levels}</div></div>
+      <p class="vb-max">Externe Partner sehen nur Baustellen, denen sie zugewiesen sind – und Formulare nur ihres eigenen Gewerks bzw. gewerkübergreifende (z. B. Baustellenbesichtigung). Welche Ordner/Bilder, steht unten unter „Ordner & Bilder“. ${Daten.modus === "cloud" ? "Die Datenbank setzt Ordner- und Partner-Freigaben durch." : "Im Demo-Modus liegen die Daten nur in diesem Browser."}</p></section>`;
   }
   const ordnerSpalten = () => [["planung", EBENE_TITEL.planung || "Planung"], ["monteur", EBENE_TITEL.monteur || "Monteur"],
     ...Object.keys(cfg().gewerke || {}).map((g) => ["partner:" + g, "Partner " + g])];
@@ -1894,7 +1960,7 @@
         <div class="kopf-aktionen"><button class="btn jetzt" data-aktion="konten-speichern">Änderungen übernehmen</button></div></header>
       ${S.kontenFehler ? `<p class="luecken">${esc(S.kontenFehler)}</p>` : ""}
       <section class="panel"><h2 class="panel-titel">Mitarbeiter</h2>
-        <div class="tab-wrap ohne-rand"><table class="team-tabelle konten-tab"><thead><tr><th>Name</th><th>Funktion</th><th>Kürzel</th><th>Ebene</th><th>Telefon</th><th>E-Mail</th><th>Zugang</th><th></th><th></th></tr></thead>
+        <div class="tab-wrap ohne-rand"><table class="team-tabelle konten-tab"><thead><tr><th>Name</th><th>Funktion</th><th>Kürzel</th><th>Ebene</th><th>Telefon</th><th>E-Mail</th><th>Signatur</th><th>Zugang</th><th></th><th></th></tr></thead>
         <tbody id="team">${c.team.map((m) => teamZeile(m)).join("")}</tbody></table></div>
         <div class="aktionen panel-innen"><button class="btn klein" data-aktion="team-neu">+ Person</button><span class="leise klein-text">Neue Personen erst mit „Änderungen übernehmen“ speichern, dann den Zugang anlegen.</span></div></section>
       <section class="panel"><h2 class="panel-titel">Externe Partner <small>sehen nur zugewiesene Einsätze und ihr Gewerk</small></h2>
@@ -2194,6 +2260,7 @@
     }
     if (akt === "palettemove") {
       const q = a.dataset.id ? finde(a.dataset.id) : p; if (!q || !q.downloadCode) return;
+      if (/^https?:\/\//i.test(q.downloadCode)) { window.open(q.downloadCode, "_blank", "noopener"); return; }
       await kopieren(q.downloadCode);
       const c = cfg().programme, link = c.app3dLink ? c.app3dLink.replace("{code}", encodeURIComponent(q.downloadCode)) : c.app3dStore;
       toast(c.app3dLink ? `${c.app3dApp || c.app3d} wird geöffnet` : `Code ${q.downloadCode} kopiert – in ${c.app3d} einfügen`);
@@ -2224,6 +2291,7 @@
         toast(erledigt ? "Erledigt gemeldet – danke!" : "Hinweis gesendet"); return render();
       } catch (err) { return toast("Senden fehlgeschlagen", "fehler"); }
     }
+    if (akt === "signatur-weg") { const td = a.closest("td"); $("[data-team=signaturBild]", td).value = ""; const im = $(".sig-mini", td); if (im) im.outerHTML = '<span class="leise klein-text">Text</span>'; a.remove(); return toast("Signaturbild entfernt – mit „Änderungen übernehmen“ speichern"); }
     if (akt === "r-auf") { const lv = a.closest(".r-level"), box = $(".r-schritte", lv), auf = box.hidden; box.hidden = !auf; a.setAttribute("aria-expanded", String(auf)); lv.classList.toggle("offen", auf); return; }
     if (akt === "r-alle") { $$("#rechte .r-level").forEach((lv) => { const auf = a.dataset.wert === "1"; $(".r-schritte", lv).hidden = !auf; $(".r-auf", lv).setAttribute("aria-expanded", String(auf)); lv.classList.toggle("offen", auf); }); return; }
     if (akt === "r-ordner-standard") {
@@ -2527,6 +2595,12 @@
     }
     if (el.matches(".r-matrix [data-r-level]")) { $$(`.r-schritt [data-r-e="${el.dataset.rLevel}"]`, el.closest(".r-level")).forEach((x) => { x.checked = el.checked; }); return rechteTeilzustand(); }
     if (el.matches(".r-matrix [data-r-e]")) return rechteTeilzustand();
+    if (el.matches("[data-signatur]") && el.files && el.files[0]) {
+      const td = el.closest("td"), url = await bildVerkleinern(el.files[0], 900);
+      $("[data-team=signaturBild]", td).value = url;
+      const alt = $(".sig-mini, .leise", td); if (alt) alt.outerHTML = `<img class="sig-mini" src="${url}" alt="Signatur">`;
+      return toast("Signaturbild übernommen – mit „Änderungen übernehmen“ speichern");
+    }
     if (el.matches("[data-zuweisen]") && p && istBuero() && el.value) {
       const id = el.value, m = mitgliedZu(id);
       aendern(p, (x) => { x.zugriff = [...new Set([...(x.zugriff || []), id])]; }, `Zugewiesen: ${m ? m.name : id}`);

@@ -22,7 +22,9 @@
 
    anhangDateien: Dateien im Ordner vorlagen/, die mitgeschickt werden.
    anhangOrdner:  Projektordner, deren neueste Datei beim „In Outlook öffnen“ angehängt wird.
-   Optionale Absätze: [[id]] … [[/id]] — im Dashboard per Häkchen an/aus.
+   Optionale Absätze: [[id]] … [[/id]] — im Dashboard per Häkchen an/aus (an: true = vorab angehakt).
+   Bilder im Text: Zeile „[Bild: name]“ + bilder: { name: "vorlagen/…jpg" } – erscheinen im Outlook-Entwurf.
+   {link3d}: Link zur 3D-Ansicht aus dem Projekt (Level 8).
    Felder, die noch leer sind, erscheinen als markierte Lücke ‹…›.
    Unter jede Mail setzt das Dashboard die Signatur des angemeldeten Nutzers
    (Name, Funktion, Durchwahl, E-Mail – gepflegt unter Konten).
@@ -73,51 +75,46 @@ Vielen Dank und freundliche Grüße`,
     id: "terminbestaetigung",
     phase: 2,
     titel: "Terminbestätigung Erstgespräch",
-    datei: "vorlagen/02-terminbestaetigung/Mail-Terminbestaetigung.oft",
+    datei: "vorlagen/02-terminbestaetigung/Mail-Terminbestaetigung-Bad.oft",
     anhaenge: ["Broschüre Bad", "Fotoanleitung Bad"],
     anhangDateien: [
       "vorlagen/02-terminbestaetigung/anhaenge/Broschuere_Bad.pdf",
       "vorlagen/02-terminbestaetigung/anhaenge/Fotoanleitung_Bad.pdf",
     ],
+    bilder: { ausstellung: "vorlagen/02-terminbestaetigung/bilder/ausstellung.jpg" },
     anredeStil: "formell",
-    betreff: "Ihr persönliches Traumbad und Ihre sparsame Heizung werden Wirklichkeit …",
+    betreff: "Ihr persönliches Traumbad wird Wirklichkeit …",
     optionen: [],
     text:
-`Träume werden Räume – Ihr persönliches Traumbad und Ihre sparsame Heizung werden Wirklichkeit …
+`Träume werden Räume – Ihr persönliches Traumbad wird Wirklichkeit …
 
 {anrede}
 
-ob Solar, Pellets, Wärmepumpe, Öl- oder Gasheizung – oder eine clevere Kombination daraus:
-Gemeinsam mit Ihnen entwickeln wir ein maßgeschneidertes Wärmekonzept, das optimal zu Ihren Bedürfnissen passt und Sie langfristig unabhängiger von Energieanbietern macht.
-
-Auch Ihr Bad kann mehr als nur funktional sein:
-Immer mehr Menschen wünschen sich einen Ort zum Wohlfühlen, Entspannen und Krafttanken – einen Rückzugsort mitten im Alltag.
+ob zur Entspannung nach einem langen Arbeitstag oder einfach, um sich selbst etwas Gutes zu tun – immer mehr Menschen wünschen sich ein Bad, das mehr als nur praktisch ist. Einen Ort zum Wohlfühlen, Entspannen und Auftanken.
 Trifft das auch auf Sie zu? Dann sind Sie bei uns in besten Händen!
 
-Eine gelungene Bad- & Heizungsmodernisierung beginnt bei uns mit individueller Beratung und durchdachter Planung.
-Wir nehmen uns Zeit für Ihre Wünsche, denken vorausschauend und gestalten gemeinsam mit Ihnen Ihr persönliches Wohlfühlbad und eine sparsame, zuverlässige Heizlösung – abgestimmt auf Ihren Stil, Ihre Bedürfnisse und Ihr Budget.
-Unsere Broschüren im Anhang geben Ihnen erste Informationen zu unseren Bad- & Heizungssanierungen.
+Eine gelungene Badmodernisierung beginnt mit durchdachter Planung und individueller Beratung.
+Wir nehmen uns Zeit für Ihre Wünsche, denken an die Zukunft und entwickeln gemeinsam mit Ihnen Ihr persönliches Wohlfühlbad – ganz nach Ihrem Stil, Ihren Bedürfnissen und Ihrem Budget.
+Von modernen Standardlösungen bis hin zur maßgeschneiderten Designlösung: Alles ist möglich.
 
-Kurz gesagt:
-Wir möchten, dass Sie sich rundum wohlfühlen – nicht erst mit dem fertigen Bad oder der neuen Heizungsanlage, sondern bereits während der Planung und auch lange nach der Umsetzung. Dafür steht unsere persönliche Service-Garantie.
+Unsere Broschüre im Anhang bietet Ihnen einen ersten Einblick in unsere Leistungen rund um die Badsanierung.
+
+[Bild: ausstellung]
 
 Den ersten Schritt haben Sie bereits getan.
 
-Ihr Gesprächstermin mit unserem Heizungsexperten Herr {heizungsexperte}
-und unserem Badexperten Herr {berater}:
+Ihr Gesprächstermin mit unserem Badexperten Herr {berater}:
 📅 {erstgespraech.wochentag}, {erstgespraech.datum}
 ⏰ {erstgespraech.uhrzeit} Uhr
 📍 {firma.adresse}
 
 📌 Anfahrt leicht gemacht: Hier geht’s zur Adresse auf Google Maps: {firma.mapsLink}
 
-Damit wir Sie optimal beraten können, freuen wir uns vorab über folgende Unterlagen:
-•  einen Grundriss und einige Fotos Ihres aktuellen Badezimmers
-
+Damit wir Sie optimal beraten können, freuen wir uns über einen Grundriss und einige Fotos (siehe Anleitung) Ihres aktuellen Badezimmers.
 Am einfachsten laden Sie alles über Ihren persönlichen Link hoch – direkt vom Handy, ohne Anmeldung:
 👉 {uploadLink}
 
-Bringen Sie auch gerne Ihre Ideen und Wünsche mit – so können wir direkt starten und gemeinsam Ihr persönliches Bad- und Heizkonzept gestalten.
+Bringen Sie Ihre Ideen und Wünsche mit – so können wir direkt loslegen und gemeinsam Ihr Traumbad gestalten.
 
 Wir freuen uns auf ein interessantes und kreatives Gespräch mit Ihnen.
 
@@ -131,6 +128,7 @@ Mit freundlichen Grüßen`,
     datei: "vorlagen/08-freigabe/Mail-Planung-zur-Freigabe.oft",
     anhaenge: ["Exposé (2D-Ansichten) als PDF", "ggf. aktualisiertes Angebot"],
     anhangOrdner: ["expose", "angebot"],   // jeweils die neueste Datei aus diesen Projektordnern
+    anhangOrdnerOption: { angebot: "angebot" },   // Angebot nur, wenn „Angebot hat sich geändert“ angehakt ist
     anredeStil: "formell",
     betreff: "Ihre Badplanung zur Prüfung und Freigabe",
     optionen: [
@@ -144,7 +142,7 @@ Mit freundlichen Grüßen`,
 Ihr Termin zur Materialauswahl ist bereits ein paar Tage vergangen.
 Um in die nächste Phase der Vorbereitung starten zu können, bitten wir Sie, sich Ihre Badplanung noch einmal genau anzuschauen.
 
-Hierzu finden Sie im Anhang das Exposé mit den 2D-Ansichten Ihres Bades als PDF-Datei. Für eine virtuelle 3D-Ansicht laden Sie sich einfach die kostenfreie App PaletteMove auf Ihr Smartphone oder Tablet und geben dort den folgenden Download-Code ein: {downloadCode}
+Hierzu finden Sie im Anhang das Exposé mit den 2D-Ansichten Ihres Bades als PDF-Datei. Für eine virtuelle 3D-Ansicht klicken Sie einfach auf den folgenden Link: {link3d}
 [[angebot]]Zudem finden Sie ebenfalls noch das aktualisierte Angebot zur Prüfung und Unterschrift im Anhang.
 [[/angebot]]
 Bitte prüfen Sie vor allem die Aufteilung bzw. Anordnung und schauen Sie gern nach Ihren Artikeln und Farben (Farben können immer etwas zur Wirklichkeit abweichen).
@@ -156,7 +154,7 @@ Teilen Sie uns außerdem noch mit, welche Sitzhöhe für das WC gewünscht ist u
 Sollten Sie Fragen haben oder etwas unklar sein, melden Sie sich bitte unbedingt bei uns! Änderungen, die nach Ihrer Freigabe erfolgen, können nicht mehr umgesetzt werden.
 Gerne können Sie auch Anmerkungen handschriftlich direkt in der Planung ergänzen.
 
-Bitte senden Sie uns die unterschriebene Planung (Exposé) sowie das unterschriebene Angebot als PDF, Scan oder Foto zurück – am einfachsten über Ihren persönlichen Link:
+Bitte senden Sie uns die unterschriebene Planung (Exposé)[[angebot]] sowie das unterschriebene Angebot[[/angebot]] als PDF, Scan oder Foto zurück – am einfachsten über Ihren persönlichen Link:
 👉 {uploadLink}
 
 Vielen Dank und herzliche Grüße`,
@@ -192,9 +190,10 @@ Mit freundlichen Grüßen`,
     titel: "Kundenerinnerung vor Baustart",
     datei: "vorlagen/11-ausfuehrung/Mail-Baustart.oft",
     anhaenge: ["Aushang für die Nachbarn", "Team-Foto (in der .oft)"],
+    anhangOption: { "Aushang für die Nachbarn": "aushang" },   // nur angehängt, wenn der Absatz mitgeht
     anredeStil: "gutentag",
     betreff: "Das Warten hat bald ein Ende …",
-    optionen: [],
+    optionen: [{ id: "aushang", label: "Aushang für die Nachbarn (Absatz + Anhang)", an: true }],
     text:
 `{anrede}
 
@@ -208,9 +207,9 @@ Die Monteure sind dann in der Regel von ca. 8:00 bis 17:00 Uhr bei Ihnen vor Ort
 Vorab bitten wir Sie, alle Gegenstände, die Sie behalten möchten, aus dem Bad zu entfernen. Alles, was zu Beginn noch im Bad verbleibt, wird von uns entsorgt.
 Bitte sorgen Sie außerdem dafür, dass die Laufwege frei sind, damit unsere Monteure direkt mit dem Staubschutz und den Abrissarbeiten beginnen können.
 
-Im Anhang finden Sie einen Aushang für Ihre Nachbarn, den Sie gerne ausdrucken und ggf. im Treppenhaus oder am schwarzen Brett aufhängen können.
-Sollten Sie keine Möglichkeit zum Ausdrucken haben, übernehmen wir dies gerne und geben den Zettel den Monteuren am {baustart.kurz} mit.
-
+[[aushang]]Im Anhang finden Sie einen Aushang für Ihre Nachbarn, den Sie gerne ausdrucken und ggf. im Treppenhaus oder am schwarzen Brett aufhängen können.
+Sollten Sie keine Möglichkeit zum Ausdrucken haben, übernehmen wir dies gerne und geben den Zettel den Monteuren am {baustart.wochentag}, {baustart.datum} mit.
+[[/aushang]]
 Sollten Sie vorab noch Fragen haben, melden Sie sich gerne!
 
 Hier erhalten Sie einen kleinen Einblick in das Team, das Ihr Traumbad Wirklichkeit werden lässt: (Team-Foto aus der Outlook-Vorlage einfügen)

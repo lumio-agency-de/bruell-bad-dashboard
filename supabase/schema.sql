@@ -95,6 +95,11 @@ create or replace function public.ordner_standard(e text) returns jsonb language
   select coalesce(
     (select daten -> 'freigabeStandard' -> e from einstellungen where id = 1 and jsonb_typeof(daten -> 'freigabeStandard' -> e) = 'array'),
     (select daten -> 'freigabeStandard' -> 'partner' from einstellungen where id = 1 and e like 'partner%' and jsonb_typeof(daten -> 'freigabeStandard' -> 'partner') = 'array'),
+    case e
+      when 'partner:Elektro' then '["bilder-alt","skizzen","planung","expose","baustelle"]'::jsonb
+      when 'partner:Fliesen' then '["planung","expose","baustelle"]'::jsonb
+      when 'partner:Maler / Trockenbau' then '["planung","expose","baustelle"]'::jsonb
+      else null end,
     case split_part(e, ':', 1)
       when 'planung' then '["bilder-alt","grundriss","heizung","skizzen","planung","angebot","auftrag","baustelle","auswahl","expose","freigabe","rechnungen","fertig","sonstiges"]'::jsonb
       when 'monteur' then '["bilder-alt","grundriss","heizung","skizzen","planung","baustelle","auswahl","expose","freigabe","fertig","sonstiges"]'::jsonb

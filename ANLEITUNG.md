@@ -216,3 +216,16 @@ Leistungen aus dem Gewerke-Formular. Als Anhang kommen alle Dateien aus den Ordn
 Gewerk freigegeben sind (Konten → „Ordner & Bilder“) – einzeln abwählbar. „In Outlook öffnen“
 erzeugt den Entwurf mit Anhängen, „Als angefragt markieren“ vermerkt das Datum in der Zeile.
 Den Mailtext ändert man in `einstellungen/mailvorlagen.js` (`sub-anfrage`).
+
+## Mails: Signatur, Bilder, Outlook-Entwurf (22.10.2026)
+
+- **Signatur:** Unter jede Mail kommt die Signatur der angemeldeten Person. Unter **Konten → Mitarbeiter →
+  Signatur** lässt sich je Person ein Signaturbild hochladen (wie in Outlook: Foto, Kontaktdaten, Logo).
+  Ohne Bild wird eine Textsignatur aus Name, Funktion, Firma, Adresse, Telefon, E-Mail gebaut.
+- **„In Outlook öffnen“** erzeugt jetzt eine formatierte Mail: klickbare Links, Bilder aus der Vorlage
+  (z. B. Foto der Ausstellung in der Terminbestätigung) und das Signaturbild – plus Anhänge.
+- **Terminbestätigung** = neue Fassung nur fürs Bad (Vorlage von Karin), weiterhin mit Upload-Link.
+- **Freigabe-Mail:** 3D-Ansicht als Link (Level 8: „Link zur 3D-Ansicht“). „sowie das unterschriebene Angebot“
+  und der Angebots-Anhang gehen nur mit, wenn „Angebot hat sich geändert“ angehakt ist.
+- **Kundenerinnerung vor Baustart:** Absatz „Aushang für die Nachbarn“ abwählbar (inkl. Anhang), mit Baustart-Datum.
+- **Wer sieht was:** externe Partner in Elektriker, Fliesenleger, Maler und „Weitere Partner“ aufgeteilt.

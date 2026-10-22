@@ -44,7 +44,8 @@ window.FIRMA = {
                 geschaeftsfuehrung | planung | monteur
        email    Login-E-Mail (nur im Cloud-Betrieb nötig) */
   team: [
-    { rolle: "badberater",      bezeichnung: "Geschäftsführer · Badberater", name: "Daniel Brüll",     kuerzel: "DB", ebene: "geschaeftsfuehrung", email: "" },
+    { rolle: "badberater",      bezeichnung: "Geschäftsführer · Badberater", name: "Daniel Brüll",     kuerzel: "DB", ebene: "geschaeftsfuehrung", email: "",
+      signaturBild: "vorlagen/signaturen/DB.png" },   // Signatur unter jeder Mail (unter Konten änderbar)
     { rolle: "badplanung",      bezeichnung: "Badplanerin",      name: "Karin Kaufmann",   kuerzel: "KK", ebene: "planung", email: "" },
     { rolle: "badplanung",      bezeichnung: "Badplanerin",      name: "Judith Rapp",      kuerzel: "JR", ebene: "planung", email: "" },
     { rolle: "projektleiter",   bezeichnung: "Projektleiter",    name: "Steven Wagner",    kuerzel: "SW", ebene: "planung", email: "" },
