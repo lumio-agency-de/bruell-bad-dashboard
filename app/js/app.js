@@ -1219,7 +1219,8 @@
       case "mail": {
         const am = (p.mails || {})[s.mail];
         meta = am ? `gesendet ${fKurz(new Date(am))}` : "noch nicht gesendet";
-        inhalt = `<div class="q-aktion"><button class="btn ${am ? "" : "voll"}" data-aktion="mail" data-mail="${s.mail}">${am ? "Erneut öffnen" : "Mail schreiben"} <span class="pfeil">→</span></button></div>`;
+        inhalt = `<div class="q-aktion"><button class="btn ${am ? "" : "voll"}" data-aktion="mail" data-mail="${s.mail}">${am ? "Erneut öffnen" : "Mail schreiben"} <span class="pfeil">→</span></button>
+          <label class="q-check"><input type="checkbox" data-mail-erledigt="${esc(s.mail)}"${am ? " checked" : ""}> Erledigt – gesendet</label></div>`;
         break;
       }
       case "erledigt":
@@ -1602,43 +1603,72 @@
     const anhangAn = (name) => !(m.anhangOption || {})[name] || optionen[m.anhangOption[name]];
     let link = null;
     if (/\{uploadLink\}/.test(m.text)) { try { link = await kundenLink(p); } catch (e) { /* Lücke */ } }
-    const mailto = (dlg) => `mailto:${encodeURIComponent(p.kunde.email || "")}?subject=${encodeURIComponent($("#mail-betreff", dlg).value)}&body=${encodeURIComponent($("#mail-text", dlg).value)}`;
+    /* Anhänge zum Herunterladen (Outlook übernimmt beim Überleiten keine Anhänge) */
+    const anhangListe = async () => {
+      const l = (m.anhangDateien || []).map((f, i) => ({ url: f, name: (m.anhaenge[i] || f.split("/").pop()) + (/\.pdf$/i.test(m.anhaenge[i] || "") ? "" : ".pdf"), an: anhangAn(m.anhaenge[i]) })).filter((x) => x.an);
+      for (const kat of (m.anhangOrdner || []).filter((k) => !(m.anhangOrdnerOption || {})[k] || optionen[m.anhangOrdnerOption[k]]))
+        for (const d of dateienVon(p.id, kat).slice(-1)) { try { l.push({ url: await dateiUrl(d), name: d.name }); } catch (e) { /* ohne */ } }
+      for (const [n, u] of Object.entries(m.bilder || {})) l.push({ url: u, name: { ausstellung: "Foto Ausstellung.jpg" }[n] || n + ".jpg", bild: true });
+      const ohneDatei = (m.anhangDateien ? [] : (m.anhaenge || []).filter(anhangAn));
+      return { l, ohneDatei };
+    };
+    let anh = await anhangListe();
     const zeichnen = (dlg) => {
-      const { text, luecken } = mailBauen(m, p, optionen, link);
+      const { text, luecken } = mailBauen(m, p, optionen, link, { _ohneSignatur: true });
+      const am = (p.mails || {})[m.id];
       dlg.innerHTML = `<div class="dlg-kopf"><div><p class="eyebrow">Level ${zwei(m.phase)} · ${esc(anzeigeName(p))}</p><h2>${esc(m.titel)}</h2>
           <p>${p.kunde.email ? `An: ${esc(p.kunde.email)}` : "Beim Kunden ist noch keine E-Mail-Adresse hinterlegt."}</p></div><button class="btn still" data-aktion="dlg-zu" aria-label="Schließen">✕</button></div>
         <div class="dlg-inhalt">
           ${m.optionen.length ? `<div class="optionen"><p class="q-gruppe">Diese Absätze mitschicken:</p>${m.optionen.map((o) => `<label><input type="checkbox" data-option="${o.id}"${optionen[o.id] ? " checked" : ""}> ${esc(o.label)}</label>`).join("")}</div>` : ""}
           ${luecken.length ? `<div class="luecken">Noch offen: ${luecken.map(esc).join(", ")} – im Projekt nachtragen oder im Text ersetzen.</div>` : ""}
           <div class="feld"><label for="mail-betreff">Betreff</label><input class="eingabe" id="mail-betreff" value="${esc(m.betreff)}"></div>
-          <div class="feld abstand-o"><label for="mail-text">Text</label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
-          ${signaturBild() ? `<div class="sig-vorschau"><span class="q-gruppe">Signatur (wird im Outlook-Entwurf angehängt)</span><img src="${esc(signaturBild())}" alt="Signatur"></div>` : ""}
-          <p class="anhang-info">Anhänge: ${m.anhangDateien ? m.anhangDateien.map((f, i) => `<a href="${esc(f)}" download>${esc(m.anhaenge[i] || f.split("/").pop())}</a>`).join(", ") : m.anhaenge.filter(anhangAn).map(esc).join(", ") || "keine"} · Absender: ${esc(cfg().kundenPostfach)}</p></div>
-        <div class="dlg-fuss">${m.datei ? `<a class="btn links still" href="${esc(m.datei)}">Original-Vorlage</a>` : '<span class="links"></span>'}<button class="btn" data-dlg="kopieren">Text kopieren</button>
-          <a class="btn still" data-dlg="mailto" href="#">Einfache Mail</a><button class="btn voll" data-dlg="eml">In Outlook öffnen</button><button class="btn jetzt" data-dlg="gesendet">Als gesendet markieren</button></div>
-        <p class="anhang-info dlg-hinweis">„In Outlook öffnen“ erzeugt einen fertigen Entwurf mit Anhängen – Datei öffnen, in Outlook prüfen und absenden.</p>`;
-      $('[data-dlg="mailto"]', dlg).href = mailto(dlg);
+          <div class="feld abstand-o"><label for="mail-text">Text <small class="leise">– die Signatur fügt Outlook selbst hinzu</small></label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
+          ${anh.l.length || anh.ohneDatei.length ? `<div class="anhang-wahl"><p class="q-gruppe">Anhänge – herunterladen und in die Outlook-Mail ziehen</p><ul>${anh.l.map((x) => `<li><a href="${esc(x.url)}" download="${esc(x.name)}" target="_blank" rel="noopener">⬇ ${esc(x.name)}</a>${x.bild ? ' <small>(Foto aus der Vorlage, zum Einfügen)</small>' : ""}</li>`).join("")}${anh.ohneDatei.map((n) => `<li>${esc(n)} <small>(aus der Original-Vorlage)</small></li>`).join("")}</ul></div>` : ""}
+          <label class="dlg-erledigt"><input type="checkbox" data-dlg-erledigt${am ? " checked" : ""}> <b>Erledigt</b> – Mail ist in Outlook gesendet${am ? ` <small class="leise">(${fDatum(new Date(am))})</small>` : ""}</label>
+        </div>
+        <div class="dlg-fuss">${m.datei ? `<a class="btn links still" href="${esc(m.datei)}">Original-Vorlage</a>` : '<span class="links"></span>'}<button class="btn still klein" data-dlg="eml" title="Entwurf-Datei mit allen Anhängen – ohne Outlook-Signatur">.eml mit Anhängen</button><button class="btn" data-dlg="kopieren">Text kopieren</button>
+          <button class="btn jetzt" data-dlg="outlook">In Outlook schreiben →</button></div>
+        <p class="anhang-info dlg-hinweis">„In Outlook schreiben“ öffnet eine neue Mail mit Empfänger, Betreff und Text – Outlook setzt Ihre Signatur ein. Anhänge oben herunterladen und hineinziehen, senden, dann hier „Erledigt“ anhaken.</p>`;
     };
     dialog("", (dlg) => {
       zeichnen(dlg);
       dlg.addEventListener("click", async (e) => {
         const a = e.target.closest("[data-dlg]"); if (!a) return;
         if (a.dataset.dlg === "kopieren") { await kopieren($("#mail-text", dlg).value); toast("Text kopiert"); }
-        if (a.dataset.dlg === "mailto") a.href = mailto(dlg);
+        if (a.dataset.dlg === "outlook") outlookOeffnen(p.kunde.email || "", $("#mail-betreff", dlg).value, $("#mail-text", dlg).value);
         if (a.dataset.dlg === "eml") {
-          const anh = [...(m.anhangDateien || []).map((f, i) => ({ url: f, name: (m.anhaenge[i] || f.split("/").pop()) + (/\.pdf$/i.test(m.anhaenge[i] || "") ? "" : ".pdf") })).filter((x, i) => anhangAn(m.anhaenge[i]))];
-          for (const kat of (m.anhangOrdner || []).filter((k) => !(m.anhangOrdnerOption || {})[k] || optionen[m.anhangOrdnerOption[k]])) for (const d of dateienVon(p.id, kat).slice(-1)) { try { anh.push({ url: await dateiUrl(d), name: d.name }); } catch (e) { /* ohne */ } }
-          const fehlt = await emlDatei(p, $("#mail-betreff", dlg).value, $("#mail-text", dlg).value, anh, undefined, { bilder: m.bilder });
+          const liste = anh.l.filter((x) => !x.bild).map(({ url, name }) => ({ url, name }));
+          const fehlt = await emlDatei(p, $("#mail-betreff", dlg).value, $("#mail-text", dlg).value, liste, undefined, { bilder: m.bilder });
           toast(fehlt ? `Entwurf erstellt – ${fehlt} Anhang/Anhänge bitte selbst anfügen` : "Entwurf erstellt – Datei öffnen, dann in Outlook absenden");
         }
-        if (a.dataset.dlg === "gesendet") {
-          aendern(p, (x) => { x.mails = x.mails || {}; x.mails[m.id] = Date.now(); }, `Mail „${m.titel}“ gesendet`);
-          dlg.close(); toast("Als gesendet vermerkt"); teilRendern(p);
+      });
+      dlg.addEventListener("change", async (e) => {
+        const o = e.target.dataset.option;
+        if (o) { optionen[o] = e.target.checked; anh = await anhangListe(); zeichnen(dlg); }
+        if (e.target.matches("[data-dlg-erledigt]")) {
+          const an = e.target.checked;
+          aendern(p, (x) => { x.mails = x.mails || {}; if (an) x.mails[m.id] = Date.now(); else delete x.mails[m.id]; }, an ? `Mail „${m.titel}“ gesendet` : `Mail „${m.titel}“: Erledigt zurückgenommen`);
+          toast(an ? "Als erledigt vermerkt" : "Erledigt zurückgenommen"); teilRendern(p); if (an) dlg.close(); else zeichnen(dlg);
         }
       });
-      dlg.addEventListener("change", (e) => { const o = e.target.dataset.option; if (o) { optionen[o] = e.target.checked; zeichnen(dlg); } });
-      dlg.addEventListener("input", (e) => { if (e.target.id === "mail-text" || e.target.id === "mail-betreff") $('[data-dlg="mailto"]', dlg).href = mailto(dlg); });
     });
+  }
+
+  /* Überleitung zu Outlook: neue Mail mit Empfänger, Betreff, Text – Outlook ergänzt die Signatur selbst.
+     Desktop: mailto (sehr lange Texte zusätzlich über die Zwischenablage). Browser: Outlook im Web (Microsoft 365). */
+  async function outlookOeffnen(an, betreff, text) {
+    const body = text.replace(/^\[Bild: \w+\]\n?/gm, "").replace(/\n{3,}/g, "\n\n");
+    const e = encodeURIComponent;
+    try { await navigator.clipboard.writeText(body); } catch (err) { /* ohne Zwischenablage */ }
+    if (cfg().mailProgramm === "web") {
+      window.open(`https://outlook.office.com/mail/deeplink/compose?to=${e(an)}&subject=${e(betreff)}&body=${e(body)}`, "_blank", "noopener");
+      return toast("Outlook im Browser wird geöffnet");
+    }
+    let url = `mailto:${e(an)}?subject=${e(betreff)}&body=${e(body.replace(/\n/g, "\r\n"))}`;
+    const zuLang = url.length > 1900;
+    if (zuLang) url = `mailto:${e(an)}?subject=${e(betreff)}`;
+    const a = document.createElement("a"); a.href = url; document.body.appendChild(a); a.click(); a.remove();
+    toast(zuLang ? "Outlook öffnet sich – der Text ist lang: in die neue Mail klicken und Strg+V (Mac: Cmd+V) drücken" : "Outlook öffnet sich – Text ist zusätzlich in der Zwischenablage");
   }
 
   /* ---------- Anfrage an einen Subunternehmer (aus dem Baustellenplan) ---------- */
@@ -1666,7 +1696,7 @@
     const optionen = Object.fromEntries(m.optionen.filter((o) => o.an).map((o) => [o.id, true]));
     const groesse = (b) => b > 1048576 ? (b / 1048576).toFixed(1).replace(".", ",") + " MB" : Math.max(1, Math.round(b / 1024)) + " KB";
     const zeichnen = (dlg) => {
-      const { text, luecken } = mailBauen(m, p, optionen, null, extra);
+      const { text, luecken } = mailBauen(m, p, optionen, null, { ...extra, _ohneSignatur: true });
       const betreff = mailBauen({ ...m, text: m.betreff }, p, {}, null, { ...extra, _ohneSignatur: true }).text;
       const summe = anh.filter((d) => !aus.has(d.id)).reduce((a, d) => a + (d.groesse || 0), 0);
       dlg.innerHTML = `<div class="dlg-kopf"><div><p class="eyebrow">Anfrage · ${esc(gewerk)} · ${esc(anzeigeName(p))}</p><h2>${esc(pa.firma)}</h2>
@@ -1675,20 +1705,28 @@
           <div class="optionen"><p class="q-gruppe">Diese Absätze mitschicken:</p>${m.optionen.map((o) => `<label><input type="checkbox" data-option="${o.id}"${optionen[o.id] ? " checked" : ""}> ${esc(o.label)}</label>`).join("")}</div>
           ${luecken.length ? `<div class="luecken">Noch offen: ${luecken.map(esc).join(", ")} – im Projekt nachtragen oder im Text ersetzen.</div>` : ""}
           <div class="feld"><label for="mail-betreff">Betreff</label><input class="eingabe" id="mail-betreff" value="${esc(betreff)}"></div>
-          <div class="feld abstand-o"><label for="mail-text">Text</label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
+          <div class="feld abstand-o"><label for="mail-text">Text <small class="leise">– die Signatur fügt Outlook selbst hinzu</small></label><textarea class="eingabe mail-text" id="mail-text">${esc(text)}</textarea></div>
           <div class="anhang-wahl"><p class="q-gruppe">Anhänge aus den freigegebenen Ordnern (${esc(gewerk)}): ${ordner.map(katTitel).map(esc).join(", ") || "keine"}</p>
             ${anh.length ? `<ul>${anh.map((d) => `<li><label><input type="checkbox" data-anhang="${esc(d.id)}"${aus.has(d.id) ? "" : " checked"}> ${esc(d.name)} <small>${esc(katTitel(d.kategorie))}${d.groesse ? " · " + groesse(d.groesse) : ""}</small></label></li>`).join("")}</ul>
-              <p class="leise klein-text">Zusammen ${groesse(summe)}${summe > 20 * 1048576 ? " – viele Mailserver nehmen nur bis ca. 20 MB an, ggf. Fotos abwählen." : ""}</p>` : '<p class="leise klein-text">In diesen Ordnern liegen noch keine Dateien.</p>'}</div>
+              <p class="leise klein-text">Zusammen ${groesse(summe)}${summe > 20 * 1048576 ? " – viele Mailserver nehmen nur bis ca. 20 MB an, ggf. Fotos abwählen." : ""}</p>
+              <button type="button" class="btn klein" data-dlg="anh-laden">⬇ Gewählte Anhänge herunterladen</button>` : '<p class="leise klein-text">In diesen Ordnern liegen noch keine Dateien.</p>'}</div>
         </div>
-        <div class="dlg-fuss"><span class="links"></span><button class="btn" data-dlg="kopieren">Text kopieren</button>
-          <button class="btn voll" data-dlg="eml">In Outlook öffnen</button><button class="btn jetzt" data-dlg="gesendet">Als angefragt markieren</button></div>
-        <p class="anhang-info dlg-hinweis">„In Outlook öffnen“ erzeugt einen fertigen Entwurf an ${esc(pa.email || "den Partner")} mit den gewählten Anhängen – Datei öffnen, prüfen und absenden.</p>`;
+        <div class="dlg-fuss"><span class="links"></span><button class="btn still klein" data-dlg="eml" title="Entwurf-Datei mit allen Anhängen – ohne Outlook-Signatur">.eml mit Anhängen</button><button class="btn" data-dlg="kopieren">Text kopieren</button>
+          <button class="btn voll" data-dlg="outlook">In Outlook schreiben →</button><button class="btn jetzt" data-dlg="gesendet">Als angefragt markieren</button></div>
+        <p class="anhang-info dlg-hinweis">„In Outlook schreiben“ öffnet eine neue Mail an ${esc(pa.email || "den Partner")} – Outlook setzt Ihre Signatur ein. Anhänge herunterladen und hineinziehen, senden, dann „Als angefragt markieren“.</p>`;
     };
     dialog("", (dlg) => {
       zeichnen(dlg);
       dlg.addEventListener("click", async (e) => {
         const a = e.target.closest("[data-dlg]"); if (!a) return;
         if (a.dataset.dlg === "kopieren") { await kopieren($("#mail-text", dlg).value); toast("Text kopiert"); }
+        if (a.dataset.dlg === "outlook") outlookOeffnen(pa.email || "", $("#mail-betreff", dlg).value, $("#mail-text", dlg).value);
+        if (a.dataset.dlg === "anh-laden") {
+          for (const d of anh.filter((x) => !aus.has(x.id))) {
+            try { const u = await dateiUrl(d), l = document.createElement("a"); l.href = u; l.download = d.name; document.body.appendChild(l); l.click(); l.remove(); await new Promise((r) => setTimeout(r, 350)); } catch (err) { /* ohne */ }
+          }
+          toast("Anhänge werden heruntergeladen – in die Outlook-Mail ziehen");
+        }
         if (a.dataset.dlg === "eml") {
           const liste = [];
           for (const d of anh.filter((x) => !aus.has(x.id))) { try { liste.push({ url: await dateiUrl(d), name: d.name }); } catch (err) { /* ohne */ } }
@@ -1798,6 +1836,11 @@
           <div class="feld"><span class="lab">Akzent („jetzt dran“)</span><div class="farbe"><input type="color" data-cfg="farben.akzent" value="${esc(c.farben.akzent)}" aria-label="Akzentfarbe"><code>${esc(c.farben.akzent)}</code></div></div>
         </div></section>
 
+        <section class="panel"><h3>E-Mail</h3><p class="leise">„In Outlook schreiben“ öffnet eine neue Mail mit Empfänger, Betreff und Text – Outlook ergänzt die eigene Signatur. Gesendet wird in Outlook, im Dashboard wird danach „Erledigt“ angehakt.</p><div class="felder drei">
+          <div class="feld"><label for="c-mailProgramm">Outlook öffnen als</label><select class="eingabe" id="c-mailProgramm" data-cfg="mailProgramm">
+            <option value="desktop"${c.mailProgramm !== "web" ? " selected" : ""}>Outlook-App (Windows/Mac)</option>
+            <option value="web"${c.mailProgramm === "web" ? " selected" : ""}>Outlook im Browser (Microsoft 365)</option></select></div>
+        </div></section>
         <section class="panel"><h3>Programme</h3><div class="felder drei">
           ${Object.entries(c.programme).map(([k, v]) => f("programme." + k, { erp: "Warenwirtschaft / ERP", cad: "Badplanung (CAD)", app3d: "3D-App für Kunden", badrechner: "Kostenrechner" }[k] || k, v)).join("")}
         </div></section>
@@ -2595,6 +2638,11 @@
     }
     if (el.matches(".r-matrix [data-r-level]")) { $$(`.r-schritt [data-r-e="${el.dataset.rLevel}"]`, el.closest(".r-level")).forEach((x) => { x.checked = el.checked; }); return rechteTeilzustand(); }
     if (el.matches(".r-matrix [data-r-e]")) return rechteTeilzustand();
+    if (el.matches("[data-mail-erledigt]") && p) {
+      const id = el.dataset.mailErledigt, an = el.checked, t = ((window.MAILVORLAGEN.find((x) => x.id === id)) || {}).titel || id;
+      aendern(p, (x) => { x.mails = x.mails || {}; if (an) x.mails[id] = Date.now(); else delete x.mails[id]; }, an ? `Mail „${t}“ gesendet` : `Mail „${t}“: Erledigt zurückgenommen`);
+      return teilRendern(p);
+    }
     if (el.matches("[data-signatur]") && el.files && el.files[0]) {
       const td = el.closest("td"), url = await bildVerkleinern(el.files[0], 900);
       $("[data-team=signaturBild]", td).value = url;

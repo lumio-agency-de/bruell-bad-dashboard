@@ -118,6 +118,9 @@ window.FIRMA = {
   },
 
   /* Fristen in Tagen — steuern das Cockpit */
+  /* „In Outlook schreiben“: "desktop" = Outlook-App (mailto), "web" = Outlook im Browser (Microsoft 365) */
+  mailProgramm: "desktop",
+
   fristen: {
     erinnerungVorErstgespraech: 3,    // Fotos & Maße nachfragen
     angebotsverfolgung: 7,            // nach Angebotsbesprechung
